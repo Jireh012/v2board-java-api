@@ -1,0 +1,55 @@
+spring:
+  application:
+    name: v2board-java-api
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:v2board}?useUnicode=true&characterEncoding=utf8&useSSL=${DB_SSL:false}&serverTimezone=Asia/Shanghai
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DATABASE:0}
+      timeout: ${REDIS_TIMEOUT:3000ms}
+      ssl:
+        enabled: ${REDIS_SSL:false}
+
+# MyBatis Plus 配置
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  mapper-locations: classpath*:mapper/**/*.xml
+  type-aliases-package: com.v2board.api.model
+
+# 服务器配置
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+# V2Board 配置
+v2board:
+  show-info-to-server-enable: true  # 是否在订阅中显示信息节点（剩余流量、到期时间等）
+  reset-traffic-method: 0  # 默认流量重置方式：0-每月第一天，1-到期日，2-不重置，3-每年第一天，4-每年到期日
+  show-subscribe-method: 0  # 订阅方法：0-直接token，1-OTP，2-TOTP
+  subscribe-path: /api/v1/client/subscribe  # 订阅路径
+  subscribe-url:  # 订阅URL列表（逗号分隔，留空则使用当前域名）
+  show-subscribe-expire: 5  # TOTP过期时间（分钟）
+  allow-new-period: 0  # 是否允许新周期：0-否，1-是
+
+# 应用配置
+app:
+  key: ${APP_KEY:base64:your-secret-key-here}  # JWT密钥，需要与PHP项目的APP_KEY保持一致
+
+# 日志配置
+logging:
+  level:
+    com.v2board.api: DEBUG
+    root: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
