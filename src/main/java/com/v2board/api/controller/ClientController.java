@@ -10,9 +10,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.MediaType;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -24,7 +21,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @RestController
-@RequestMapping("/api/v1/client")
 public class ClientController {
     
     private static final Logger logger = LoggerFactory.getLogger(ClientController.class);
@@ -44,7 +40,14 @@ public class ClientController {
     @Value("${v2board.show-info-to-server-enable:false}")
     private Boolean showInfoToServerEnable;
     
-    @GetMapping(value = "/subscribe", produces = MediaType.TEXT_PLAIN_VALUE)
+    @Value("${v2board.subscribe-path:}")
+    private String subscribePath;
+    
+    /**
+     * 订阅接口
+     * 路径由 DynamicRouteConfig 动态注册
+     * 如果没有配置自定义路径，则使用默认路径 /api/v1/client/subscribe
+     */
     public String subscribe(
             @RequestParam(required = false) String flag,
             HttpServletRequest request) {
