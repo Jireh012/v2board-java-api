@@ -20,6 +20,8 @@ export REDIS_SSL=false
 
 # 设置应用配置
 export APP_KEY=base64:your-secret-key-here
+# 设置订阅路径（可选，留空则使用默认路径 /api/v1/client/subscribe）
+export SUBSCRIBE_PATH=""
 
 # 启动应用
 echo "Starting V2Board Java API..."

@@ -20,6 +20,8 @@ set REDIS_SSL=false
 
 REM 设置应用配置
 set APP_KEY=base64:your-secret-key-here
+REM 设置订阅路径（可选，留空则使用默认路径 /api/v1/client/subscribe）
+set SUBSCRIBE_PATH=
 
 REM 启动应用
 echo Starting V2Board Java API...

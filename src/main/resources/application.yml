@@ -36,7 +36,7 @@ v2board:
   show-info-to-server-enable: true  # 是否在订阅中显示信息节点（剩余流量、到期时间等）
   reset-traffic-method: 0  # 默认流量重置方式：0-每月第一天，1-到期日，2-不重置，3-每年第一天，4-每年到期日
   show-subscribe-method: 0  # 订阅方法：0-直接token，1-OTP，2-TOTP
-  subscribe-path:  # 订阅路径，留空则使用默认路径 /api/v1/client/subscribe
+  subscribe-path: ${SUBSCRIBE_PATH:}  # 订阅路径，从环境变量 SUBSCRIBE_PATH 读取，留空则使用默认路径 /api/v1/client/subscribe
   subscribe-url:  # 订阅URL列表（逗号分隔，留空则使用当前域名）
   show-subscribe-expire: 5  # TOTP过期时间（分钟）
   allow-new-period: 0  # 是否允许新周期：0-否，1-是

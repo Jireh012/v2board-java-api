@@ -20,6 +20,7 @@ $env:REDIS_PORT="6379"
 $env:REDIS_PASSWORD=""
 $env:REDIS_DATABASE="0"
 $env:APP_KEY="base64:your-secret-key-here"
+$env:SUBSCRIBE_PATH=""  # 可选，留空则使用默认路径
 ```
 
 **Windows (CMD):**
@@ -34,6 +35,7 @@ set REDIS_PORT=6379
 set REDIS_PASSWORD=
 set REDIS_DATABASE=0
 set APP_KEY=base64:your-secret-key-here
+set SUBSCRIBE_PATH=  # 可选，留空则使用默认路径
 ```
 
 **Linux/Mac:**
@@ -48,6 +50,7 @@ export REDIS_PORT=6379
 export REDIS_PASSWORD=
 export REDIS_DATABASE=0
 export APP_KEY=base64:your-secret-key-here
+export SUBSCRIBE_PATH=""  # 可选，留空则使用默认路径
 ```
 
 ### 方式二：使用 .env 文件（需要额外依赖）
@@ -87,6 +90,7 @@ export APP_KEY=base64:your-secret-key-here
 | 变量名 | 说明 | 默认值 | 示例 |
 |--------|------|--------|------|
 | `APP_KEY` | JWT密钥（需要与PHP项目的APP_KEY保持一致） | `base64:your-secret-key-here` | `base64:xxxxx` |
+| `SUBSCRIBE_PATH` | 订阅路径（留空则使用默认路径 `/api/v1/client/subscribe`） | 空 | `/rss_subscribe` |
 
 ## 注意事项
 
