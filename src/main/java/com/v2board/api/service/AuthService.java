@@ -4,6 +4,7 @@ import com.v2board.api.model.User;
 import com.v2board.api.mapper.UserMapper;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,9 +13,12 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
+import jakarta.servlet.http.HttpServletRequest;
 import java.nio.charset.StandardCharsets;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 public class AuthService {
@@ -29,6 +33,45 @@ public class AuthService {
     
     @Value("${app.key:base64:your-secret-key-here}")
     private String appKey;
+    
+    /**
+     * 登录成功后生成 auth_data，与 PHP AuthService::generateAuthData 对齐：
+     * - 生成 session GUID
+     * - 使用 app.key(HS256) 签发 JWT，claims 含 id 与 session
+     * - 在缓存中记录 USER_SESSIONS_<userId>，保存本次会话元信息
+     * - 返回包含 token / is_admin / auth_data 的 Map
+     */
+    public Map<String, Object> generateAuthData(User user, HttpServletRequest request) {
+        if (user == null || user.getId() == null) {
+            return null;
+        }
+        // 会话 ID
+        String session = UUID.randomUUID().toString().replace("-", "");
+
+        // 构造 JWT
+        SecretKey key = Keys.hmacShaKeyFor(getSecretKeyBytes());
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("id", user.getId());
+        claims.put("session", session);
+
+        Date now = new Date();
+        // 为了兼容 PHP 行为，这里不强制设置过期时间，由服务端 Session 控制有效性
+        String jwt = Jwts.builder()
+                .setClaims(claims)
+                .setIssuedAt(now)
+                .signWith(key, SignatureAlgorithm.HS256)
+                .compact();
+
+        // 写入会话缓存，key 形如 USER_SESSIONS_1
+        addSession(user.getId(), session, request, jwt);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("token", user.getToken());
+        // 当前 User 模型可能尚未包含 is_admin 字段，这里先按普通用户处理
+        result.put("is_admin", false);
+        result.put("auth_data", jwt);
+        return result;
+    }
     
     /**
      * 解密JWT token获取用户信息
@@ -92,6 +135,36 @@ public class AuthService {
         } catch (Exception e) {
             logger.error("Error decrypting auth data", e);
             return null;
+        }
+    }
+    
+    /**
+     * 新增会话信息，兼容 PHP USER_SESSIONS 结构：
+     * sessions[sessionId] = {ip, login_at, ua, auth_data}
+     */
+    @SuppressWarnings("unchecked")
+    private void addSession(Long userId, String sessionId, HttpServletRequest request, String authData) {
+        try {
+            String cacheKey = "USER_SESSIONS_" + userId;
+            Object existing = cacheService.get(cacheKey);
+            Map<String, Object> sessions;
+            if (existing instanceof Map) {
+                sessions = (Map<String, Object>) existing;
+            } else {
+                sessions = new HashMap<>();
+            }
+            Map<String, Object> meta = new HashMap<>();
+            String ip = request != null ? request.getRemoteAddr() : "";
+            String ua = request != null ? request.getHeader("User-Agent") : "";
+            meta.put("ip", ip);
+            meta.put("login_at", System.currentTimeMillis() / 1000);
+            meta.put("ua", ua);
+            meta.put("auth_data", authData);
+            sessions.put(sessionId, meta);
+            // 这里设置一个较长的过期时间（例如 30 天），接近 PHP 默认行为
+            cacheService.set(cacheKey, sessions, 30L * 24 * 3600, java.util.concurrent.TimeUnit.SECONDS);
+        } catch (Exception e) {
+            logger.error("Error adding session {} for user {}", sessionId, userId, e);
         }
     }
     
@@ -175,7 +248,15 @@ public class AuthService {
     private byte[] getSecretKeyBytes() {
         if (appKey.startsWith("base64:")) {
             String base64Key = appKey.substring(7);
-            return java.util.Base64.getDecoder().decode(base64Key);
+            try {
+                // 标准 base64 解析（对接 Laravel APP_KEY=base64:xxxx）
+                return java.util.Base64.getDecoder().decode(base64Key);
+            } catch (IllegalArgumentException e) {
+                // 当配置值不是合法 base64（例如默认的 your-secret-key-here 占位符）时，
+                // 回退为普通字符串键，避免 Illegal base64 character 错误。
+                logger.warn("Invalid base64 app.key, fallback to raw string key: {}", e.getMessage());
+                return base64Key.getBytes(StandardCharsets.UTF_8);
+            }
         }
         return appKey.getBytes(StandardCharsets.UTF_8);
     }

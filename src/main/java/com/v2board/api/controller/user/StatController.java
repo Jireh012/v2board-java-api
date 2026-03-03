@@ -102,8 +102,11 @@ public class StatController {
 
     /**
      * 流量日志，对齐 PHP V1\\User\\StatController::getTrafficLog。
+     * 兼容路径：
+     * - /api/v1/user/stat/getTrafficLog
+     * - /api/v1/user/trafficLog
      */
-    @GetMapping("/trafficLog")
+    @GetMapping({"/trafficLog", "/stat/getTrafficLog"})
     public ApiResponse<List<StatUser>> getTrafficLog(HttpServletRequest request) {
         Object attr = request.getAttribute("user");
         if (!(attr instanceof User user)) {

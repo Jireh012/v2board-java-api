@@ -9,6 +9,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.Calendar;
@@ -17,6 +19,8 @@ import java.util.Calendar;
 public class UserService {
     
     private static final Logger logger = LoggerFactory.getLogger(UserService.class);
+    
+    private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
     
     @Autowired
     private UserMapper userMapper;
@@ -91,13 +95,31 @@ public class UserService {
     
     /**
      * 校验密码
-     * 当前实现假定 password 字段为明文或已按同一算法加密，后续可根据实际情况调整。
+     * 兼容：
+     * - PHP 端已有的 bcrypt 哈希（v2board 默认）
+     * - 纯明文存储（测试环境或早期数据）
      */
     public boolean verifyPassword(User user, String rawPassword) {
         if (user == null || rawPassword == null) {
             return false;
         }
-        return rawPassword.equals(user.getPassword());
+        String stored = user.getPassword();
+        if (stored == null || stored.isEmpty()) {
+            return false;
+        }
+        
+        // bcrypt 哈希（PHP: password_hash 默认生成以 $2a/$2b/$2y 开头的字符串）
+        if (stored.startsWith("$2a$") || stored.startsWith("$2b$") || stored.startsWith("$2y$")) {
+            try {
+                return passwordEncoder.matches(rawPassword, stored);
+            } catch (Exception e) {
+                logger.warn("BCrypt password verify failed", e);
+                return false;
+            }
+        }
+        
+        // 退回到明文对比
+        return rawPassword.equals(stored);
     }
     
     /**

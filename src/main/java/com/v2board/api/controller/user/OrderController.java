@@ -267,8 +267,11 @@ public class OrderController {
 
     /**
      * 对齐 PHP User\\OrderController::getPaymentMethod
+     * 兼容路径：
+     * - /api/v1/user/order/getPaymentMethod
+     * - /api/v1/user/order/paymentMethod
      */
-    @GetMapping("/paymentMethod")
+    @GetMapping({"/paymentMethod", "/getPaymentMethod"})
     public ApiResponse<List<Map<String, Object>>> getPaymentMethod() {
         LambdaQueryWrapper<Payment> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Payment::getEnable, 1)

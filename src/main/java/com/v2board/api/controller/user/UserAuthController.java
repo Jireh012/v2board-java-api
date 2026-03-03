@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
@@ -26,9 +27,10 @@ public class UserAuthController {
 
     /**
      * 对齐 PHP 版 /api/v1/user/checkLogin
+     * 兼容 GET/POST 两种请求方式。
      * 这里通过 AuthService 解密前端携带的 JWT（与 PHP 端生成方式兼容）
      */
-    @PostMapping("/checkLogin")
+    @RequestMapping(value = "/checkLogin", method = {RequestMethod.GET, RequestMethod.POST})
     public ApiResponse<Map<String, Object>> checkLogin(HttpServletRequest request) {
         String jwt = resolveJwt(request);
         if (!StringUtils.hasText(jwt)) {
