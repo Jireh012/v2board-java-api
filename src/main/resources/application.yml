@@ -40,6 +40,16 @@ v2board:
   subscribe-url:  # 订阅URL列表（逗号分隔，留空则使用当前域名）
   show-subscribe-expire: 5  # TOTP过期时间（分钟）
   allow-new-period: 0  # 是否允许新周期：0-否，1-是
+  app-name: ${APP_NAME:V2Board}
+  app-url: ${APP_URL:}
+  invite-gen-limit: ${INVITE_GEN_LIMIT:5}
+  invite-commission: ${INVITE_COMMISSION:10}
+  commission-distribution-enable: ${COMMISSION_DISTRIBUTION_ENABLE:0}
+  commission-distribution-l1: ${COMMISSION_DISTRIBUTION_L1:100}
+  ticket-status: ${TICKET_STATUS:0} # 0: 全开放, 1: 仅有付费订单用户可开, 2: 完全关闭
+  withdraw-close-enable: ${WITHDRAW_CLOSE_ENABLE:0}
+  commission-withdraw-method: ${COMMISSION_WITHDRAW_METHOD:alipay,wechat}
+  commission-withdraw-limit: ${COMMISSION_WITHDRAW_LIMIT:100}
 
 # 应用配置
 app:

@@ -11,6 +11,7 @@ public class User {
     @TableId(type = IdType.AUTO)
     private Long id;
     private String email;
+    private String password;
     private String uuid;
     private String token;
     private Integer groupId;
@@ -22,6 +23,17 @@ public class User {
     private Integer deviceLimit; // 设备限制数量
     private Integer banned;      // 是否封禁 0-否 1-是
     private Long createdAt;      // Unix 时间戳
-    private Long updatedAt;       // Unix 时间戳
+    private Long updatedAt;      // Unix 时间戳
+    // 以下字段根据 PHP 模型常用字段补充，允许为 null
+    private Long lastLoginAt;
+    private Integer autoRenewal;
+    private Integer remindExpire;
+    private Integer remindTraffic;
+    private Long balance;
+    private Long commissionBalance;
+    private Integer discount;
+    private Integer commissionRate;
+    private Long telegramId;
+    private Long inviteUserId;
 }
 

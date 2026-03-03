@@ -50,6 +50,18 @@ public class UserService {
     }
     
     /**
+     * 根据邮箱查找用户
+     */
+    public User findByEmail(String email) {
+        if (email == null || email.isEmpty()) {
+            return null;
+        }
+        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(User::getEmail, email);
+        return userMapper.selectOne(wrapper);
+    }
+    
+    /**
      * 检查用户是否可用
      * 用户必须：未封禁、有流量配额、未过期
      */
@@ -75,6 +87,28 @@ public class UserService {
         }
         
         return true;
+    }
+    
+    /**
+     * 校验密码
+     * 当前实现假定 password 字段为明文或已按同一算法加密，后续可根据实际情况调整。
+     */
+    public boolean verifyPassword(User user, String rawPassword) {
+        if (user == null || rawPassword == null) {
+            return false;
+        }
+        return rawPassword.equals(user.getPassword());
+    }
+    
+    /**
+     * 更新密码
+     */
+    public void updatePassword(User user, String newPassword) {
+        if (user == null || newPassword == null) {
+            return;
+        }
+        user.setPassword(newPassword);
+        userMapper.updateById(user);
     }
     
     /**

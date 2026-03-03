@@ -34,5 +34,8 @@ public class Plan {
     private Integer capacityLimit;
     private Long createdAt;
     private Long updatedAt;
+    
+    @TableField(exist = false)
+    private Long count;
 }
 

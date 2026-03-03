@@ -129,6 +129,11 @@ public class Helper {
                                          String subscribeUrls, Integer subscribeExpire) {
         if (subscribePath == null || subscribePath.isEmpty()) {
             subscribePath = "/api/v1/client/subscribe";
+        } else {
+            // 统一路径格式，保证与 DynamicRouteConfig 一致
+            if (!subscribePath.startsWith("/")) {
+                subscribePath = "/" + subscribePath;
+            }
         }
         
         String[] urlArray = subscribeUrls != null && !subscribeUrls.isEmpty() 

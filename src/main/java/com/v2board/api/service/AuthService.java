@@ -113,7 +113,61 @@ public class AuthService {
             return false;
         }
     }
-    
+
+    /**
+     * 获取用户的所有活跃 session 列表（简化为缓存中的 key 集合）。
+     * 对齐 PHP AuthService::getSessions 的返回形态（这里只返回 sessionId 列表）。
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> getSessions(Long userId) {
+        try {
+            String cacheKey = "USER_SESSIONS_" + userId;
+            Object data = cacheService.get(cacheKey);
+            if (data instanceof Map) {
+                return (Map<String, Object>) data;
+            }
+            return new HashMap<>();
+        } catch (Exception e) {
+            logger.error("Error getting sessions for user {}", userId, e);
+            return new HashMap<>();
+        }
+    }
+
+    /**
+     * 移除单个 session。
+     */
+    @SuppressWarnings("unchecked")
+    public boolean removeSession(Long userId, String sessionId) {
+        try {
+            String cacheKey = "USER_SESSIONS_" + userId;
+            Object data = cacheService.get(cacheKey);
+            if (!(data instanceof Map)) {
+                return false;
+            }
+            Map<String, Object> sessions = (Map<String, Object>) data;
+            Object removed = sessions.remove(sessionId);
+            cacheService.set(cacheKey, sessions, 3600, java.util.concurrent.TimeUnit.SECONDS);
+            return removed != null;
+        } catch (Exception e) {
+            logger.error("Error removing session {} for user {}", sessionId, userId, e);
+            return false;
+        }
+    }
+
+    /**
+     * 移除用户所有 session。
+     */
+    public void removeAllSession(User user) {
+        if (user == null || user.getId() == null) {
+            return;
+        }
+        try {
+            String cacheKey = "USER_SESSIONS_" + user.getId();
+            cacheService.delete(cacheKey);
+        } catch (Exception e) {
+            logger.error("Error removing all sessions for user {}", user.getId(), e);
+        }
+    }
     /**
      * 获取密钥字节数组
      * 支持base64:前缀的配置格式

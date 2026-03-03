@@ -1,6 +1,7 @@
 package com.v2board.api.config;
 
 import com.v2board.api.middleware.ClientTokenInterceptor;
+import com.v2board.api.middleware.ClientAuthInterceptor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,6 +18,9 @@ public class WebConfig implements WebMvcConfigurer {
     
     @Autowired
     private ClientTokenInterceptor clientTokenInterceptor;
+    
+    @Autowired
+    private ClientAuthInterceptor clientAuthInterceptor;
     
     @Value("${v2board.subscribe-path:}")
     private String subscribePath;
@@ -42,6 +46,10 @@ public class WebConfig implements WebMvcConfigurer {
         // 拦截配置的订阅路径
         registry.addInterceptor(clientTokenInterceptor)
             .addPathPatterns(pathToIntercept);
+        
+        // 用户与管理端 API 登录态拦截器（基于 JWT/session）
+        registry.addInterceptor(clientAuthInterceptor)
+                .addPathPatterns("/api/v1/user/**", "/api/v1/admin/**");
         
         logger.debug("Registered interceptor for subscribe path: {}", pathToIntercept);
     }
