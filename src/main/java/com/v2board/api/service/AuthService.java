@@ -67,8 +67,9 @@ public class AuthService {
 
         Map<String, Object> result = new HashMap<>();
         result.put("token", user.getToken());
-        // 当前 User 模型可能尚未包含 is_admin 字段，这里先按普通用户处理
-        result.put("is_admin", false);
+        // 根据 v2_user.is_admin 字段判断是否为管理员
+        boolean isAdmin = user.getIsAdmin() != null && user.getIsAdmin() == 1;
+        result.put("is_admin", isAdmin);
         result.put("auth_data", jwt);
         return result;
     }
@@ -124,9 +125,9 @@ public class AuthService {
             Map<String, Object> userMap = new HashMap<>();
             userMap.put("id", user.getId());
             userMap.put("email", user.getEmail());
-            // 注意：User模型中可能没有is_admin和is_staff字段，需要根据实际情况调整
-            userMap.put("is_admin", false);  // 默认值，需要根据实际数据库字段调整
-            userMap.put("is_staff", false);  // 默认值，需要根据实际数据库字段调整
+            boolean isAdmin = user.getIsAdmin() != null && user.getIsAdmin() == 1;
+            userMap.put("is_admin", isAdmin);
+            userMap.put("is_staff", false);  // 目前暂不区分 staff，保持为 false
             
             // 缓存1小时
             cacheService.set(jwt, userMap, 3600, java.util.concurrent.TimeUnit.SECONDS);

@@ -22,6 +22,7 @@ public class User {
     private Long transferEnable; // 总流量（字节）
     private Integer deviceLimit; // 设备限制数量
     private Integer banned;      // 是否封禁 0-否 1-是
+    private Integer isAdmin;     // 是否管理员 0-否 1-是
     private Long createdAt;      // Unix 时间戳
     private Long updatedAt;      // Unix 时间戳
     // 以下字段根据 PHP 模型常用字段补充，允许为 null
