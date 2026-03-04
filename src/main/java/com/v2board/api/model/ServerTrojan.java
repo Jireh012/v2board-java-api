@@ -16,6 +16,8 @@ public class ServerTrojan {
     private String name;
     private String host;
     private String port;
+    /** 流量倍率 */
+    private String rate;
     private String serverName;
     private Integer allowInsecure;
     

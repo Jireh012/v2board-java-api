@@ -16,6 +16,8 @@ public class ServerVmess {
     private String name;
     private String host;
     private String port;
+    /** 流量倍率 */
+    private String rate;
     private String network;
     private Integer tls;
     

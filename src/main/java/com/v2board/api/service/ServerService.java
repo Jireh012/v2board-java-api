@@ -145,6 +145,7 @@ public class ServerService {
             map.put("host", server.getHost());
             map.put("port", portStr); // 已经处理过端口范围
             map.put("cipher", server.getCipher());
+            map.put("rate", server.getRate() != null && !server.getRate().isEmpty() ? server.getRate() : "1");
             map.put("created_at", server.getCreatedAt());
             map.put("updated_at", server.getUpdatedAt()); // 添加 updated_at 用于 cache_key
             map.put("sort", server.getSort());
@@ -271,6 +272,7 @@ public class ServerService {
             map.put("name", server.getName());
             map.put("host", server.getHost());
             map.put("port", portStr); // 已经处理过端口范围
+            map.put("rate", server.getRate() != null && !server.getRate().isEmpty() ? server.getRate() : "1");
             map.put("server_name", server.getServerName());
             map.put("allow_insecure", server.getAllowInsecure() != null && server.getAllowInsecure() == 1);
             map.put("created_at", server.getCreatedAt());
@@ -319,6 +321,7 @@ public class ServerService {
             map.put("name", server.getName());
             map.put("host", server.getHost());
             map.put("port", server.getPort());
+            map.put("rate", server.getRate() != null && !server.getRate().isEmpty() ? server.getRate() : "1");
             map.put("created_at", server.getCreatedAt());
             map.put("sort", server.getSort());
             map.put("last_check_at", 0L);
@@ -379,6 +382,7 @@ public class ServerService {
                 map.put("name", server.getName());
                 map.put("host", server.getHost());
                 map.put("port", port != null ? port : 0);
+                map.put("rate", server.getRate() != null && !server.getRate().isEmpty() ? server.getRate() : "1");
                 map.put("network", server.getNetwork());
                 // 直接使用Integer类型的tls值：0=none, 1=tls, 2=reality
                 map.put("tls", server.getTls() != null ? server.getTls() : 0);

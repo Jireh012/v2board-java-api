@@ -17,6 +17,8 @@ public class ServerShadowsocks {
     private String host;
     private String port;
     private String cipher;
+    /** 流量倍率，如 1、1.5、2 */
+    private String rate;
     
     @TableField("`show`")
     private Integer show;
