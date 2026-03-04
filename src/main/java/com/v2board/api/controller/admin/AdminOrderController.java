@@ -202,7 +202,9 @@ public class AdminOrderController {
         order.setUserId(user.getId());
         order.setPlanId(plan.getId());
         order.setPeriod(period);
-        order.setTradeNo(java.util.UUID.randomUUID().toString().replace("-", ""));
+        // 管理员手动分配订单，沿用原版 Helper::guid 的风格使用随机字符串也可；
+        // 这里统一改为 generateOrderNo，便于前台展示和检索。
+        order.setTradeNo(com.v2board.api.util.Helper.generateOrderNo());
         order.setTotalAmount(totalAmount);
         order.setStatus(0);
         order.setType(resolveOrderTypeForUser(user, plan.getId(), period));

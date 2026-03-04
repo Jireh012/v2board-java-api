@@ -107,6 +107,7 @@ public class OrderController {
         data.put("total_amount", order.getTotalAmount());
         data.put("status", order.getStatus());
         data.put("surplus_order_ids", order.getSurplusOrderIds());
+        data.put("created_at", order.getCreatedAt());
         if (order.getPlanId() == 0) {
             Map<String, Object> plan = new HashMap<>();
             plan.put("id", 0);
@@ -146,7 +147,8 @@ public class OrderController {
             order.setUserId(user.getId());
             order.setPlanId(0L);
             order.setPeriod("deposit");
-            order.setTradeNo(Helper.getServerKey(System.currentTimeMillis(), 16));
+            // 订单号对齐原版：Helper::generateOrderNo()，形如 2026030411030655845024696
+            order.setTradeNo(Helper.generateOrderNo());
             order.setTotalAmount(depositAmount);
             order.setStatus(0);
             order.setType(9); // 充值
@@ -203,7 +205,8 @@ public class OrderController {
         order.setUserId(user.getId());
         order.setPlanId(plan.getId());
         order.setPeriod(period);
-        order.setTradeNo(Helper.getServerKey(System.currentTimeMillis(), 16));
+        // 订单号对齐原版：Helper::generateOrderNo()，形如 2026030411030655845024696
+        order.setTradeNo(Helper.generateOrderNo());
         order.setTotalAmount(price.longValue());
         order.setStatus(0);
         order.setType(orderType);
@@ -275,11 +278,8 @@ public class OrderController {
         payOrder.put("user_id", order.getUserId());
         payOrder.put("stripe_token", null);
         Map<String, Object> payResult = paymentService.pay(payment.getPayment(), payment.getId(), payOrder);
-        
-        Map<String, Object> result = new HashMap<>();
-        result.put("type", 0);
-        result.put("data", payResult);
-        return ApiResponse.success(result);
+        // 直接返回支付驱动结果（type + data），与 PHP 行为对齐
+        return ApiResponse.success(payResult);
     }
 
     /**

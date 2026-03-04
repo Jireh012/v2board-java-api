@@ -35,6 +35,24 @@ public class Helper {
     }
     
     /**
+     * 生成订单号
+     * 对齐 PHP Helper::generateOrderNo():
+     *   date('YmdHms') . substr(microtime(), 2, 6) . mt_rand(10000, 99999)
+     */
+    public static String generateOrderNo() {
+        // 时间部分：yyyyMMddHHmmss（14 位）
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        String timePart = now.format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
+        // 微秒部分：取当前纳秒的低 6 位数字
+        long micros = System.nanoTime() % 1_000_000L;
+        String microPart = String.format("%06d", micros);
+        // 随机部分：5 位随机数
+        int random = java.util.concurrent.ThreadLocalRandom.current().nextInt(10000, 100000);
+        String randomPart = String.format("%05d", random);
+        return timePart + microPart + randomPart;
+    }
+    
+    /**
      * 随机端口（处理端口范围）
      */
     public static int randomPort(String portStr) {

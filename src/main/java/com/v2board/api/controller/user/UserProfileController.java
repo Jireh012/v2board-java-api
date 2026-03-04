@@ -316,7 +316,8 @@ public class UserProfileController {
         order.setUserId(current.getId());
         order.setPlanId(0L);
         order.setPeriod("deposit");
-        order.setTradeNo(java.util.UUID.randomUUID().toString().replace("-", ""));
+        // 与原版一致，使用 Helper.generateOrderNo() 生成充值订单号
+        order.setTradeNo(com.v2board.api.util.Helper.generateOrderNo());
         order.setTotalAmount(0L);
         order.setStatus(3);
         order.setSurplusAmount(transferAmount);
