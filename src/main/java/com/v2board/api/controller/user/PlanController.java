@@ -23,7 +23,9 @@ public class PlanController {
 
     @GetMapping("/fetch")
     public ApiResponse<Object> fetch(@RequestParam(value = "id", required = false) Long id,
-                                     User currentUser) {
+                                    @RequestParam(value = "order_by", required = false) String orderBy,
+                                    @RequestParam(value = "order", required = false) String order,
+                                    User currentUser) {
         if (id != null) {
             Plan plan = planMapper.selectById(id);
             if (plan == null) {
@@ -39,8 +41,15 @@ public class PlanController {
             return ApiResponse.success(plan);
         }
         LambdaQueryWrapper<Plan> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Plan::getShow, 1)
-                .orderByAsc(Plan::getSort);
+        wrapper.eq(Plan::getShow, 1);
+        boolean asc = !"desc".equalsIgnoreCase(order);
+        if ("period".equalsIgnoreCase(orderBy)) {
+            wrapper.orderBy(true, asc, Plan::getMonthPrice);
+        } else if ("traffic".equalsIgnoreCase(orderBy)) {
+            wrapper.orderBy(true, asc, Plan::getTransferEnable);
+        } else {
+            wrapper.orderByAsc(Plan::getSort);
+        }
         List<Plan> plans = planMapper.selectList(wrapper);
         return ApiResponse.success(plans);
     }

@@ -311,6 +311,7 @@ public class UserProfileController {
         long balance = current.getBalance() != null ? current.getBalance() : 0L;
         long newBalance = balance + transferAmount;
 
+        long now = System.currentTimeMillis() / 1000;
         Order order = new Order();
         order.setUserId(current.getId());
         order.setPlanId(0L);
@@ -320,6 +321,9 @@ public class UserProfileController {
         order.setStatus(3);
         order.setSurplusAmount(transferAmount);
         order.setCallbackNo("Commission transfer");
+        order.setType(9); // 充值 / 佣金转余额
+        order.setCreatedAt(now);
+        order.setUpdatedAt(now);
 
         current.setCommissionBalance(newCommission);
         current.setBalance(newBalance);

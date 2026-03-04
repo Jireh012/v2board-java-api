@@ -197,6 +197,7 @@ public class AdminOrderController {
         if (orderService.userHasUnfinishedOrder(user.getId())) {
             throw new BusinessException(500, "该用户还有待支付的订单，无法分配");
         }
+        long now = System.currentTimeMillis() / 1000;
         Order order = new Order();
         order.setUserId(user.getId());
         order.setPlanId(plan.getId());
@@ -204,10 +205,36 @@ public class AdminOrderController {
         order.setTradeNo(java.util.UUID.randomUUID().toString().replace("-", ""));
         order.setTotalAmount(totalAmount);
         order.setStatus(0);
+        order.setType(resolveOrderTypeForUser(user, plan.getId(), period));
+        order.setCreatedAt(now);
+        order.setUpdatedAt(now);
         if (orderMapper.insert(order) <= 0) {
             throw new BusinessException(500, "订单创建失败");
         }
         return ApiResponse.success(order.getTradeNo());
+    }
+
+    /**
+     * 根据用户当前订阅与周期推断订单类型：
+     * 1-新购 2-续费 3-升级 4-流量重置。
+     */
+    private int resolveOrderTypeForUser(User user, Long planId, String period) {
+        if ("reset_price".equals(period)) {
+            return 4;
+        }
+        if (user == null) {
+            return 1;
+        }
+        Long userPlanId = user.getPlanId();
+        Long expiredAt = user.getExpiredAt();
+        boolean notExpired = expiredAt != null && expiredAt > System.currentTimeMillis() / 1000;
+        if (userPlanId != null && !planId.equals(userPlanId) && (notExpired || expiredAt == null)) {
+            return 3;
+        }
+        if (notExpired && planId.equals(userPlanId)) {
+            return 2;
+        }
+        return 1;
     }
 }
 

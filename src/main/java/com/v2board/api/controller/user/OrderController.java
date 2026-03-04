@@ -6,6 +6,7 @@ import com.v2board.api.common.BusinessException;
 import com.v2board.api.mapper.OrderMapper;
 import com.v2board.api.mapper.PaymentMapper;
 import com.v2board.api.mapper.PlanMapper;
+import com.v2board.api.mapper.UserMapper;
 import com.v2board.api.model.Order;
 import com.v2board.api.model.Payment;
 import com.v2board.api.model.Plan;
@@ -45,6 +46,9 @@ public class OrderController {
     
     @Autowired
     private PaymentService paymentService;
+
+    @Autowired
+    private UserMapper userMapper;
 
     /**
      * 对齐 PHP User\\OrderController::fetch
@@ -145,6 +149,7 @@ public class OrderController {
             order.setTradeNo(Helper.getServerKey(System.currentTimeMillis(), 16));
             order.setTotalAmount(depositAmount);
             order.setStatus(0);
+            order.setType(9); // 充值
             orderMapper.insert(order);
             return ApiResponse.success(order.getTradeNo());
         }
@@ -190,6 +195,10 @@ public class OrderController {
             throw new BusinessException(500, "This payment period cannot be purchased, please choose another period");
         }
 
+        User dbUser = userMapper.selectById(user.getId());
+        int orderType = resolveOrderType(dbUser, plan.getId(), period);
+        long now = System.currentTimeMillis() / 1000;
+
         Order order = new Order();
         order.setUserId(user.getId());
         order.setPlanId(plan.getId());
@@ -197,9 +206,34 @@ public class OrderController {
         order.setTradeNo(Helper.getServerKey(System.currentTimeMillis(), 16));
         order.setTotalAmount(price.longValue());
         order.setStatus(0);
+        order.setType(orderType);
+        order.setCreatedAt(now);
+        order.setUpdatedAt(now);
         orderMapper.insert(order);
 
         return ApiResponse.success(order.getTradeNo());
+    }
+
+    /**
+     * 与 PHP OrderService::setOrderType 对齐：1-新购 2-续费 3-升级 4-流量重置 9-充值
+     */
+    private int resolveOrderType(User user, Long planId, String period) {
+        if ("reset_price".equals(period)) {
+            return 4;
+        }
+        if (user == null) {
+            return 1;
+        }
+        Long userPlanId = user.getPlanId();
+        Long expiredAt = user.getExpiredAt();
+        boolean notExpired = expiredAt != null && expiredAt > System.currentTimeMillis() / 1000;
+        if (userPlanId != null && !planId.equals(userPlanId) && (notExpired || expiredAt == null)) {
+            return 3; // 升级
+        }
+        if (notExpired && planId.equals(userPlanId)) {
+            return 2; // 续费
+        }
+        return 1; // 新购
     }
 
     /**
