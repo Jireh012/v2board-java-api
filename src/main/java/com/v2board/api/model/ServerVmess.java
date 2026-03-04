@@ -21,11 +21,29 @@ public class ServerVmess {
     private String network;
     private Integer tls;
     
+    /**
+     * TLS 配置(JSON)，对应 PHP casts 中的 tlsSettings
+     */
     @TableField("tlsSettings")
     private String tlsSettings;
     
+    /**
+     * 传输层配置(JSON)，对应 networkSettings
+     */
     @TableField("networkSettings")
     private String networkSettings;
+
+    /**
+     * DNS 配置(JSON)，对应 dnsSettings
+     */
+    @TableField("dnsSettings")
+    private String dnsSettings;
+
+    /**
+     * 规则配置(JSON)，对应 ruleSettings
+     */
+    @TableField("ruleSettings")
+    private String ruleSettings;
     
     @TableField("`show`")
     private Integer show;
@@ -35,6 +53,18 @@ public class ServerVmess {
     
     @TableField(typeHandler = JacksonTypeHandler.class)
     private List<Integer> groupId;
+
+    /**
+     * 路由 ID 列表，对应 route_id（JSON 数组）
+     */
+    @TableField(typeHandler = JacksonTypeHandler.class)
+    private List<Integer> routeId;
+
+    /**
+     * 标签列表，对应 tags（JSON 数组）
+     */
+    @TableField(typeHandler = JacksonTypeHandler.class)
+    private List<String> tags;
     
     private Long createdAt;      // Unix 时间戳
     private Long updatedAt;       // Unix 时间戳

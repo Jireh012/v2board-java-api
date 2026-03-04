@@ -27,7 +27,24 @@ public class ServerVless {
     private String networkSettings;  // 数据库字段名是 network_settings
     
     private String flow;
-    private String tags;
+
+    /**
+     * 加密方式，对应 encryption
+     */
+    private String encryption;
+
+    /**
+     * 加密配置(JSON)，对应 encryption_settings
+     */
+    @TableField("encryption_settings")
+    private String encryptionSettings;
+
+    /**
+     * 标签列表，对应 tags(JSON 数组)
+     */
+    @TableField(value = "tags", typeHandler = JacksonTypeHandler.class)
+    private java.util.List<String> tags;
+
     private String rate;
     
     @TableField("`show`")
@@ -38,6 +55,12 @@ public class ServerVless {
     
     @TableField(value = "group_id", typeHandler = JacksonTypeHandler.class)
     private List<Object> groupId;  // 使用 Object 类型，因为 JSON 可能解析为 String 或 Integer
+
+    /**
+     * 路由 ID 列表，对应 route_id(JSON 数组)
+     */
+    @TableField(value = "route_id", typeHandler = JacksonTypeHandler.class)
+    private List<Integer> routeId;
     
     private Long createdAt;      // Unix 时间戳
     private Long updatedAt;       // Unix 时间戳

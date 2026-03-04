@@ -2,18 +2,28 @@ package com.v2board.api.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.v2board.api.mapper.PlanMapper;
+import com.v2board.api.mapper.StatServerMapper;
+import com.v2board.api.mapper.StatUserMapper;
 import com.v2board.api.mapper.UserMapper;
 import com.v2board.api.model.Plan;
+import com.v2board.api.model.StatServer;
+import com.v2board.api.model.StatUser;
 import com.v2board.api.model.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.Calendar;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 @Service
 public class UserService {
@@ -27,6 +37,15 @@ public class UserService {
     
     @Autowired
     private PlanMapper planMapper;
+
+    @Autowired
+    private StatUserMapper statUserMapper;
+
+    @Autowired
+    private StatServerMapper statServerMapper;
+
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
     
     @Value("${v2board.reset-traffic-method:0}")
     private Integer defaultResetTrafficMethod;
@@ -64,6 +83,36 @@ public class UserService {
         wrapper.eq(User::getEmail, email);
         return userMapper.selectOne(wrapper);
     }
+
+    /**
+     * 获取可用用户（按节点分组限制）。
+     * PHP: ServerService::getAvailableUsers($groupId)
+     */
+    public List<User> getAvailableUsers(List<Integer> groupIds) {
+        long now = System.currentTimeMillis() / 1000;
+        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
+        if (groupIds != null && !groupIds.isEmpty()) {
+            wrapper.in(User::getGroupId, groupIds);
+        }
+        wrapper.apply("u + d < transfer_enable");
+        wrapper.and(q -> q.ge(User::getExpiredAt, now).or().isNull(User::getExpiredAt));
+        wrapper.eq(User::getBanned, 0);
+        return userMapper.selectList(wrapper);
+    }
+
+    /**
+     * 获取有设备限制且当前可用的用户列表。
+     * PHP: UserService::getDeviceLimitedUsers()
+     */
+    public List<User> getDeviceLimitedUsers() {
+        long now = System.currentTimeMillis() / 1000;
+        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
+        wrapper.apply("u + d < transfer_enable");
+        wrapper.and(q -> q.ge(User::getExpiredAt, now).or().isNull(User::getExpiredAt));
+        wrapper.eq(User::getBanned, 0);
+        wrapper.gt(User::getDeviceLimit, 0);
+        return userMapper.selectList(wrapper);
+    }
     
     /**
      * 检查用户是否可用
@@ -91,6 +140,125 @@ public class UserService {
         }
         
         return true;
+    }
+
+    /**
+     * 处理节点上报的流量数据（仅用户维度）。
+     * 兼容旧调用。
+     */
+    public void trafficFetch(double rate, Map<String, List<Long>> data) {
+        trafficFetch(null, null, rate, data);
+    }
+
+    /**
+     * 处理节点上报的流量数据。
+     * 对齐 PHP UserService::trafficFetch + StatUserJob + StatServerJob 的核心逻辑，简化为同步执行。
+     *
+     * @param serverId   节点 ID
+     * @param serverType 节点类型，例如 vmess/shadowsocks 等
+     * @param rate       节点流量倍率
+     * @param data       key 为用户 ID，value 为 [u, d] 数组（字节）
+     */
+    public void trafficFetch(Long serverId, String serverType, double rate, Map<String, List<Long>> data) {
+        if (data == null || data.isEmpty()) {
+            return;
+        }
+
+        long today = LocalDate.now(ZoneOffset.UTC).atStartOfDay().toEpochSecond(ZoneOffset.UTC);
+
+        Map<Long, long[]> trafficMap = new HashMap<>();
+        long totalU = 0L;
+        long totalD = 0L;
+        for (Map.Entry<String, List<Long>> entry : data.entrySet()) {
+            try {
+                Long userId = Long.valueOf(entry.getKey());
+                List<Long> values = entry.getValue();
+                if (values == null || values.size() < 2) {
+                    continue;
+                }
+                long u = values.get(0) != null ? values.get(0) : 0L;
+                long d = values.get(1) != null ? values.get(1) : 0L;
+                trafficMap.put(userId, new long[]{u, d});
+
+                long incU = (long) (u * rate);
+                long incD = (long) (d * rate);
+                redisTemplate.opsForHash().increment("v2board_upload_traffic", String.valueOf(userId), incU);
+                redisTemplate.opsForHash().increment("v2board_download_traffic", String.valueOf(userId), incD);
+                totalU += incU;
+                totalD += incD;
+            } catch (NumberFormatException ignore) {
+            }
+        }
+
+        if (trafficMap.isEmpty()) {
+            return;
+        }
+
+        for (Map.Entry<Long, long[]> e : trafficMap.entrySet()) {
+            Long userId = e.getKey();
+            long[] td = e.getValue();
+            long incU = (long) (td[0] * rate);
+            long incD = (long) (td[1] * rate);
+
+            User user = userMapper.selectById(userId);
+            if (user != null) {
+                long currentU = user.getU() != null ? user.getU() : 0L;
+                long currentD = user.getD() != null ? user.getD() : 0L;
+                user.setU(currentU + incU);
+                user.setD(currentD + incD);
+                userMapper.updateById(user);
+            }
+
+            LambdaQueryWrapper<StatUser> wrapper = new LambdaQueryWrapper<>();
+            wrapper.eq(StatUser::getUserId, userId)
+                    .eq(StatUser::getServerRate, rate)
+                    .eq(StatUser::getRecordAt, today);
+            StatUser stat = statUserMapper.selectOne(wrapper);
+            if (stat == null) {
+                stat = new StatUser();
+                stat.setUserId(userId);
+                stat.setServerRate(rate);
+                stat.setRecordAt(today);
+                stat.setU(incU);
+                stat.setD(incD);
+                long nowTs = System.currentTimeMillis() / 1000;
+                stat.setCreatedAt(nowTs);
+                stat.setUpdatedAt(nowTs);
+                statUserMapper.insert(stat);
+            } else {
+                stat.setU(stat.getU() + incU);
+                stat.setD(stat.getD() + incD);
+                stat.setUpdatedAt(System.currentTimeMillis() / 1000);
+                statUserMapper.updateById(stat);
+            }
+        }
+
+        // 统计节点级流量（StatServer），对齐 PHP StatServerJob
+        if (serverId != null && serverType != null && (totalU > 0 || totalD > 0)) {
+            LambdaQueryWrapper<StatServer> sw = new LambdaQueryWrapper<>();
+            sw.eq(StatServer::getServerId, serverId)
+              .eq(StatServer::getServerType, serverType)
+              .eq(StatServer::getRecordAt, today);
+            StatServer statServer = statServerMapper.selectOne(sw);
+            long nowTs = System.currentTimeMillis() / 1000;
+            if (statServer == null) {
+                statServer = new StatServer();
+                statServer.setServerId(serverId);
+                statServer.setServerType(serverType);
+                statServer.setU(totalU);
+                statServer.setD(totalD);
+                statServer.setRecordType("d");
+                statServer.setRecordAt(today);
+                statServer.setCreatedAt(nowTs);
+                statServer.setUpdatedAt(nowTs);
+                statServerMapper.insert(statServer);
+            } else {
+                statServer.setU((statServer.getU() != null ? statServer.getU() : 0L) + totalU);
+                statServer.setD((statServer.getD() != null ? statServer.getD() : 0L) + totalD);
+                statServer.setUpdatedAt(nowTs);
+                statServerMapper.updateById(statServer);
+            }
+        }
     }
     
     /**

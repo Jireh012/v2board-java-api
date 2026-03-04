@@ -88,6 +88,13 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- MessagePack (用于 UniProxy msgpack 响应) -->
+        <dependency>
+            <groupId>org.msgpack</groupId>
+            <artifactId>jackson-dataformat-msgpack</artifactId>
+            <version>0.9.11</version>
+        </dependency>
+
         <!-- BouncyCastle for crypto (PKCS#1 / PKCS#8 keys) -->
         <dependency>
             <groupId>org.bouncycastle</groupId>

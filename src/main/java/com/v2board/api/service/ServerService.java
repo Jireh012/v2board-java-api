@@ -1,18 +1,38 @@
 package com.v2board.api.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.v2board.api.mapper.*;
-import com.v2board.api.model.*;
+import com.v2board.api.mapper.ServerAnytlsMapper;
+import com.v2board.api.mapper.ServerHysteriaMapper;
+import com.v2board.api.mapper.ServerShadowsocksMapper;
+import com.v2board.api.mapper.ServerTrojanMapper;
+import com.v2board.api.mapper.ServerTuicMapper;
+import com.v2board.api.mapper.ServerV2nodeMapper;
+import com.v2board.api.mapper.ServerVlessMapper;
+import com.v2board.api.mapper.ServerVmessMapper;
+import com.v2board.api.model.ServerAnytls;
+import com.v2board.api.model.ServerHysteria;
+import com.v2board.api.model.ServerShadowsocks;
+import com.v2board.api.model.ServerTrojan;
+import com.v2board.api.model.ServerTuic;
+import com.v2board.api.model.ServerV2node;
 import com.v2board.api.model.ServerVless;
+import com.v2board.api.model.ServerVmess;
+import com.v2board.api.model.User;
 import com.v2board.api.util.Helper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -34,9 +54,21 @@ public class ServerService {
     
     @Autowired
     private ServerVlessMapper vlessMapper;
+
+    @Autowired
+    private ServerTuicMapper tuicMapper;
+
+    @Autowired
+    private ServerAnytlsMapper anytlsMapper;
+
+    @Autowired
+    private ServerV2nodeMapper v2nodeMapper;
     
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
     
     /**
      * 获取用户可用的服务器列表
@@ -103,6 +135,26 @@ public class ServerService {
             return server;
         }).collect(Collectors.toList());
     }
+
+    /**
+     * 查找指定类型与 ID 的服务器，供 UniProxy 使用。
+     */
+    public Object findServer(String serverType, Long serverId) {
+        if (serverId == null || serverType == null) {
+            return null;
+        }
+        return switch (serverType.toLowerCase(Locale.ROOT)) {
+            case "vmess" -> vmessMapper.selectById(serverId);
+            case "shadowsocks" -> shadowsocksMapper.selectById(serverId);
+            case "trojan" -> trojanMapper.selectById(serverId);
+            case "hysteria" -> hysteriaMapper.selectById(serverId);
+            case "vless" -> vlessMapper.selectById(serverId);
+            case "tuic" -> tuicMapper.selectById(serverId);
+            case "anytls" -> anytlsMapper.selectById(serverId);
+            case "v2node" -> v2nodeMapper.selectById(serverId);
+            default -> null;
+        };
+    }
     
     /**
      * 获取可用的 Shadowsocks 服务器
@@ -138,6 +190,9 @@ public class ServerService {
                 portStr = String.valueOf(Helper.randomPort(portStr));
             }
             
+            Long targetId = server.getParentId() != null ? server.getParentId() : server.getId();
+            Long lastCheckAt = getServerTimestamp("SERVER_SHADOWSOCKS_LAST_CHECK_AT", targetId);
+
             Map<String, Object> map = new HashMap<>();
             map.put("id", server.getId());
             map.put("type", "shadowsocks");
@@ -148,8 +203,8 @@ public class ServerService {
             map.put("rate", server.getRate() != null && !server.getRate().isEmpty() ? server.getRate() : "1");
             map.put("created_at", server.getCreatedAt());
             map.put("updated_at", server.getUpdatedAt()); // 添加 updated_at 用于 cache_key
+            map.put("last_check_at", lastCheckAt != null ? lastCheckAt : 0L);
             map.put("sort", server.getSort());
-            map.put("last_check_at", 0L); // 从缓存获取（PHP: Cache::get(...)）
             result.add(map);
             
             logger.debug("Shadowsocks server {} added: {}", server.getId(), server.getName());
@@ -192,6 +247,9 @@ public class ServerService {
                 portStr = String.valueOf(Helper.randomPort(portStr));
             }
             
+            Long targetId = server.getParentId() != null ? server.getParentId() : server.getId();
+            Long lastCheckAt = getServerTimestamp("SERVER_VMESS_LAST_CHECK_AT", targetId);
+
             Map<String, Object> map = new HashMap<>();
             map.put("id", server.getId());
             map.put("type", "vmess");
@@ -223,7 +281,7 @@ public class ServerService {
             
             map.put("created_at", server.getCreatedAt());
             map.put("sort", server.getSort());
-            map.put("last_check_at", 0L);
+            map.put("last_check_at", lastCheckAt != null ? lastCheckAt : 0L);
             result.add(map);
             
             logger.debug("VMess server {} added: {}", server.getId(), server.getName());
@@ -266,6 +324,9 @@ public class ServerService {
                 portStr = String.valueOf(Helper.randomPort(portStr));
             }
             
+            Long targetId = server.getParentId() != null ? server.getParentId() : server.getId();
+            Long lastCheckAt = getServerTimestamp("SERVER_TROJAN_LAST_CHECK_AT", targetId);
+
             Map<String, Object> map = new HashMap<>();
             map.put("id", server.getId());
             map.put("type", "trojan");
@@ -278,7 +339,7 @@ public class ServerService {
             map.put("created_at", server.getCreatedAt());
             map.put("updated_at", server.getUpdatedAt()); // 添加 updated_at 用于 cache_key
             map.put("sort", server.getSort());
-            map.put("last_check_at", 0L); // 从缓存获取（PHP: Cache::get(...)）
+            map.put("last_check_at", lastCheckAt != null ? lastCheckAt : 0L);
             result.add(map);
             
             logger.debug("Trojan server {} added: {}", server.getId(), server.getName());
@@ -315,6 +376,9 @@ public class ServerService {
                 continue;
             }
             
+            Long targetId = server.getParentId() != null ? server.getParentId() : server.getId();
+            Long lastCheckAt = getServerTimestamp("SERVER_HYSTERIA_LAST_CHECK_AT", targetId);
+
             Map<String, Object> map = new HashMap<>();
             map.put("id", server.getId());
             map.put("type", "hysteria");
@@ -324,12 +388,135 @@ public class ServerService {
             map.put("rate", server.getRate() != null && !server.getRate().isEmpty() ? server.getRate() : "1");
             map.put("created_at", server.getCreatedAt());
             map.put("sort", server.getSort());
-            map.put("last_check_at", 0L);
+            map.put("last_check_at", lastCheckAt != null ? lastCheckAt : 0L);
             result.add(map);
             
             logger.debug("Hysteria server {} added: {}", server.getId(), server.getName());
         }
         
+        return result;
+    }
+
+    /**
+     * 获取可用的 TUIC 服务器
+     */
+    private List<Map<String, Object>> getAvailableTuic(User user) {
+        List<ServerTuic> allServers = tuicMapper.selectList(
+                new LambdaQueryWrapper<ServerTuic>()
+                        .orderByAsc(ServerTuic::getSort)
+        );
+
+        logger.debug("Total TUIC servers found: {}", allServers.size());
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (ServerTuic server : allServers) {
+            if (server.getShow() == null || server.getShow() != 1) {
+                continue;
+            }
+            if (!isUserGroupMatched(server.getGroupId(), user.getGroupId())) {
+                continue;
+            }
+
+            Long targetId = server.getParentId() != null ? server.getParentId() : server.getId();
+            Long lastCheckAt = getServerTimestamp("SERVER_TUIC_LAST_CHECK_AT", targetId);
+
+            Map<String, Object> map = new HashMap<>();
+            map.put("id", server.getId());
+            map.put("type", "tuic");
+            map.put("name", server.getName());
+            map.put("host", server.getHost());
+            map.put("port", server.getPort());
+            map.put("rate", server.getRate() != null && !server.getRate().isEmpty() ? server.getRate() : "1");
+            map.put("server_port", server.getServerPort());
+            map.put("server_name", server.getServerName());
+            map.put("created_at", server.getCreatedAt());
+            map.put("sort", server.getSort());
+            map.put("last_check_at", lastCheckAt != null ? lastCheckAt : 0L);
+            result.add(map);
+        }
+        return result;
+    }
+
+    /**
+     * 获取可用的 AnyTLS 服务器
+     */
+    private List<Map<String, Object>> getAvailableAnyTLS(User user) {
+        List<ServerAnytls> allServers = anytlsMapper.selectList(
+                new LambdaQueryWrapper<ServerAnytls>()
+                        .orderByAsc(ServerAnytls::getSort)
+        );
+
+        logger.debug("Total AnyTLS servers found: {}", allServers.size());
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (ServerAnytls server : allServers) {
+            if (server.getShow() == null || server.getShow() != 1) {
+                continue;
+            }
+            if (!isUserGroupMatched(server.getGroupId(), user.getGroupId())) {
+                continue;
+            }
+
+            Long targetId = server.getParentId() != null ? server.getParentId() : server.getId();
+            Long lastCheckAt = getServerTimestamp("SERVER_ANYTLS_LAST_CHECK_AT", targetId);
+
+            Map<String, Object> map = new HashMap<>();
+            map.put("id", server.getId());
+            map.put("type", "anytls");
+            map.put("name", server.getName());
+            map.put("host", server.getHost());
+            map.put("port", server.getPort());
+            map.put("rate", server.getRate() != null && !server.getRate().isEmpty() ? server.getRate() : "1");
+            map.put("server_port", server.getServerPort());
+            map.put("server_name", server.getServerName());
+            map.put("padding_scheme", server.getPaddingScheme());
+            map.put("created_at", server.getCreatedAt());
+            map.put("sort", server.getSort());
+            map.put("last_check_at", lastCheckAt != null ? lastCheckAt : 0L);
+            result.add(map);
+        }
+        return result;
+    }
+
+    /**
+     * 获取可用的 V2node 服务器
+     */
+    private List<Map<String, Object>> getAvailableV2node(User user) {
+        List<ServerV2node> allServers = v2nodeMapper.selectList(
+                new LambdaQueryWrapper<ServerV2node>()
+                        .orderByAsc(ServerV2node::getSort)
+        );
+
+        logger.debug("Total V2node servers found: {}", allServers.size());
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (ServerV2node server : allServers) {
+            if (server.getShow() == null || server.getShow() != 1) {
+                continue;
+            }
+            if (!isUserGroupMatched(server.getGroupId(), user.getGroupId())) {
+                continue;
+            }
+
+            Long targetId = server.getParentId() != null ? server.getParentId() : server.getId();
+            Long lastCheckAt = getServerTimestamp("SERVER_V2NODE_LAST_CHECK_AT", targetId);
+
+            Map<String, Object> map = new HashMap<>();
+            map.put("id", server.getId());
+            map.put("type", "v2node");
+            map.put("name", server.getName());
+            map.put("host", server.getHost());
+            map.put("port", server.getPort());
+            map.put("rate", server.getRate() != null && !server.getRate().isEmpty() ? server.getRate() : "1");
+            map.put("server_port", server.getServerPort());
+            map.put("server_name", server.getServerName());
+            map.put("protocol", server.getProtocol());
+            map.put("network", server.getNetwork());
+            map.put("created_at", server.getCreatedAt());
+            map.put("sort", server.getSort());
+            map.put("last_check_at", lastCheckAt != null ? lastCheckAt : 0L);
+            result.add(map);
+        }
         return result;
     }
     
@@ -376,6 +563,9 @@ public class ServerService {
                 // 端口是 int 类型，不需要处理范围
                 Integer port = server.getPort();
                 
+                Long targetId = server.getParentId() != null ? server.getParentId() : server.getId();
+                Long lastCheckAt = getServerTimestamp("SERVER_VLESS_LAST_CHECK_AT", targetId);
+
                 Map<String, Object> map = new HashMap<>();
                 map.put("id", server.getId());
                 map.put("type", "vless");
@@ -411,7 +601,7 @@ public class ServerService {
                 map.put("created_at", server.getCreatedAt());
                 map.put("updated_at", server.getUpdatedAt()); // 添加 updated_at 用于 cache_key
                 map.put("sort", server.getSort());
-                map.put("last_check_at", 0L); // 从缓存获取（PHP: Cache::get(...)）
+                map.put("last_check_at", lastCheckAt != null ? lastCheckAt : 0L);
                 result.add(map);
                 
                 logger.debug("VLESS server {} added: {}", server.getId(), server.getName());
@@ -478,6 +668,22 @@ public class ServerService {
         logger.debug("Group match result: user group {} in server groups {} = {}", 
             userGroupId, serverGroupIds, matched);
         return matched;
+    }
+
+    private Long getServerTimestamp(String keyPrefix, Long id) {
+        try {
+            String key = keyPrefix + "_" + id;
+            Object value = redisTemplate.opsForValue().get(key);
+            if (value instanceof Number num) {
+                return num.longValue();
+            }
+            if (value instanceof String str && !str.isEmpty()) {
+                return Long.parseLong(str);
+            }
+        } catch (Exception e) {
+            logger.warn("Error reading server timestamp for {} {}", keyPrefix, id, e);
+        }
+        return null;
     }
 }
 
