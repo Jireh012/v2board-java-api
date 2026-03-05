@@ -18,16 +18,20 @@ public class StatUser {
     private Long d;
 
     @TableField("record_at")
+    @com.fasterxml.jackson.annotation.JsonProperty("record_at")
     private Long recordAt;
 
     @TableField("user_id")
+    @com.fasterxml.jackson.annotation.JsonProperty("user_id")
     private Long userId;
 
     @TableField("server_rate")
+    @com.fasterxml.jackson.annotation.JsonProperty("server_rate")
     private Double serverRate;
 
+    @com.fasterxml.jackson.annotation.JsonProperty("created_at")
     private Long createdAt;
 
+    @com.fasterxml.jackson.annotation.JsonProperty("updated_at")
     private Long updatedAt;
 }
-

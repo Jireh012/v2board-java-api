@@ -17,14 +17,15 @@ public class User {
     private Integer groupId;
     private Long planId;
     private Long expiredAt;
-    private Long u;              // 已用上传流量（字节）
-    private Long d;              // 已用下载流量（字节）
+    private Long u; // 已用上传流量（字节）
+    private Long d; // 已用下载流量（字节）
+    @com.fasterxml.jackson.annotation.JsonProperty("transfer_enable")
     private Long transferEnable; // 总流量（字节）
     private Integer deviceLimit; // 设备限制数量
-    private Integer banned;      // 是否封禁 0-否 1-是
-    private Integer isAdmin;     // 是否管理员 0-否 1-是
-    private Long createdAt;      // Unix 时间戳
-    private Long updatedAt;      // Unix 时间戳
+    private Integer banned; // 是否封禁 0-否 1-是
+    private Integer isAdmin; // 是否管理员 0-否 1-是
+    private Long createdAt; // Unix 时间戳
+    private Long updatedAt; // Unix 时间戳
     // 以下字段根据 PHP 模型常用字段补充，允许为 null
     private Long lastLoginAt;
     private Integer autoRenewal;
@@ -37,4 +38,3 @@ public class User {
     private Long telegramId;
     private Long inviteUserId;
 }
-

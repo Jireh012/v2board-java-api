@@ -31,9 +31,9 @@ public class Notice {
      */
     private String tags;
 
+    @com.fasterxml.jackson.annotation.JsonProperty("created_at")
     private Long createdAt;
 
+    @com.fasterxml.jackson.annotation.JsonProperty("updated_at")
     private Long updatedAt;
 }
-
-
