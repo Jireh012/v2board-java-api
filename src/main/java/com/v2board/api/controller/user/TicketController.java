@@ -60,7 +60,7 @@ public class TicketController {
                             .eq(Ticket::getId, id)
                             .eq(Ticket::getUserId, user.getId()));
             if (ticket == null) {
-                throw new BusinessException(500, "Ticket does not exist");
+                throw new BusinessException(500, "工单不存在");
             }
             List<TicketMessage> messages = ticketMessageMapper.selectList(
                     new LambdaQueryWrapper<TicketMessage>()
@@ -94,7 +94,7 @@ public class TicketController {
                         .eq(Ticket::getUserId, user.getId())
                         .eq(Ticket::getStatus, 0));
         if (openCount > 0) {
-            throw new BusinessException(500, "There are other unresolved tickets");
+            throw new BusinessException(500, "您还有未解决的工单，请等待处理完成再发起新工单");
         }
 
         // 工单开单策略
@@ -128,7 +128,7 @@ public class TicketController {
         ticket.setUpdatedAt(now);
         int inserted = ticketMapper.insert(ticket);
         if (inserted <= 0) {
-            throw new BusinessException(500, "Failed to open ticket");
+            throw new BusinessException(500, "工单开启失败");
         }
         TicketMessage tm = new TicketMessage();
         tm.setTicketId(ticket.getId());
@@ -137,7 +137,7 @@ public class TicketController {
         tm.setCreatedAt(now);
         tm.setUpdatedAt(now);
         if (ticketMessageMapper.insert(tm) <= 0) {
-            throw new BusinessException(500, "Failed to open ticket");
+            throw new BusinessException(500, "工单开启失败");
         }
         return ApiResponse.success(true);
     }
@@ -150,10 +150,10 @@ public class TicketController {
             @RequestParam("id") Long id,
             @RequestParam("message") String message) {
         if (id == null) {
-            throw new BusinessException(500, "Invalid parameter");
+            throw new BusinessException(500, "参数错误");
         }
         if (!StringUtils.hasText(message)) {
-            throw new BusinessException(500, "Message cannot be empty");
+            throw new BusinessException(500, "回复内容不能为空");
         }
         User user = requireUser(request);
         Ticket ticket = ticketMapper.selectOne(
@@ -161,10 +161,10 @@ public class TicketController {
                         .eq(Ticket::getId, id)
                         .eq(Ticket::getUserId, user.getId()));
         if (ticket == null) {
-            throw new BusinessException(500, "Ticket does not exist");
+            throw new BusinessException(500, "工单不存在");
         }
         if (ticket.getStatus() != null && ticket.getStatus() != 0) {
-            throw new BusinessException(500, "The ticket is closed and cannot be replied");
+            throw new BusinessException(500, "工单已关闭，无法回复");
         }
         TicketMessage last = ticketMessageMapper.selectOne(
                 new LambdaQueryWrapper<TicketMessage>()
@@ -172,7 +172,7 @@ public class TicketController {
                         .orderByDesc(TicketMessage::getId)
                         .last("LIMIT 1"));
         if (last != null && last.getUserId().equals(user.getId())) {
-            throw new BusinessException(500, "Please wait for the technical enginneer to reply");
+            throw new BusinessException(500, "请等待技术客服回复后再提交新回复");
         }
         long now = System.currentTimeMillis() / 1000;
         TicketMessage tm = new TicketMessage();
@@ -182,7 +182,7 @@ public class TicketController {
         tm.setCreatedAt(now);
         tm.setUpdatedAt(now);
         if (ticketMessageMapper.insert(tm) <= 0) {
-            throw new BusinessException(500, "Ticket reply failed");
+            throw new BusinessException(500, "工单回复失败");
         }
         ticket.setReplyStatus(0);
         ticket.setUpdatedAt(now);
@@ -197,7 +197,7 @@ public class TicketController {
     public ApiResponse<Boolean> close(HttpServletRequest request,
             @RequestParam("id") Long id) {
         if (id == null) {
-            throw new BusinessException(500, "Invalid parameter");
+            throw new BusinessException(500, "参数错误");
         }
         User user = requireUser(request);
         Ticket ticket = ticketMapper.selectOne(
@@ -205,11 +205,11 @@ public class TicketController {
                         .eq(Ticket::getId, id)
                         .eq(Ticket::getUserId, user.getId()));
         if (ticket == null) {
-            throw new BusinessException(500, "Ticket does not exist");
+            throw new BusinessException(500, "工单不存在");
         }
         ticket.setStatus(1);
         if (ticketMapper.updateById(ticket) <= 0) {
-            throw new BusinessException(500, "Close failed");
+            throw new BusinessException(500, "操作失败");
         }
         return ApiResponse.success(true);
     }
@@ -222,7 +222,7 @@ public class TicketController {
             @RequestParam("withdraw_method") String withdrawMethod,
             @RequestParam("withdraw_account") String withdrawAccount) {
         if (withdrawCloseEnable != null && withdrawCloseEnable == 1) {
-            throw new BusinessException(500, "user.ticket.withdraw.not_support_withdraw");
+            throw new BusinessException(500, "当前系统暂不支持提现工单");
         }
         String[] methods = (withdrawMethods != null ? withdrawMethods : "").split(",");
         boolean allowed = false;
@@ -233,29 +233,29 @@ public class TicketController {
             }
         }
         if (!allowed) {
-            throw new BusinessException(500, "Unsupported withdrawal method");
+            throw new BusinessException(500, "不支持的提现方式");
         }
         User user = requireUser(request);
         long balanceYuan = (user.getCommissionBalance() != null ? user.getCommissionBalance() : 0L) / 100;
         int limit = withdrawLimit != null ? withdrawLimit : 100;
         if (limit > balanceYuan) {
-            throw new BusinessException(500, "The current required minimum withdrawal commission is " + limit);
+            throw new BusinessException(500, "当前提现佣金最低限额为 " + limit + " 元");
         }
 
         long now = System.currentTimeMillis() / 1000;
         Ticket ticket = new Ticket();
         ticket.setUserId(user.getId());
-        ticket.setSubject("[Commission Withdrawal Request] This ticket is opened by the system");
+        ticket.setSubject("[佣金提现申请] 系统自动开启");
         ticket.setLevel(2);
         ticket.setStatus(0);
         ticket.setReplyStatus(0);
         ticket.setCreatedAt(now);
         ticket.setUpdatedAt(now);
         if (ticketMapper.insert(ticket) <= 0) {
-            throw new BusinessException(500, "Failed to open ticket");
+            throw new BusinessException(500, "提现工单开启失败");
         }
-        String message = "Withdrawal method：" + withdrawMethod + "\r\n" +
-                "Withdrawal account：" + withdrawAccount;
+        String message = "提现方式：" + withdrawMethod + "\r\n" +
+                "提现账号：" + withdrawAccount;
         TicketMessage tm = new TicketMessage();
         tm.setTicketId(ticket.getId());
         tm.setUserId(user.getId());
@@ -263,7 +263,7 @@ public class TicketController {
         tm.setCreatedAt(now);
         tm.setUpdatedAt(now);
         if (ticketMessageMapper.insert(tm) <= 0) {
-            throw new BusinessException(500, "Failed to open ticket");
+            throw new BusinessException(500, "提现工单开启失败");
         }
         return ApiResponse.success(true);
     }
@@ -273,6 +273,6 @@ public class TicketController {
         if (attr instanceof User user) {
             return user;
         }
-        throw new BusinessException(401, "Unauthenticated");
+        throw new BusinessException(401, "请先登录");
     }
 }

@@ -65,7 +65,7 @@ public class InviteController {
                         .eq(InviteCode::getUserId, userId)
                         .eq(InviteCode::getStatus, 0));
         if (count >= inviteGenLimit) {
-            throw new BusinessException(500, "The maximum number of creations has been reached");
+            throw new BusinessException(500, "已达到邀请码生成数量上限");
         }
         InviteCode code = new InviteCode();
         code.setUserId(userId);
@@ -147,6 +147,6 @@ public class InviteController {
         if (attr instanceof User user) {
             return user;
         }
-        throw new BusinessException(401, "Unauthenticated");
+        throw new BusinessException(401, "请先登录");
     }
 }
