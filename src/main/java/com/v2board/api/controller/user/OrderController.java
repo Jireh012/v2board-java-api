@@ -43,7 +43,7 @@ public class OrderController {
 
     @Autowired
     private OrderService orderService;
-    
+
     @Autowired
     private PaymentService paymentService;
 
@@ -55,7 +55,7 @@ public class OrderController {
      */
     @GetMapping("/fetch")
     public ApiResponse<List<Map<String, Object>>> fetch(HttpServletRequest request,
-                                                        @RequestParam(value = "status", required = false) Integer status) {
+            @RequestParam(value = "status", required = false) Integer status) {
         User user = requireUser(request);
         LambdaQueryWrapper<Order> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Order::getUserId, user.getId())
@@ -91,7 +91,7 @@ public class OrderController {
      */
     @GetMapping("/detail")
     public ApiResponse<Map<String, Object>> detail(HttpServletRequest request,
-                                                   @RequestParam("trade_no") String tradeNo) {
+            @RequestParam("trade_no") String tradeNo) {
         User user = requireUser(request);
         LambdaQueryWrapper<Order> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Order::getUserId, user.getId())
@@ -128,12 +128,13 @@ public class OrderController {
      */
     @PostMapping("/save")
     public ApiResponse<String> save(HttpServletRequest request,
-                                    @RequestParam("plan_id") Long planId,
-                                    @RequestParam(value = "period", required = false) String period,
-                                    @RequestParam(value = "deposit_amount", required = false) Long depositAmount) {
+            @RequestParam("plan_id") Long planId,
+            @RequestParam(value = "period", required = false) String period,
+            @RequestParam(value = "deposit_amount", required = false) Long depositAmount) {
         User user = requireUser(request);
         if (orderService.userHasUnfinishedOrder(user.getId())) {
-            throw new BusinessException(500, "You have an unpaid or pending order, please try again later or cancel it");
+            throw new BusinessException(500,
+                    "You have an unpaid or pending order, please try again later or cancel it");
         }
         // 充值订单
         if (planId == 0) {
@@ -143,6 +144,7 @@ public class OrderController {
             if (depositAmount >= 9_999_999L) {
                 throw new BusinessException(500, "Deposit amount too large, please contact the administrator");
             }
+            long now = System.currentTimeMillis() / 1000;
             Order order = new Order();
             order.setUserId(user.getId());
             order.setPlanId(0L);
@@ -152,6 +154,8 @@ public class OrderController {
             order.setTotalAmount(depositAmount);
             order.setStatus(0);
             order.setType(9); // 充值
+            order.setCreatedAt(now);
+            order.setUpdatedAt(now);
             orderMapper.insert(order);
             return ApiResponse.success(order.getTradeNo());
         }
@@ -191,7 +195,8 @@ public class OrderController {
                 price = plan.getResetPrice();
                 break;
             default:
-                throw new BusinessException(500, "This payment period cannot be purchased, please choose another period");
+                throw new BusinessException(500,
+                        "This payment period cannot be purchased, please choose another period");
         }
         if (price == null) {
             throw new BusinessException(500, "This payment period cannot be purchased, please choose another period");
@@ -245,8 +250,8 @@ public class OrderController {
      */
     @PostMapping("/checkout")
     public ApiResponse<Map<String, Object>> checkout(HttpServletRequest request,
-                                                     @RequestParam("trade_no") String tradeNo,
-                                                     @RequestParam("method") Long method) {
+            @RequestParam("trade_no") String tradeNo,
+            @RequestParam("method") Long method) {
         User user = requireUser(request);
         LambdaQueryWrapper<Order> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Order::getTradeNo, tradeNo)
@@ -271,7 +276,7 @@ public class OrderController {
         }
         order.setPaymentId(method);
         orderMapper.updateById(order);
-        
+
         Map<String, Object> payOrder = new HashMap<>();
         payOrder.put("trade_no", order.getTradeNo());
         payOrder.put("total_amount", order.getTotalAmount());
@@ -287,7 +292,7 @@ public class OrderController {
      */
     @GetMapping("/check")
     public ApiResponse<Integer> check(HttpServletRequest request,
-                                      @RequestParam("trade_no") String tradeNo) {
+            @RequestParam("trade_no") String tradeNo) {
         User user = requireUser(request);
         LambdaQueryWrapper<Order> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Order::getTradeNo, tradeNo)
@@ -305,7 +310,7 @@ public class OrderController {
      * - /api/v1/user/order/getPaymentMethod
      * - /api/v1/user/order/paymentMethod
      */
-    @GetMapping({"/paymentMethod", "/getPaymentMethod"})
+    @GetMapping({ "/paymentMethod", "/getPaymentMethod" })
     public ApiResponse<List<Map<String, Object>>> getPaymentMethod() {
         LambdaQueryWrapper<Payment> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Payment::getEnable, 1)
@@ -330,7 +335,7 @@ public class OrderController {
      */
     @PostMapping("/cancel")
     public ApiResponse<Boolean> cancel(HttpServletRequest request,
-                                       @RequestParam("trade_no") String tradeNo) {
+            @RequestParam("trade_no") String tradeNo) {
         if (!StringUtils.hasText(tradeNo)) {
             throw new BusinessException(500, "Invalid parameter");
         }
@@ -359,4 +364,3 @@ public class OrderController {
         throw new BusinessException(401, "Unauthenticated");
     }
 }
-

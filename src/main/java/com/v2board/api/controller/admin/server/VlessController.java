@@ -25,23 +25,26 @@ public class VlessController {
     @GetMapping("/fetch")
     public ApiResponse<List<ServerVless>> fetch() {
         List<ServerVless> list = serverVlessMapper.selectList(
-                new LambdaQueryWrapper<ServerVless>().orderByAsc(ServerVless::getSort)
-        );
+                new LambdaQueryWrapper<ServerVless>().orderByAsc(ServerVless::getSort));
         return ApiResponse.success(list);
     }
 
     @PostMapping("/save")
     public ApiResponse<Boolean> save(@RequestBody ServerVless body) {
+        long now = System.currentTimeMillis() / 1000;
         if (body.getId() != null) {
             ServerVless server = serverVlessMapper.selectById(body.getId());
             if (server == null) {
                 throw new BusinessException(500, "服务器不存在");
             }
+            body.setUpdatedAt(now);
             if (serverVlessMapper.updateById(body) <= 0) {
                 throw new BusinessException(500, "保存失败");
             }
             return ApiResponse.success(true);
         }
+        body.setCreatedAt(now);
+        body.setUpdatedAt(now);
         if (serverVlessMapper.insert(body) <= 0) {
             throw new BusinessException(500, "创建失败");
         }
@@ -62,12 +65,13 @@ public class VlessController {
 
     @PostMapping("/update")
     public ApiResponse<Boolean> update(@RequestParam("id") Long id,
-                                       @RequestParam("show") Integer show) {
+            @RequestParam("show") Integer show) {
         ServerVless server = serverVlessMapper.selectById(id);
         if (server == null) {
             throw new BusinessException(500, "该服务器不存在");
         }
         server.setShow(show);
+        server.setUpdatedAt(System.currentTimeMillis() / 1000);
         if (serverVlessMapper.updateById(server) <= 0) {
             throw new BusinessException(500, "保存失败");
         }
@@ -80,12 +84,14 @@ public class VlessController {
         if (server == null) {
             throw new BusinessException(500, "服务器不存在");
         }
+        long now = System.currentTimeMillis() / 1000;
         server.setId(null);
         server.setShow(0);
+        server.setCreatedAt(now);
+        server.setUpdatedAt(now);
         if (serverVlessMapper.insert(server) <= 0) {
             throw new BusinessException(500, "复制失败");
         }
         return ApiResponse.success(true);
     }
 }
-

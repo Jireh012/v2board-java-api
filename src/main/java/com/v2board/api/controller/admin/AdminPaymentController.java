@@ -88,7 +88,7 @@ public class AdminPaymentController {
      */
     @GetMapping("/form")
     public ApiResponse<List<Map<String, Object>>> getPaymentForm(@RequestParam("payment") String payment,
-                                                                 @RequestParam("id") Long id) {
+            @RequestParam("id") Long id) {
         return ApiResponse.success(paymentService.form(payment, id));
     }
 
@@ -162,6 +162,9 @@ public class AdminPaymentController {
         payment.setHandlingFeePercent(percent.intValue());
         payment.setEnable(0);
         payment.setUuid(UUID.randomUUID().toString().replace("-", "").substring(0, 8));
+        long now = System.currentTimeMillis() / 1000;
+        payment.setCreatedAt(now);
+        payment.setUpdatedAt(now);
         if (paymentMapper.insert(payment) <= 0) {
             throw new BusinessException(500, "保存失败");
         }
@@ -199,4 +202,3 @@ public class AdminPaymentController {
         return ApiResponse.success(true);
     }
 }
-

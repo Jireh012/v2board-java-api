@@ -41,11 +41,11 @@ public class AdminTicketController {
      */
     @GetMapping("/fetch")
     public ApiResponse<Object> fetch(@RequestParam(value = "id", required = false) Long id,
-                                     @RequestParam(value = "current", required = false, defaultValue = "1") long current,
-                                     @RequestParam(value = "pageSize", required = false, defaultValue = "10") long pageSize,
-                                     @RequestParam(value = "status", required = false) Integer status,
-                                     @RequestParam(value = "reply_status", required = false) List<Integer> replyStatus,
-                                     @RequestParam(value = "email", required = false) String email) {
+            @RequestParam(value = "current", required = false, defaultValue = "1") long current,
+            @RequestParam(value = "pageSize", required = false, defaultValue = "10") long pageSize,
+            @RequestParam(value = "status", required = false) Integer status,
+            @RequestParam(value = "reply_status", required = false) List<Integer> replyStatus,
+            @RequestParam(value = "email", required = false) String email) {
         if (id != null) {
             Ticket ticket = ticketMapper.selectById(id);
             if (ticket == null) {
@@ -54,8 +54,7 @@ public class AdminTicketController {
             List<TicketMessage> messages = ticketMessageMapper.selectList(
                     new LambdaQueryWrapper<TicketMessage>()
                             .eq(TicketMessage::getTicketId, ticket.getId())
-                            .orderByAsc(TicketMessage::getId)
-            );
+                            .orderByAsc(TicketMessage::getId));
             for (TicketMessage m : messages) {
                 // 管理端视角：非用户消息为 is_me=true
                 m.setIsMe(!m.getUserId().equals(ticket.getUserId()));
@@ -76,8 +75,7 @@ public class AdminTicketController {
         }
         if (StringUtils.hasText(email)) {
             User user = userMapper.selectOne(
-                    new LambdaQueryWrapper<User>().eq(User::getEmail, email)
-            );
+                    new LambdaQueryWrapper<User>().eq(User::getEmail, email));
             if (user != null) {
                 wrapper.eq(Ticket::getUserId, user.getId());
             }
@@ -95,8 +93,8 @@ public class AdminTicketController {
      */
     @PostMapping("/reply")
     public ApiResponse<Boolean> reply(HttpServletRequest request,
-                                      @RequestParam("id") Long id,
-                                      @RequestParam("message") String message) {
+            @RequestParam("id") Long id,
+            @RequestParam("message") String message) {
         if (id == null) {
             throw new BusinessException(500, "参数错误");
         }
@@ -108,14 +106,18 @@ public class AdminTicketController {
             throw new BusinessException(500, "工单不存在");
         }
         User admin = requireUser(request);
+        long now = System.currentTimeMillis() / 1000;
         TicketMessage tm = new TicketMessage();
         tm.setTicketId(ticket.getId());
         tm.setUserId(admin.getId());
         tm.setMessage(message);
+        tm.setCreatedAt(now);
+        tm.setUpdatedAt(now);
         if (ticketMessageMapper.insert(tm) <= 0) {
             throw new BusinessException(500, "回复失败");
         }
         ticket.setReplyStatus(1);
+        ticket.setUpdatedAt(now);
         ticketMapper.updateById(ticket);
         return ApiResponse.success(true);
     }
@@ -147,4 +149,3 @@ public class AdminTicketController {
         throw new BusinessException(401, "Unauthenticated");
     }
 }
-

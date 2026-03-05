@@ -40,7 +40,7 @@ public class AdminKnowledgeController {
         }
         LambdaQueryWrapper<Knowledge> wrapper = new LambdaQueryWrapper<>();
         wrapper.select(Knowledge::getTitle, Knowledge::getId, Knowledge::getUpdatedAt,
-                        Knowledge::getCategory, Knowledge::getShow)
+                Knowledge::getCategory, Knowledge::getShow)
                 .orderByAsc(Knowledge::getSort);
         List<Knowledge> list = knowledgeMapper.selectList(wrapper);
         return ApiResponse.success(list);
@@ -66,6 +66,9 @@ public class AdminKnowledgeController {
     @PostMapping("/save")
     public ApiResponse<Boolean> save(@RequestBody Knowledge body) {
         if (body.getId() == null) {
+            long now = System.currentTimeMillis() / 1000;
+            body.setCreatedAt(now);
+            body.setUpdatedAt(now);
             int inserted = knowledgeMapper.insert(body);
             if (inserted <= 0) {
                 throw new BusinessException(500, "创建失败");
@@ -153,4 +156,3 @@ public class AdminKnowledgeController {
         return ApiResponse.success(true);
     }
 }
-

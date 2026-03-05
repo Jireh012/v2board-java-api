@@ -63,8 +63,7 @@ public class InviteController {
         long count = inviteCodeMapper.selectCount(
                 new LambdaQueryWrapper<InviteCode>()
                         .eq(InviteCode::getUserId, userId)
-                        .eq(InviteCode::getStatus, 0)
-        );
+                        .eq(InviteCode::getStatus, 0));
         if (count >= inviteGenLimit) {
             throw new BusinessException(500, "The maximum number of creations has been reached");
         }
@@ -72,6 +71,9 @@ public class InviteController {
         code.setUserId(userId);
         code.setCode(Helper.base64EncodeUrlSafe(Helper.getServerKey(System.currentTimeMillis(), 8)));
         code.setStatus(0);
+        long now = System.currentTimeMillis() / 1000;
+        code.setCreatedAt(now);
+        code.setUpdatedAt(now);
         int rows = inviteCodeMapper.insert(code);
         return ApiResponse.success(rows > 0);
     }
@@ -81,8 +83,8 @@ public class InviteController {
      */
     @GetMapping("/details")
     public ApiResponse<Map<String, Object>> details(HttpServletRequest request,
-                                                    @RequestParam(value = "current", required = false, defaultValue = "1") long current,
-                                                    @RequestParam(value = "page_size", required = false, defaultValue = "10") long pageSize) {
+            @RequestParam(value = "current", required = false, defaultValue = "1") long current,
+            @RequestParam(value = "page_size", required = false, defaultValue = "10") long pageSize) {
         User user = requireUser(request);
         if (pageSize < 10) {
             pageSize = 10;
@@ -109,8 +111,7 @@ public class InviteController {
         List<InviteCode> codes = inviteCodeMapper.selectList(
                 new LambdaQueryWrapper<InviteCode>()
                         .eq(InviteCode::getUserId, userId)
-                        .eq(InviteCode::getStatus, 0)
-        );
+                        .eq(InviteCode::getStatus, 0));
         int commissionRate = defaultInviteCommission;
         if (user.getCommissionRate() != null) {
             commissionRate = user.getCommissionRate();
@@ -120,8 +121,7 @@ public class InviteController {
             uncheckCommission = uncheckCommission * commissionDistributionL1 / 100;
         }
         long registeredCountLong = userMapper.selectCount(
-                new LambdaQueryWrapper<User>().eq(User::getInviteUserId, userId)
-        );
+                new LambdaQueryWrapper<User>().eq(User::getInviteUserId, userId));
         long validCommission = commissionLogMapper.selectSumGetAmount(userId);
         long availableCommission = user.getCommissionBalance() != null ? user.getCommissionBalance() : 0L;
 
@@ -129,7 +129,7 @@ public class InviteController {
         long safeUncheck = Math.max(0, Math.min(uncheckCommission, Integer.MAX_VALUE));
         long safeAvailable = Math.max(0, Math.min(availableCommission, Integer.MAX_VALUE));
 
-        int[] stat = new int[]{
+        int[] stat = new int[] {
                 (int) Math.max(0, Math.min(registeredCountLong, Integer.MAX_VALUE)),
                 (int) safeValid,
                 (int) safeUncheck,
@@ -150,4 +150,3 @@ public class InviteController {
         throw new BusinessException(401, "Unauthenticated");
     }
 }
-

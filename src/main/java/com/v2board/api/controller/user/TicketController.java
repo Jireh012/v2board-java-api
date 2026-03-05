@@ -52,22 +52,20 @@ public class TicketController {
      */
     @GetMapping("/fetch")
     public ApiResponse<Object> fetch(HttpServletRequest request,
-                                     @RequestParam(value = "id", required = false) Long id) {
+            @RequestParam(value = "id", required = false) Long id) {
         User user = requireUser(request);
         if (id != null) {
             Ticket ticket = ticketMapper.selectOne(
                     new LambdaQueryWrapper<Ticket>()
                             .eq(Ticket::getId, id)
-                            .eq(Ticket::getUserId, user.getId())
-            );
+                            .eq(Ticket::getUserId, user.getId()));
             if (ticket == null) {
                 throw new BusinessException(500, "Ticket does not exist");
             }
             List<TicketMessage> messages = ticketMessageMapper.selectList(
                     new LambdaQueryWrapper<TicketMessage>()
                             .eq(TicketMessage::getTicketId, ticket.getId())
-                            .orderByAsc(TicketMessage::getId)
-            );
+                            .orderByAsc(TicketMessage::getId));
             for (TicketMessage m : messages) {
                 m.setIsMe(m.getUserId().equals(ticket.getUserId()));
             }
@@ -77,8 +75,7 @@ public class TicketController {
         List<Ticket> list = ticketMapper.selectList(
                 new LambdaQueryWrapper<Ticket>()
                         .eq(Ticket::getUserId, user.getId())
-                        .orderByDesc(Ticket::getCreatedAt)
-        );
+                        .orderByDesc(Ticket::getCreatedAt));
         return ApiResponse.success(list);
     }
 
@@ -87,16 +84,15 @@ public class TicketController {
      */
     @PostMapping("/save")
     public ApiResponse<Boolean> save(HttpServletRequest request,
-                                     @RequestParam("subject") String subject,
-                                     @RequestParam("level") Integer level,
-                                     @RequestParam("message") String message) {
+            @RequestParam("subject") String subject,
+            @RequestParam("level") Integer level,
+            @RequestParam("message") String message) {
         User user = requireUser(request);
         // 检查是否有未解决工单
         long openCount = ticketMapper.selectCount(
                 new LambdaQueryWrapper<Ticket>()
                         .eq(Ticket::getUserId, user.getId())
-                        .eq(Ticket::getStatus, 0)
-        );
+                        .eq(Ticket::getStatus, 0));
         if (openCount > 0) {
             throw new BusinessException(500, "There are other unresolved tickets");
         }
@@ -110,8 +106,7 @@ public class TicketController {
                 long hasOrder = orderMapper.selectCount(
                         new LambdaQueryWrapper<Order>()
                                 .eq(Order::getUserId, user.getId())
-                                .in(Order::getStatus, 3, 4)
-                );
+                                .in(Order::getStatus, 3, 4));
                 if (hasOrder == 0) {
                     throw new BusinessException(500, "请先购买套餐");
                 }
@@ -122,12 +117,15 @@ public class TicketController {
                 throw new BusinessException(500, "未知的工单状态");
         }
 
+        long now = System.currentTimeMillis() / 1000;
         Ticket ticket = new Ticket();
         ticket.setUserId(user.getId());
         ticket.setSubject(subject);
         ticket.setLevel(level != null ? level : 1);
         ticket.setStatus(0);
         ticket.setReplyStatus(0);
+        ticket.setCreatedAt(now);
+        ticket.setUpdatedAt(now);
         int inserted = ticketMapper.insert(ticket);
         if (inserted <= 0) {
             throw new BusinessException(500, "Failed to open ticket");
@@ -136,6 +134,8 @@ public class TicketController {
         tm.setTicketId(ticket.getId());
         tm.setUserId(user.getId());
         tm.setMessage(message);
+        tm.setCreatedAt(now);
+        tm.setUpdatedAt(now);
         if (ticketMessageMapper.insert(tm) <= 0) {
             throw new BusinessException(500, "Failed to open ticket");
         }
@@ -147,8 +147,8 @@ public class TicketController {
      */
     @PostMapping("/reply")
     public ApiResponse<Boolean> reply(HttpServletRequest request,
-                                      @RequestParam("id") Long id,
-                                      @RequestParam("message") String message) {
+            @RequestParam("id") Long id,
+            @RequestParam("message") String message) {
         if (id == null) {
             throw new BusinessException(500, "Invalid parameter");
         }
@@ -159,8 +159,7 @@ public class TicketController {
         Ticket ticket = ticketMapper.selectOne(
                 new LambdaQueryWrapper<Ticket>()
                         .eq(Ticket::getId, id)
-                        .eq(Ticket::getUserId, user.getId())
-        );
+                        .eq(Ticket::getUserId, user.getId()));
         if (ticket == null) {
             throw new BusinessException(500, "Ticket does not exist");
         }
@@ -171,19 +170,22 @@ public class TicketController {
                 new LambdaQueryWrapper<TicketMessage>()
                         .eq(TicketMessage::getTicketId, ticket.getId())
                         .orderByDesc(TicketMessage::getId)
-                        .last("LIMIT 1")
-        );
+                        .last("LIMIT 1"));
         if (last != null && last.getUserId().equals(user.getId())) {
             throw new BusinessException(500, "Please wait for the technical enginneer to reply");
         }
+        long now = System.currentTimeMillis() / 1000;
         TicketMessage tm = new TicketMessage();
         tm.setTicketId(ticket.getId());
         tm.setUserId(user.getId());
         tm.setMessage(message);
+        tm.setCreatedAt(now);
+        tm.setUpdatedAt(now);
         if (ticketMessageMapper.insert(tm) <= 0) {
             throw new BusinessException(500, "Ticket reply failed");
         }
         ticket.setReplyStatus(0);
+        ticket.setUpdatedAt(now);
         ticketMapper.updateById(ticket);
         return ApiResponse.success(true);
     }
@@ -193,7 +195,7 @@ public class TicketController {
      */
     @PostMapping("/close")
     public ApiResponse<Boolean> close(HttpServletRequest request,
-                                      @RequestParam("id") Long id) {
+            @RequestParam("id") Long id) {
         if (id == null) {
             throw new BusinessException(500, "Invalid parameter");
         }
@@ -201,8 +203,7 @@ public class TicketController {
         Ticket ticket = ticketMapper.selectOne(
                 new LambdaQueryWrapper<Ticket>()
                         .eq(Ticket::getId, id)
-                        .eq(Ticket::getUserId, user.getId())
-        );
+                        .eq(Ticket::getUserId, user.getId()));
         if (ticket == null) {
             throw new BusinessException(500, "Ticket does not exist");
         }
@@ -218,8 +219,8 @@ public class TicketController {
      */
     @PostMapping("/withdraw")
     public ApiResponse<Boolean> withdraw(HttpServletRequest request,
-                                         @RequestParam("withdraw_method") String withdrawMethod,
-                                         @RequestParam("withdraw_account") String withdrawAccount) {
+            @RequestParam("withdraw_method") String withdrawMethod,
+            @RequestParam("withdraw_account") String withdrawAccount) {
         if (withdrawCloseEnable != null && withdrawCloseEnable == 1) {
             throw new BusinessException(500, "user.ticket.withdraw.not_support_withdraw");
         }
@@ -241,12 +242,15 @@ public class TicketController {
             throw new BusinessException(500, "The current required minimum withdrawal commission is " + limit);
         }
 
+        long now = System.currentTimeMillis() / 1000;
         Ticket ticket = new Ticket();
         ticket.setUserId(user.getId());
         ticket.setSubject("[Commission Withdrawal Request] This ticket is opened by the system");
         ticket.setLevel(2);
         ticket.setStatus(0);
         ticket.setReplyStatus(0);
+        ticket.setCreatedAt(now);
+        ticket.setUpdatedAt(now);
         if (ticketMapper.insert(ticket) <= 0) {
             throw new BusinessException(500, "Failed to open ticket");
         }
@@ -256,6 +260,8 @@ public class TicketController {
         tm.setTicketId(ticket.getId());
         tm.setUserId(user.getId());
         tm.setMessage(message);
+        tm.setCreatedAt(now);
+        tm.setUpdatedAt(now);
         if (ticketMessageMapper.insert(tm) <= 0) {
             throw new BusinessException(500, "Failed to open ticket");
         }
@@ -270,4 +276,3 @@ public class TicketController {
         throw new BusinessException(401, "Unauthenticated");
     }
 }
-

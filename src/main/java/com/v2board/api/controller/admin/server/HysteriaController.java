@@ -3,6 +3,7 @@ package com.v2board.api.controller.admin.server;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.v2board.api.common.ApiResponse;
 import com.v2board.api.common.BusinessException;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.v2board.api.mapper.ServerHysteriaMapper;
 import com.v2board.api.model.ServerHysteria;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,23 +26,26 @@ public class HysteriaController {
     @GetMapping("/fetch")
     public ApiResponse<List<ServerHysteria>> fetch() {
         List<ServerHysteria> list = serverHysteriaMapper.selectList(
-                new LambdaQueryWrapper<ServerHysteria>().orderByAsc(ServerHysteria::getSort)
-        );
+                new LambdaQueryWrapper<ServerHysteria>().orderByAsc(ServerHysteria::getSort));
         return ApiResponse.success(list);
     }
 
     @PostMapping("/save")
     public ApiResponse<Boolean> save(@RequestBody ServerHysteria body) {
+        long now = System.currentTimeMillis() / 1000;
         if (body.getId() != null) {
             ServerHysteria server = serverHysteriaMapper.selectById(body.getId());
             if (server == null) {
                 throw new BusinessException(500, "服务器不存在");
             }
+            body.setUpdatedAt(now);
             if (serverHysteriaMapper.updateById(body) <= 0) {
                 throw new BusinessException(500, "保存失败");
             }
             return ApiResponse.success(true);
         }
+        body.setCreatedAt(now);
+        body.setUpdatedAt(now);
         if (serverHysteriaMapper.insert(body) <= 0) {
             throw new BusinessException(500, "创建失败");
         }
@@ -62,12 +66,13 @@ public class HysteriaController {
 
     @PostMapping("/update")
     public ApiResponse<Boolean> update(@RequestParam("id") Long id,
-                                       @RequestParam("show") Integer show) {
+            @RequestParam("show") Integer show) {
         ServerHysteria server = serverHysteriaMapper.selectById(id);
         if (server == null) {
             throw new BusinessException(500, "该服务器不存在");
         }
         server.setShow(show);
+        server.setUpdatedAt(System.currentTimeMillis() / 1000);
         if (serverHysteriaMapper.updateById(server) <= 0) {
             throw new BusinessException(500, "保存失败");
         }
@@ -80,12 +85,14 @@ public class HysteriaController {
         if (server == null) {
             throw new BusinessException(500, "服务器不存在");
         }
+        long now = System.currentTimeMillis() / 1000;
         server.setId(null);
         server.setShow(0);
+        server.setCreatedAt(now);
+        server.setUpdatedAt(now);
         if (serverHysteriaMapper.insert(server) <= 0) {
             throw new BusinessException(500, "复制失败");
         }
         return ApiResponse.success(true);
     }
 }
-

@@ -56,11 +56,12 @@ public class AdminPlanController {
 
     /**
      * 创建或更新套餐。
-     * 对齐 PHP Admin\\PlanController::save 的主要行为，未实现 force_update 对 user.transfer_enable 的整体更新。
+     * 对齐 PHP Admin\\PlanController::save 的主要行为，未实现 force_update 对
+     * user.transfer_enable 的整体更新。
      */
     @PostMapping("/save")
     public ApiResponse<Boolean> save(@RequestBody Plan body,
-                                     @RequestParam(value = "force_update", required = false, defaultValue = "false") boolean forceUpdate) {
+            @RequestParam(value = "force_update", required = false, defaultValue = "false") boolean forceUpdate) {
         if (body.getId() != null) {
             Plan plan = planMapper.selectById(body.getId());
             if (plan == null) {
@@ -83,6 +84,9 @@ public class AdminPlanController {
             planMapper.updateById(body);
             return ApiResponse.success(true);
         }
+        long now = System.currentTimeMillis() / 1000;
+        body.setCreatedAt(now);
+        body.setUpdatedAt(now);
         if (planMapper.insert(body) <= 0) {
             throw new BusinessException(500, "创建失败");
         }
@@ -119,8 +123,8 @@ public class AdminPlanController {
      */
     @PostMapping("/update")
     public ApiResponse<Boolean> update(@RequestParam("id") Long id,
-                                       @RequestParam(value = "show", required = false) Integer show,
-                                       @RequestParam(value = "renew", required = false) Integer renew) {
+            @RequestParam(value = "show", required = false) Integer show,
+            @RequestParam(value = "renew", required = false) Integer renew) {
         Plan plan = planMapper.selectById(id);
         if (plan == null) {
             throw new BusinessException(500, "该订阅不存在");
@@ -153,4 +157,3 @@ public class AdminPlanController {
         return ApiResponse.success(true);
     }
 }
-
