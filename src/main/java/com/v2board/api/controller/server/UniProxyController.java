@@ -9,12 +9,12 @@ import com.v2board.api.model.ServerVless;
 import com.v2board.api.model.ServerVmess;
 import com.v2board.api.model.User;
 import com.v2board.api.service.ConfigService;
+import com.v2board.api.service.NodeCacheService;
 import com.v2board.api.service.ServerService;
 import com.v2board.api.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.msgpack.jackson.dataformat.MessagePackFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -26,7 +26,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.*;
@@ -45,7 +44,7 @@ public class UniProxyController {
     private ConfigService configService;
 
     @Autowired
-    private RedisTemplate<String, Object> redisTemplate;
+    private NodeCacheService nodeCacheService;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -56,23 +55,32 @@ public class UniProxyController {
     public ResponseEntity<byte[]> user(HttpServletRequest request) throws Exception {
         NodeContext ctx = resolveNodeContext(request);
 
-        String lastCheckKey = buildServerKey("SERVER_" + ctx.nodeTypeUpper + "_LAST_CHECK_AT", ctx.nodeId);
+        String lastCheckKey = nodeCacheService.buildServerKey("SERVER_" + ctx.nodeTypeUpper + "_LAST_CHECK_AT",
+                ctx.nodeId);
         long now = System.currentTimeMillis() / 1000;
-        redisTemplate.opsForValue().set(lastCheckKey, now, Duration.ofHours(1));
+        nodeCacheService.set(lastCheckKey, now, Duration.ofHours(1));
 
         List<Integer> groupIds = ctx.groupIds;
         List<User> users = userService.getAvailableUsers(groupIds);
         List<Map<String, Object>> userList = new ArrayList<>();
         for (User user : users) {
             Map<String, Object> m = new LinkedHashMap<>();
-            if (user.getId() != null) m.put("id", user.getId());
-            if (user.getUuid() != null) m.put("uuid", user.getUuid());
-            if (user.getDeviceLimit() != null) m.put("device_limit", user.getDeviceLimit());
-            if (user.getGroupId() != null) m.put("group_id", user.getGroupId());
-            if (user.getTransferEnable() != null) m.put("transfer_enable", user.getTransferEnable());
-            if (user.getU() != null) m.put("u", user.getU());
-            if (user.getD() != null) m.put("d", user.getD());
-            if (user.getExpiredAt() != null) m.put("expired_at", user.getExpiredAt());
+            if (user.getId() != null)
+                m.put("id", user.getId());
+            if (user.getUuid() != null)
+                m.put("uuid", user.getUuid());
+            if (user.getDeviceLimit() != null)
+                m.put("device_limit", user.getDeviceLimit());
+            if (user.getGroupId() != null)
+                m.put("group_id", user.getGroupId());
+            if (user.getTransferEnable() != null)
+                m.put("transfer_enable", user.getTransferEnable());
+            if (user.getU() != null)
+                m.put("u", user.getU());
+            if (user.getD() != null)
+                m.put("d", user.getD());
+            if (user.getExpiredAt() != null)
+                m.put("expired_at", user.getExpiredAt());
             userList.add(m);
         }
 
@@ -118,11 +126,12 @@ public class UniProxyController {
             throw new BusinessException(400, "Invalid traffic data");
         }
 
-        String onlineKey = buildServerKey("SERVER_" + ctx.nodeTypeUpper + "_ONLINE_USER", ctx.nodeId);
-        String lastPushKey = buildServerKey("SERVER_" + ctx.nodeTypeUpper + "_LAST_PUSH_AT", ctx.nodeId);
+        String onlineKey = nodeCacheService.buildServerKey("SERVER_" + ctx.nodeTypeUpper + "_ONLINE_USER", ctx.nodeId);
+        String lastPushKey = nodeCacheService.buildServerKey("SERVER_" + ctx.nodeTypeUpper + "_LAST_PUSH_AT",
+                ctx.nodeId);
         long now = System.currentTimeMillis() / 1000;
-        redisTemplate.opsForValue().set(onlineKey, data.size(), Duration.ofHours(1));
-        redisTemplate.opsForValue().set(lastPushKey, now, Duration.ofHours(1));
+        nodeCacheService.set(onlineKey, data.size(), Duration.ofHours(1));
+        nodeCacheService.set(lastPushKey, now, Duration.ofHours(1));
 
         double rate = ctx.rate;
         userService.trafficFetch(ctx.nodeId, ctx.nodeType, rate, data);
@@ -133,7 +142,7 @@ public class UniProxyController {
     @GetMapping("/alivelist")
     public ResponseEntity<Map<String, Object>> alivelist() throws Exception {
         String cacheKey = "ALIVE_LIST";
-        Object cached = redisTemplate.opsForValue().get(cacheKey);
+        Object cached = nodeCacheService.get(cacheKey);
         Map<Long, Integer> alive;
         if (cached instanceof Map<?, ?> m) {
             alive = new LinkedHashMap<>();
@@ -156,25 +165,23 @@ public class UniProxyController {
                     keys.add(key);
                     idMap.put(key, user.getId());
                 }
-                List<Object> results = redisTemplate.opsForValue().multiGet(keys);
+                List<Object> results = nodeCacheService.multiGet(keys);
                 alive = new LinkedHashMap<>();
-                if (results != null) {
-                    for (int i = 0; i < keys.size(); i++) {
-                        String k = keys.get(i);
-                        Object data = results.get(i);
-                        if (data instanceof Map<?, ?> map) {
-                            Object aliveIp = map.get("alive_ip");
-                            if (aliveIp instanceof Number) {
-                                Long userId = idMap.get(k);
-                                if (userId != null) {
-                                    alive.put(userId, ((Number) aliveIp).intValue());
-                                }
+                for (int i = 0; i < keys.size(); i++) {
+                    String k = keys.get(i);
+                    Object data = i < results.size() ? results.get(i) : null;
+                    if (data instanceof Map<?, ?> map) {
+                        Object aliveIp = map.get("alive_ip");
+                        if (aliveIp instanceof Number) {
+                            Long userId = idMap.get(k);
+                            if (userId != null) {
+                                alive.put(userId, ((Number) aliveIp).intValue());
                             }
                         }
                     }
                 }
             }
-            redisTemplate.opsForValue().set(cacheKey, alive, Duration.ofSeconds(60));
+            nodeCacheService.set(cacheKey, alive, Duration.ofSeconds(60));
         }
         Map<String, Object> body = new HashMap<>();
         body.put("alive", alive);
@@ -195,7 +202,8 @@ public class UniProxyController {
 
         Map<String, Object> fullConfig = configService.getFullConfig();
         @SuppressWarnings("unchecked")
-        Map<String, Object> serverConfig = (Map<String, Object>) fullConfig.getOrDefault("server", Collections.emptyMap());
+        Map<String, Object> serverConfig = (Map<String, Object>) fullConfig.getOrDefault("server",
+                Collections.emptyMap());
         int deviceLimitMode = getInt(serverConfig.get("device_limit_mode"), 0);
 
         String nodeKey = ctx.nodeType + ctx.nodeId;
@@ -203,7 +211,7 @@ public class UniProxyController {
             Long uid = Long.valueOf(entry.getKey());
             List<String> ips = entry.getValue();
             String key = "ALIVE_IP_USER_" + uid;
-            Object existing = redisTemplate.opsForValue().get(key);
+            Object existing = nodeCacheService.get(key);
             Map<String, Object> ipsMap;
             if (existing instanceof Map<?, ?> map) {
                 ipsMap = new HashMap<>();
@@ -261,7 +269,7 @@ public class UniProxyController {
                 }
             }
             ipsMap.put("alive_ip", count);
-            redisTemplate.opsForValue().set(key, ipsMap, Duration.ofSeconds(120));
+            nodeCacheService.set(key, ipsMap, Duration.ofSeconds(120));
         }
 
         return ResponseEntity.ok(Map.of("data", true));
@@ -319,13 +327,13 @@ public class UniProxyController {
 
         Map<String, Object> fullConfig = configService.getFullConfig();
         @SuppressWarnings("unchecked")
-        Map<String, Object> serverConfig = (Map<String, Object>) fullConfig.getOrDefault("server", Collections.emptyMap());
+        Map<String, Object> serverConfig = (Map<String, Object>) fullConfig.getOrDefault("server",
+                Collections.emptyMap());
         int pushInterval = getInt(serverConfig.get("server_push_interval"), 60);
         int pullInterval = getInt(serverConfig.get("server_pull_interval"), 60);
         resp.put("base_config", Map.of(
                 "push_interval", pushInterval,
-                "pull_interval", pullInterval
-        ));
+                "pull_interval", pullInterval));
 
         byte[] body = objectMapper.writeValueAsBytes(resp);
         String eTag = sha1Hex(body);
@@ -359,8 +367,10 @@ public class UniProxyController {
         if (!StringUtils.hasText(nodeType)) {
             throw new BusinessException(500, "node_type is null");
         }
-        if ("v2ray".equals(nodeType)) nodeType = "vmess";
-        if ("hysteria2".equals(nodeType)) nodeType = "hysteria";
+        if ("v2ray".equals(nodeType))
+            nodeType = "vmess";
+        if ("hysteria2".equals(nodeType))
+            nodeType = "hysteria";
 
         String nodeIdStr = request.getParameter("node_id");
         if (!StringUtils.hasText(nodeIdStr)) {
@@ -381,16 +391,20 @@ public class UniProxyController {
         List<Integer> groupIds = new ArrayList<>();
         double rate = 1.0;
         if (server instanceof ServerShadowsocks s) {
-            if (s.getGroupId() != null) groupIds.addAll(s.getGroupId());
+            if (s.getGroupId() != null)
+                groupIds.addAll(s.getGroupId());
             rate = parseRate(s.getRate());
         } else if (server instanceof ServerVmess s) {
-            if (s.getGroupId() != null) groupIds.addAll(s.getGroupId());
+            if (s.getGroupId() != null)
+                groupIds.addAll(s.getGroupId());
             rate = parseRate(s.getRate());
         } else if (server instanceof ServerTrojan s) {
-            if (s.getGroupId() != null) groupIds.addAll(s.getGroupId());
+            if (s.getGroupId() != null)
+                groupIds.addAll(s.getGroupId());
             rate = parseRate(s.getRate());
         } else if (server instanceof ServerHysteria s) {
-            if (s.getGroupId() != null) groupIds.addAll(s.getGroupId());
+            if (s.getGroupId() != null)
+                groupIds.addAll(s.getGroupId());
             rate = parseRate(s.getRate());
         } else if (server instanceof ServerVless s) {
             if (s.getGroupId() != null) {
@@ -437,7 +451,8 @@ public class UniProxyController {
     }
 
     private int parsePort(String port) {
-        if (port == null) return 0;
+        if (port == null)
+            return 0;
         if (port.contains("-")) {
             String[] parts = port.split("-");
             port = parts[0];
@@ -486,10 +501,6 @@ public class UniProxyController {
         }
     }
 
-    private String buildServerKey(String keyPrefix, Long id) {
-        return keyPrefix + "_" + id;
-    }
-
     private static class NodeContext {
         String nodeType;
         String nodeTypeUpper;
@@ -499,4 +510,3 @@ public class UniProxyController {
         double rate;
     }
 }
-

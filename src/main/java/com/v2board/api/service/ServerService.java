@@ -24,7 +24,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -37,21 +36,21 @@ import java.util.stream.Collectors;
 
 @Service
 public class ServerService {
-    
+
     private static final Logger logger = LoggerFactory.getLogger(ServerService.class);
-    
+
     @Autowired
     private ServerVmessMapper vmessMapper;
-    
+
     @Autowired
     private ServerShadowsocksMapper shadowsocksMapper;
-    
+
     @Autowired
     private ServerTrojanMapper trojanMapper;
-    
+
     @Autowired
     private ServerHysteriaMapper hysteriaMapper;
-    
+
     @Autowired
     private ServerVlessMapper vlessMapper;
 
@@ -63,19 +62,19 @@ public class ServerService {
 
     @Autowired
     private ServerV2nodeMapper v2nodeMapper;
-    
+
     @Autowired
     private ObjectMapper objectMapper;
 
     @Autowired
-    private RedisTemplate<String, Object> redisTemplate;
-    
+    private NodeCacheService nodeCacheService;
+
     /**
      * 获取用户可用的服务器列表
      */
     public List<Map<String, Object>> getAvailableServers(User user) {
         List<Map<String, Object>> servers = new ArrayList<>();
-        
+
         try {
             // 获取各种类型的服务器
             List<Map<String, Object>> shadowsocks = getAvailableShadowsocks(user);
@@ -83,10 +82,10 @@ public class ServerService {
             List<Map<String, Object>> trojan = getAvailableTrojan(user);
             List<Map<String, Object>> hysteria = getAvailableHysteria(user);
             List<Map<String, Object>> vless = getAvailableVless(user);
-            
-            logger.debug("Found servers - Shadowsocks: {}, VMess: {}, Trojan: {}, Hysteria: {}, VLESS: {}", 
-                shadowsocks.size(), vmess.size(), trojan.size(), hysteria.size(), vless.size());
-            
+
+            logger.debug("Found servers - Shadowsocks: {}, VMess: {}, Trojan: {}, Hysteria: {}, VLESS: {}",
+                    shadowsocks.size(), vmess.size(), trojan.size(), hysteria.size(), vless.size());
+
             servers.addAll(shadowsocks);
             servers.addAll(vmess);
             servers.addAll(trojan);
@@ -95,13 +94,13 @@ public class ServerService {
         } catch (Exception e) {
             logger.error("Error getting available servers", e);
         }
-        
+
         // 按 sort 字段排序（与 PHP 的 array_multisort 一致）
         servers.sort(Comparator.comparing(s -> {
             Object sort = s.get("sort");
             return sort != null ? (Integer) sort : 0;
         }));
-        
+
         // 处理端口、在线状态和 cache_key（与 PHP 的 array_map 逻辑一致）
         return servers.stream().map(server -> {
             // 端口转换为整数（PHP: $server['port'] = (int)$server['port']）
@@ -117,21 +116,23 @@ public class ServerService {
             } else if (portObj instanceof Integer) {
                 server.put("port", portObj);
             }
-            
-            // 检查在线状态（PHP: $server['is_online'] = (time() - 300 > $server['last_check_at']) ? 0 : 1）
+
+            // 检查在线状态（PHP: $server['is_online'] = (time() - 300 > $server['last_check_at'])
+            // ? 0 : 1）
             Long lastCheckAt = (Long) server.getOrDefault("last_check_at", 0L);
             long currentTime = System.currentTimeMillis() / 1000;
             server.put("is_online", (currentTime - 300 > lastCheckAt) ? 0 : 1);
-            
-            // 添加 cache_key（PHP: $server['cache_key'] = "{$server['type']}-{$server['id']}-{$server['updated_at']}-{$server['is_online']}"）
+
+            // 添加 cache_key（PHP: $server['cache_key'] =
+            // "{$server['type']}-{$server['id']}-{$server['updated_at']}-{$server['is_online']}"）
             Long updatedAt = (Long) server.getOrDefault("updated_at", 0L);
-            String cacheKey = String.format("%s-%d-%d-%d", 
-                server.get("type"), 
-                server.get("id"), 
-                updatedAt, 
-                server.get("is_online"));
+            String cacheKey = String.format("%s-%d-%d-%d",
+                    server.get("type"),
+                    server.get("id"),
+                    updatedAt,
+                    server.get("is_online"));
             server.put("cache_key", cacheKey);
-            
+
             return server;
         }).collect(Collectors.toList());
     }
@@ -155,41 +156,41 @@ public class ServerService {
             default -> null;
         };
     }
-    
+
     /**
      * 获取可用的 Shadowsocks 服务器
      */
     private List<Map<String, Object>> getAvailableShadowsocks(User user) {
         // 先获取所有服务器（不筛选show），与PHP逻辑一致
         List<ServerShadowsocks> allServers = shadowsocksMapper.selectList(
-            new LambdaQueryWrapper<ServerShadowsocks>()
-                .orderByAsc(ServerShadowsocks::getSort)
-        );
-        
+                new LambdaQueryWrapper<ServerShadowsocks>()
+                        .orderByAsc(ServerShadowsocks::getSort));
+
         logger.debug("Total Shadowsocks servers found: {}", allServers.size());
-        
+
         List<Map<String, Object>> result = new ArrayList<>();
-        
+
         for (ServerShadowsocks server : allServers) {
             // 检查show字段
             if (server.getShow() == null || server.getShow() != 1) {
                 logger.debug("Shadowsocks server {} skipped: show = {}", server.getId(), server.getShow());
                 continue;
             }
-            
+
             // 检查用户组匹配
             if (!isUserGroupMatched(server.getGroupId(), user.getGroupId())) {
-                logger.debug("Shadowsocks server {} skipped: group_id not matched. Server groups: {}, User group: {}", 
-                    server.getId(), server.getGroupId(), user.getGroupId());
+                logger.debug("Shadowsocks server {} skipped: group_id not matched. Server groups: {}, User group: {}",
+                        server.getId(), server.getGroupId(), user.getGroupId());
                 continue;
             }
-            
-            // 处理端口范围（PHP: if (strpos($v['port'], '-') !== false) { $shadowsocks[$key]['port'] = Helper::randomPort($v['port']); }）
+
+            // 处理端口范围（PHP: if (strpos($v['port'], '-') !== false) {
+            // $shadowsocks[$key]['port'] = Helper::randomPort($v['port']); }）
             String portStr = server.getPort();
             if (portStr != null && portStr.contains("-")) {
                 portStr = String.valueOf(Helper.randomPort(portStr));
             }
-            
+
             Long targetId = server.getParentId() != null ? server.getParentId() : server.getId();
             Long lastCheckAt = getServerTimestamp("SERVER_SHADOWSOCKS_LAST_CHECK_AT", targetId);
 
@@ -206,47 +207,47 @@ public class ServerService {
             map.put("last_check_at", lastCheckAt != null ? lastCheckAt : 0L);
             map.put("sort", server.getSort());
             result.add(map);
-            
+
             logger.debug("Shadowsocks server {} added: {}", server.getId(), server.getName());
         }
-        
+
         return result;
     }
-    
+
     /**
      * 获取可用的 VMess 服务器
      */
     private List<Map<String, Object>> getAvailableVmess(User user) {
         // 先获取所有服务器（不筛选show），与PHP逻辑一致
         List<ServerVmess> allServers = vmessMapper.selectList(
-            new LambdaQueryWrapper<ServerVmess>()
-                .orderByAsc(ServerVmess::getSort)
-        );
-        
+                new LambdaQueryWrapper<ServerVmess>()
+                        .orderByAsc(ServerVmess::getSort));
+
         logger.debug("Total VMess servers found: {}", allServers.size());
-        
+
         List<Map<String, Object>> result = new ArrayList<>();
-        
+
         for (ServerVmess server : allServers) {
             // 检查show字段
             if (server.getShow() == null || server.getShow() != 1) {
                 logger.debug("VMess server {} skipped: show = {}", server.getId(), server.getShow());
                 continue;
             }
-            
+
             // 检查用户组匹配
             if (!isUserGroupMatched(server.getGroupId(), user.getGroupId())) {
-                logger.debug("VMess server {} skipped: group_id not matched. Server groups: {}, User group: {}", 
-                    server.getId(), server.getGroupId(), user.getGroupId());
+                logger.debug("VMess server {} skipped: group_id not matched. Server groups: {}, User group: {}",
+                        server.getId(), server.getGroupId(), user.getGroupId());
                 continue;
             }
-            
-            // 处理端口范围（PHP: if (strpos($vmess[$key]['port'], '-') !== false) { $vmess[$key]['port'] = Helper::randomPort($vmess[$key]['port']); }）
+
+            // 处理端口范围（PHP: if (strpos($vmess[$key]['port'], '-') !== false) {
+            // $vmess[$key]['port'] = Helper::randomPort($vmess[$key]['port']); }）
             String portStr = server.getPort();
             if (portStr != null && portStr.contains("-")) {
                 portStr = String.valueOf(Helper.randomPort(portStr));
             }
-            
+
             Long targetId = server.getParentId() != null ? server.getParentId() : server.getId();
             Long lastCheckAt = getServerTimestamp("SERVER_VMESS_LAST_CHECK_AT", targetId);
 
@@ -258,72 +259,72 @@ public class ServerService {
             map.put("port", portStr); // 已经处理过端口范围
             map.put("network", server.getNetwork());
             map.put("tls", server.getTls() != null && server.getTls() == 1);
-            
+
             // 解析 JSON 字符串
             try {
                 if (server.getTlsSettings() != null && !server.getTlsSettings().isEmpty()) {
                     Map<String, Object> tlsSettings = objectMapper.readValue(
-                        server.getTlsSettings(), 
-                        new TypeReference<Map<String, Object>>() {}
-                    );
+                            server.getTlsSettings(),
+                            new TypeReference<Map<String, Object>>() {
+                            });
                     map.put("tlsSettings", tlsSettings);
                 }
                 if (server.getNetworkSettings() != null && !server.getNetworkSettings().isEmpty()) {
                     Map<String, Object> networkSettings = objectMapper.readValue(
-                        server.getNetworkSettings(), 
-                        new TypeReference<Map<String, Object>>() {}
-                    );
+                            server.getNetworkSettings(),
+                            new TypeReference<Map<String, Object>>() {
+                            });
                     map.put("networkSettings", networkSettings);
                 }
             } catch (Exception e) {
                 logger.warn("Error parsing JSON settings for VMess server {}: {}", server.getId(), e.getMessage());
             }
-            
+
             map.put("created_at", server.getCreatedAt());
             map.put("sort", server.getSort());
             map.put("last_check_at", lastCheckAt != null ? lastCheckAt : 0L);
             result.add(map);
-            
+
             logger.debug("VMess server {} added: {}", server.getId(), server.getName());
         }
-        
+
         return result;
     }
-    
+
     /**
      * 获取可用的 Trojan 服务器
      */
     private List<Map<String, Object>> getAvailableTrojan(User user) {
         // 先获取所有服务器（不筛选show），与PHP逻辑一致
         List<ServerTrojan> allServers = trojanMapper.selectList(
-            new LambdaQueryWrapper<ServerTrojan>()
-                .orderByAsc(ServerTrojan::getSort)
-        );
-        
+                new LambdaQueryWrapper<ServerTrojan>()
+                        .orderByAsc(ServerTrojan::getSort));
+
         logger.debug("Total Trojan servers found: {}", allServers.size());
-        
+
         List<Map<String, Object>> result = new ArrayList<>();
-        
+
         for (ServerTrojan server : allServers) {
             // 检查show字段
             if (server.getShow() == null || server.getShow() != 1) {
                 logger.debug("Trojan server {} skipped: show = {}", server.getId(), server.getShow());
                 continue;
             }
-            
+
             // 检查用户组匹配
             if (!isUserGroupMatched(server.getGroupId(), user.getGroupId())) {
-                logger.debug("Trojan server {} skipped: group_id not matched. Server groups: {}, User group: {}", 
-                    server.getId(), server.getGroupId(), user.getGroupId());
+                logger.debug("Trojan server {} skipped: group_id not matched. Server groups: {}, User group: {}",
+                        server.getId(), server.getGroupId(), user.getGroupId());
                 continue;
             }
-            
-            // 处理端口范围（PHP: if (strpos($trojan[$key]['port'], '-') !== false) { $trojan[$key]['port'] = Helper::randomPort($trojan[$key]['port']); }）
+
+            // 处理端口范围（PHP: if (strpos($trojan[$key]['port'], '-') !== false) {
+            // $trojan[$key]['port'] = Helper::randomPort($trojan[$key]['port']); }）
             String portStr = server.getPort();
             if (portStr != null && portStr.contains("-")) {
                 portStr = String.valueOf(Helper.randomPort(portStr));
             }
-            
+
             Long targetId = server.getParentId() != null ? server.getParentId() : server.getId();
             Long lastCheckAt = getServerTimestamp("SERVER_TROJAN_LAST_CHECK_AT", targetId);
 
@@ -341,41 +342,40 @@ public class ServerService {
             map.put("sort", server.getSort());
             map.put("last_check_at", lastCheckAt != null ? lastCheckAt : 0L);
             result.add(map);
-            
+
             logger.debug("Trojan server {} added: {}", server.getId(), server.getName());
         }
-        
+
         return result;
     }
-    
+
     /**
      * 获取可用的 Hysteria 服务器
      */
     private List<Map<String, Object>> getAvailableHysteria(User user) {
         // 先获取所有服务器（不筛选show），与PHP逻辑一致
         List<ServerHysteria> allServers = hysteriaMapper.selectList(
-            new LambdaQueryWrapper<ServerHysteria>()
-                .orderByAsc(ServerHysteria::getSort)
-        );
-        
+                new LambdaQueryWrapper<ServerHysteria>()
+                        .orderByAsc(ServerHysteria::getSort));
+
         logger.debug("Total Hysteria servers found: {}", allServers.size());
-        
+
         List<Map<String, Object>> result = new ArrayList<>();
-        
+
         for (ServerHysteria server : allServers) {
             // 检查show字段
             if (server.getShow() == null || server.getShow() != 1) {
                 logger.debug("Hysteria server {} skipped: show = {}", server.getId(), server.getShow());
                 continue;
             }
-            
+
             // 检查用户组匹配
             if (!isUserGroupMatched(server.getGroupId(), user.getGroupId())) {
-                logger.debug("Hysteria server {} skipped: group_id not matched. Server groups: {}, User group: {}", 
-                    server.getId(), server.getGroupId(), user.getGroupId());
+                logger.debug("Hysteria server {} skipped: group_id not matched. Server groups: {}, User group: {}",
+                        server.getId(), server.getGroupId(), user.getGroupId());
                 continue;
             }
-            
+
             Long targetId = server.getParentId() != null ? server.getParentId() : server.getId();
             Long lastCheckAt = getServerTimestamp("SERVER_HYSTERIA_LAST_CHECK_AT", targetId);
 
@@ -390,10 +390,10 @@ public class ServerService {
             map.put("sort", server.getSort());
             map.put("last_check_at", lastCheckAt != null ? lastCheckAt : 0L);
             result.add(map);
-            
+
             logger.debug("Hysteria server {} added: {}", server.getId(), server.getName());
         }
-        
+
         return result;
     }
 
@@ -403,8 +403,7 @@ public class ServerService {
     private List<Map<String, Object>> getAvailableTuic(User user) {
         List<ServerTuic> allServers = tuicMapper.selectList(
                 new LambdaQueryWrapper<ServerTuic>()
-                        .orderByAsc(ServerTuic::getSort)
-        );
+                        .orderByAsc(ServerTuic::getSort));
 
         logger.debug("Total TUIC servers found: {}", allServers.size());
 
@@ -443,8 +442,7 @@ public class ServerService {
     private List<Map<String, Object>> getAvailableAnyTLS(User user) {
         List<ServerAnytls> allServers = anytlsMapper.selectList(
                 new LambdaQueryWrapper<ServerAnytls>()
-                        .orderByAsc(ServerAnytls::getSort)
-        );
+                        .orderByAsc(ServerAnytls::getSort));
 
         logger.debug("Total AnyTLS servers found: {}", allServers.size());
 
@@ -484,8 +482,7 @@ public class ServerService {
     private List<Map<String, Object>> getAvailableV2node(User user) {
         List<ServerV2node> allServers = v2nodeMapper.selectList(
                 new LambdaQueryWrapper<ServerV2node>()
-                        .orderByAsc(ServerV2node::getSort)
-        );
+                        .orderByAsc(ServerV2node::getSort));
 
         logger.debug("Total V2node servers found: {}", allServers.size());
 
@@ -519,7 +516,7 @@ public class ServerService {
         }
         return result;
     }
-    
+
     /**
      * 获取可用的 VLESS 服务器
      */
@@ -527,42 +524,43 @@ public class ServerService {
         try {
             // 先获取所有服务器（不筛选show），与PHP逻辑一致
             List<ServerVless> allServers = vlessMapper.selectList(
-                new LambdaQueryWrapper<ServerVless>()
-                    .orderByAsc(ServerVless::getSort)
-            );
-            
+                    new LambdaQueryWrapper<ServerVless>()
+                            .orderByAsc(ServerVless::getSort));
+
             logger.debug("Total VLESS servers found: {}", allServers.size());
-            
+
             List<Map<String, Object>> result = new ArrayList<>();
-            
+
             for (ServerVless server : allServers) {
                 // 检查show字段
                 if (server.getShow() == null || server.getShow() != 1) {
                     logger.debug("VLESS server {} skipped: show = {}", server.getId(), server.getShow());
                     continue;
                 }
-                
+
                 // 检查用户组匹配
                 // 添加详细日志用于调试
                 List<?> serverGroupIds = server.getGroupId();
-                logger.debug("VLESS server {} - Checking group match. Server group_id: {} (class: {}, element types: {}), User group_id: {} (class: {})", 
-                    server.getId(), 
-                    serverGroupIds,
-                    serverGroupIds != null ? serverGroupIds.getClass().getName() : "null",
-                    serverGroupIds != null && !serverGroupIds.isEmpty() ? 
-                        serverGroupIds.get(0).getClass().getSimpleName() : "empty",
-                    user.getGroupId(),
-                    user.getGroupId() != null ? user.getGroupId().getClass().getName() : "null");
-                
+                logger.debug(
+                        "VLESS server {} - Checking group match. Server group_id: {} (class: {}, element types: {}), User group_id: {} (class: {})",
+                        server.getId(),
+                        serverGroupIds,
+                        serverGroupIds != null ? serverGroupIds.getClass().getName() : "null",
+                        serverGroupIds != null && !serverGroupIds.isEmpty()
+                                ? serverGroupIds.get(0).getClass().getSimpleName()
+                                : "empty",
+                        user.getGroupId(),
+                        user.getGroupId() != null ? user.getGroupId().getClass().getName() : "null");
+
                 if (!isUserGroupMatched(serverGroupIds, user.getGroupId())) {
-                    logger.debug("VLESS server {} skipped: group_id not matched. Server groups: {}, User group: {}", 
-                        server.getId(), serverGroupIds, user.getGroupId());
+                    logger.debug("VLESS server {} skipped: group_id not matched. Server groups: {}, User group: {}",
+                            server.getId(), serverGroupIds, user.getGroupId());
                     continue;
                 }
-                
+
                 // 端口是 int 类型，不需要处理范围
                 Integer port = server.getPort();
-                
+
                 Long targetId = server.getParentId() != null ? server.getParentId() : server.getId();
                 Long lastCheckAt = getServerTimestamp("SERVER_VLESS_LAST_CHECK_AT", targetId);
 
@@ -577,43 +575,43 @@ public class ServerService {
                 // 直接使用Integer类型的tls值：0=none, 1=tls, 2=reality
                 map.put("tls", server.getTls() != null ? server.getTls() : 0);
                 map.put("flow", server.getFlow());
-                
+
                 // 解析 JSON 字符串
                 try {
                     if (server.getTlsSettings() != null && !server.getTlsSettings().isEmpty()) {
                         Map<String, Object> tlsSettings = objectMapper.readValue(
-                            server.getTlsSettings(), 
-                            new TypeReference<Map<String, Object>>() {}
-                        );
+                                server.getTlsSettings(),
+                                new TypeReference<Map<String, Object>>() {
+                                });
                         map.put("tlsSettings", tlsSettings);
                     }
                     if (server.getNetworkSettings() != null && !server.getNetworkSettings().isEmpty()) {
                         Map<String, Object> networkSettings = objectMapper.readValue(
-                            server.getNetworkSettings(), 
-                            new TypeReference<Map<String, Object>>() {}
-                        );
+                                server.getNetworkSettings(),
+                                new TypeReference<Map<String, Object>>() {
+                                });
                         map.put("networkSettings", networkSettings);
                     }
                 } catch (Exception e) {
                     logger.warn("Error parsing JSON settings for VLESS server {}: {}", server.getId(), e.getMessage());
                 }
-                
+
                 map.put("created_at", server.getCreatedAt());
                 map.put("updated_at", server.getUpdatedAt()); // 添加 updated_at 用于 cache_key
                 map.put("sort", server.getSort());
                 map.put("last_check_at", lastCheckAt != null ? lastCheckAt : 0L);
                 result.add(map);
-                
+
                 logger.debug("VLESS server {} added: {}", server.getId(), server.getName());
             }
-            
+
             return result;
         } catch (Exception e) {
             logger.error("Error getting VLESS servers, table may not exist: {}", e.getMessage());
             return new ArrayList<>(); // 如果表不存在，返回空列表
         }
     }
-    
+
     /**
      * 检查用户组是否匹配
      * PHP逻辑：in_array($user->group_id, $server['group_id'])
@@ -627,20 +625,21 @@ public class ServerService {
             logger.debug("User group_id is null");
             return false;
         }
-        
+
         // 详细日志：检查每个元素的类型和值
-        logger.debug("Checking group match - User group: {} (type: {}), Server groups: {} (types: {})", 
-            userGroupId, userGroupId.getClass().getSimpleName(),
-            serverGroupIds, 
-            serverGroupIds.stream()
-                .map(g -> g != null ? g.getClass().getSimpleName() : "null")
-                .collect(java.util.stream.Collectors.toList()));
-        
+        logger.debug("Checking group match - User group: {} (type: {}), Server groups: {} (types: {})",
+                userGroupId, userGroupId.getClass().getSimpleName(),
+                serverGroupIds,
+                serverGroupIds.stream()
+                        .map(g -> g != null ? g.getClass().getSimpleName() : "null")
+                        .collect(java.util.stream.Collectors.toList()));
+
         // 使用多种方式比较，确保类型兼容
         boolean matched = false;
         for (Object groupId : serverGroupIds) {
-            if (groupId == null) continue;
-            
+            if (groupId == null)
+                continue;
+
             // 转换为整数进行比较
             int serverGroupId;
             if (groupId instanceof Integer) {
@@ -658,32 +657,19 @@ public class ServerService {
                 logger.warn("Unexpected group_id type: {} ({})", groupId, groupId.getClass().getSimpleName());
                 continue;
             }
-            
+
             if (serverGroupId == userGroupId) {
                 matched = true;
                 break;
             }
         }
-        
-        logger.debug("Group match result: user group {} in server groups {} = {}", 
-            userGroupId, serverGroupIds, matched);
+
+        logger.debug("Group match result: user group {} in server groups {} = {}",
+                userGroupId, serverGroupIds, matched);
         return matched;
     }
 
     private Long getServerTimestamp(String keyPrefix, Long id) {
-        try {
-            String key = keyPrefix + "_" + id;
-            Object value = redisTemplate.opsForValue().get(key);
-            if (value instanceof Number num) {
-                return num.longValue();
-            }
-            if (value instanceof String str && !str.isEmpty()) {
-                return Long.parseLong(str);
-            }
-        } catch (Exception e) {
-            logger.warn("Error reading server timestamp for {} {}", keyPrefix, id, e);
-        }
-        return null;
+        return nodeCacheService.getServerTimestamp(keyPrefix, id);
     }
 }
-

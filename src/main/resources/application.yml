@@ -51,6 +51,12 @@ v2board:
   commission-withdraw-method: ${COMMISSION_WITHDRAW_METHOD:alipay,wechat}
   commission-withdraw-limit: ${COMMISSION_WITHDRAW_LIMIT:100}
 
+  redis:
+    # 与 PHP 项目 REDIS_CACHE_DB 对齐的缓存库索引（默认 1）
+    cache-database: ${REDIS_CACHE_DB:1}
+    # 可选的 Redis Key 前缀，用于与 Laravel REDIS_PREFIX 对齐
+    prefix: "v2board_database_v2board_cache:"
+
 # 应用配置
 app:
   key: ${APP_KEY:base64:your-secret-key-here}  # JWT密钥，需要与PHP项目的APP_KEY保持一致
