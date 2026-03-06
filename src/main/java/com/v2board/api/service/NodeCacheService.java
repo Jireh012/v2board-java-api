@@ -1,6 +1,7 @@
 package com.v2board.api.service;
 
 import com.v2board.api.config.V2boardRedisProperties;
+import com.v2board.api.util.PhpSerializeUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -60,6 +61,7 @@ public class NodeCacheService {
 
     /**
      * 写入单个值，带可选过期时间。
+     * 自动将 value 转为 PHP serialize 字符串，与 PHP Cache 共用时可被 unserialize 读取。
      */
     public void set(String rawKey, Object value, Duration ttl) {
         if (rawKey == null) {
@@ -67,10 +69,11 @@ public class NodeCacheService {
         }
         try {
             String redisKey = applyPrefix(rawKey);
+            String serialized = PhpSerializeUtil.serialize(value);
             if (ttl != null) {
-                cacheRedisTemplate.opsForValue().set(redisKey, value, ttl);
+                cacheRedisTemplate.opsForValue().set(redisKey, serialized, ttl);
             } else {
-                cacheRedisTemplate.opsForValue().set(redisKey, value);
+                cacheRedisTemplate.opsForValue().set(redisKey, serialized);
             }
         } catch (Exception e) {
             logger.warn("Failed to set node cache key: {}", rawKey, e);
@@ -78,7 +81,7 @@ public class NodeCacheService {
     }
 
     /**
-     * 读取单个值。
+     * 读取单个值。从 Redis 取出的 PHP serialize 字符串会反序列化为 Java 对象（Map/List/Number/String）。
      */
     public Object get(String rawKey) {
         if (rawKey == null) {
@@ -86,7 +89,14 @@ public class NodeCacheService {
         }
         try {
             String redisKey = applyPrefix(rawKey);
-            return cacheRedisTemplate.opsForValue().get(redisKey);
+            Object raw = cacheRedisTemplate.opsForValue().get(redisKey);
+            if (raw == null) {
+                return null;
+            }
+            if (raw instanceof String s) {
+                return PhpSerializeUtil.unserialize(s);
+            }
+            return raw;
         } catch (Exception e) {
             logger.warn("Failed to get node cache key: {}", rawKey, e);
             return null;
@@ -95,7 +105,7 @@ public class NodeCacheService {
 
     /**
      * 批量读取多个 Key，对外仍然使用“原始 Key”（无前缀），
-     * 内部自动为每个 Key 追加前缀。
+     * 内部自动为每个 Key 追加前缀；每个 value 会按 PHP unserialize 解析后返回。
      */
     public List<Object> multiGet(List<String> rawKeys) {
         if (rawKeys == null || rawKeys.isEmpty()) {
@@ -107,7 +117,12 @@ public class NodeCacheService {
                     .map(this::applyPrefix)
                     .collect(Collectors.toList());
             List<Object> results = cacheRedisTemplate.opsForValue().multiGet(redisKeys);
-            return results != null ? results : Collections.emptyList();
+            if (results == null) {
+                return Collections.emptyList();
+            }
+            return results.stream()
+                    .map(raw -> raw instanceof String s ? PhpSerializeUtil.unserialize(s) : raw)
+                    .collect(Collectors.toList());
         } catch (Exception e) {
             logger.warn("Failed to multiGet node cache keys: {}", rawKeys, e);
             return Collections.emptyList();

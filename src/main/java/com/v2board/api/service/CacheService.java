@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -46,12 +47,21 @@ public class CacheService {
                 return 0;
             }
 
-            // 1）Number 形式（兜底）
+            // 1）已反序列化后的 Map（NodeCacheService.get 对 PHP serialize 的 a:... 会解析为 Map）
+            if (data instanceof Map<?, ?> map) {
+                Object v = map.get("alive_ip");
+                if (v instanceof Number) {
+                    return ((Number) v).intValue();
+                }
+                return 0;
+            }
+
+            // 2）Number 形式（兜底）
             if (data instanceof Number) {
                 return ((Number) data).intValue();
             }
 
-            // 2）字符串形式（例如 PHP serialize 写入）
+            // 3）字符串形式（未解析的 PHP serialize 原始串，兼容旧读法）
             if (data instanceof String str && !str.isEmpty()) {
                 // 典型形式：a:2:{s:6:"vless2";a:2:{...}s:8:"alive_ip";i:1;}
                 String s = str;

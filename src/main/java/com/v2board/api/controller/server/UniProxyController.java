@@ -149,8 +149,18 @@ public class UniProxyController {
             for (Map.Entry<?, ?> e : m.entrySet()) {
                 Object k = e.getKey();
                 Object v = e.getValue();
-                if (k instanceof Number && v instanceof Number) {
-                    alive.put(((Number) k).longValue(), ((Number) v).intValue());
+                Long uid = null;
+                if (k instanceof Number) {
+                    uid = ((Number) k).longValue();
+                } else if (k != null) {
+                    try {
+                        uid = Long.parseLong(k.toString());
+                    } catch (NumberFormatException ignore) {
+                        // skip
+                    }
+                }
+                if (uid != null && v instanceof Number) {
+                    alive.put(uid, ((Number) v).intValue());
                 }
             }
         } else {
