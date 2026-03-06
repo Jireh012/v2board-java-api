@@ -7,26 +7,20 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 @Data
-@TableName("v2_commission_log")
-public class CommissionLog {
+@TableName("v2_mail_log")
+public class MailLog {
 
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    @TableField("invite_user_id")
-    private Long inviteUserId;
+    private String email;
 
-    @TableField("user_id")
-    private Long userId;
+    private String subject;
 
-    @TableField("trade_no")
-    private String tradeNo;
+    @TableField("template_name")
+    private String templateName;
 
-    @TableField("order_amount")
-    private Long orderAmount;
-
-    @TableField("get_amount")
-    private Long getAmount;
+    private String error;
 
     @TableField("created_at")
     private Long createdAt;
@@ -34,4 +28,3 @@ public class CommissionLog {
     @TableField("updated_at")
     private Long updatedAt;
 }
-

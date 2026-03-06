@@ -59,6 +59,15 @@ public class Order {
     @TableField("callback_no")
     private String callbackNo;
 
+    @TableField("paid_at")
+    private Long paidAt;
+
+    @TableField("refund_amount")
+    private Long refundAmount;
+
+    @TableField("discount_amount")
+    private Long discountAmount;
+
     @TableField("invite_user_id")
     private Long inviteUserId;
 
@@ -67,6 +76,9 @@ public class Order {
 
     @TableField("commission_status")
     private Integer commissionStatus;
+
+    @TableField("actual_commission_balance")
+    private Long actualCommissionBalance;
 
     /**
      * 订单类型：1-新购 2-续费 3-升级 4-流量重置等

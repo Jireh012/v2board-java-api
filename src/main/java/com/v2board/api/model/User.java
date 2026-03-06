@@ -33,8 +33,11 @@ public class User {
     private Integer remindTraffic;
     private Long balance;
     private Long commissionBalance;
-    private Integer discount;
+    private Integer commissionType;
     private Integer commissionRate;
+    private Integer discount;
     private Long telegramId;
     private Long inviteUserId;
+    private Integer speedLimit;
+    private Long t; // 最后流量时间戳
 }

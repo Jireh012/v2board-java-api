@@ -134,7 +134,11 @@ public class UniProxyController {
         nodeCacheService.set(lastPushKey, now, Duration.ofHours(1));
 
         double rate = ctx.rate;
-        userService.trafficFetch(ctx.nodeId, ctx.nodeType, rate, data);
+        // 第一阶段：仅写入 Redis hash（对齐 PHP TrafficFetchJob）
+        userService.trafficFetch(rate, data);
+        // 第二阶段：异步统计（对齐 PHP StatUserJob + StatServerJob）
+        userService.recordStatUserAsync(data, rate);
+        userService.recordStatServerAsync(data, ctx.nodeId, ctx.nodeType, rate);
 
         return ResponseEntity.ok(Map.of("data", true));
     }
