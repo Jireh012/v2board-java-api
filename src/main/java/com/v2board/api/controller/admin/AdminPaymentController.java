@@ -41,12 +41,11 @@ public class AdminPaymentController {
     private String appUrl;
 
     /**
-     * 返回可用的支付驱动名称列表。
-     * 这里暂时返回空列表，占位以兼容前端。
+     * 返回可用的支付驱动名称列表。对齐 PHP getPaymentMethods()。
      */
     @GetMapping("/methods")
     public ApiResponse<List<String>> getPaymentMethods() {
-        return ApiResponse.success(new ArrayList<>());
+        return ApiResponse.success(paymentService.getPaymentMethods());
     }
 
     /**
@@ -120,6 +119,7 @@ public class AdminPaymentController {
         String name = (String) body.get("name");
         String paymentCode = (String) body.get("payment");
         Object configObj = body.get("config");
+        String icon = (String) body.getOrDefault("icon", "");
         String notifyDomain = (String) body.getOrDefault("notify_domain", "");
         Number fixed = (Number) body.getOrDefault("handling_fee_fixed", 0);
         Number percent = (Number) body.getOrDefault("handling_fee_percent", 0);
@@ -145,6 +145,7 @@ public class AdminPaymentController {
             payment.setName(name);
             payment.setPayment(paymentCode);
             payment.setConfig(configJson);
+            payment.setIcon(icon);
             payment.setNotifyDomain(notifyDomain);
             payment.setHandlingFeeFixed(fixed.longValue());
             payment.setHandlingFeePercent(percent.intValue());
@@ -157,6 +158,7 @@ public class AdminPaymentController {
         payment.setName(name);
         payment.setPayment(paymentCode);
         payment.setConfig(configJson);
+        payment.setIcon(icon);
         payment.setNotifyDomain(notifyDomain);
         payment.setHandlingFeeFixed(fixed.longValue());
         payment.setHandlingFeePercent(percent.intValue());

@@ -95,6 +95,13 @@
             <version>0.9.11</version>
         </dependency>
 
+        <!-- Stripe Java SDK -->
+        <dependency>
+            <groupId>com.stripe</groupId>
+            <artifactId>stripe-java</artifactId>
+            <version>24.3.0</version>
+        </dependency>
+
         <!-- BouncyCastle for crypto (PKCS#1 / PKCS#8 keys) -->
         <dependency>
             <groupId>org.bouncycastle</groupId>
