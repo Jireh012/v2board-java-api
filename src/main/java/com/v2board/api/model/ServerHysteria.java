@@ -52,7 +52,9 @@ public class ServerHysteria {
 
     @TableField("obfs_password")
     private String obfsPassword;
-    
+
+    private Integer insecure;
+
     @TableField("`show`")
     private Integer show;
     

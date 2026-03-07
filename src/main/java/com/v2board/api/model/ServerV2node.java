@@ -27,11 +27,45 @@ public class ServerV2node {
     @TableField("server_name")
     private String serverName;
 
+    @TableField("listen_ip")
+    private String listenIp;
+
     @TableField("protocol")
     private String protocol;
 
     @TableField("network")
     private String network;
+
+    private Integer tls;
+
+    private String flow;
+
+    private String encryption;
+
+    @TableField("disable_sni")
+    private Integer disableSni;
+
+    @TableField("udp_relay_mode")
+    private String udpRelayMode;
+
+    @TableField("zero_rtt_handshake")
+    private Integer zeroRttHandshake;
+
+    @TableField("congestion_control")
+    private String congestionControl;
+
+    private String cipher;
+
+    @TableField("up_mbps")
+    private Integer upMbps;
+
+    @TableField("down_mbps")
+    private Integer downMbps;
+
+    private String obfs;
+
+    @TableField("obfs_password")
+    private String obfsPassword;
 
     @TableField(value = "group_id", typeHandler = JacksonTypeHandler.class)
     private List<Integer> groupId;

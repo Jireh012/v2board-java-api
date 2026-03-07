@@ -33,6 +33,8 @@ public class ServerAnytls {
     @TableField(value = "padding_scheme", typeHandler = JacksonTypeHandler.class)
     private Object paddingScheme;
 
+    private Integer insecure;
+
     @TableField("`show`")
     private Integer show;
 

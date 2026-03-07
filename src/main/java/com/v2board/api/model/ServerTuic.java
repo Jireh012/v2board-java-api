@@ -32,6 +32,14 @@ public class ServerTuic {
     @TableField("zero_rtt_handshake")
     private Integer zeroRttHandshake;
 
+    private Integer insecure;
+
+    @TableField("disable_sni")
+    private Integer disableSni;
+
+    @TableField("udp_relay_mode")
+    private String udpRelayMode;
+
     @TableField("`show`")
     private Integer show;
 
