@@ -29,6 +29,10 @@ public class StatUser {
     @com.fasterxml.jackson.annotation.JsonProperty("server_rate")
     private Double serverRate;
 
+    @TableField("record_type")
+    @com.fasterxml.jackson.annotation.JsonProperty("record_type")
+    private String recordType;
+
     @com.fasterxml.jackson.annotation.JsonProperty("created_at")
     private Long createdAt;
 

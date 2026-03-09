@@ -22,7 +22,8 @@ public class AdminRouteController {
     private static final Set<String> VALID_ACTIONS = Set.of(
             "block", "block_ip", "block_port", "protocol", "dns", "route", "route_ip", "default_out");
 
-    private static final ObjectMapper mapper = new ObjectMapper();
+    @Autowired
+    private ObjectMapper mapper;
 
     @Autowired
     private ServerRouteMapper serverRouteMapper;

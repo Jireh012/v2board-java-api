@@ -7,8 +7,8 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 @Data
-@TableName("v2_giftcard")
-public class Giftcard {
+@TableName("v2_coupon")
+public class Coupon {
 
     @TableId(type = IdType.AUTO)
     private Long id;
@@ -18,20 +18,26 @@ public class Giftcard {
     private String code;
 
     /**
-     * 类型：1-余额，2-延长有效期（天），3-增加流量（GB），4-清空流量，5-指定套餐。
+     * 1-金额（分），2-比例（百分比）
      */
     private Integer type;
 
     private Integer value;
 
-    @TableField("plan_id")
-    private Long planId;
+    @TableField(value = "`show`")
+    private Integer show;
 
     @TableField("limit_use")
     private Integer limitUse;
 
-    @TableField("used_user_ids")
-    private String usedUserIds;
+    @TableField("limit_use_with_user")
+    private Integer limitUseWithUser;
+
+    @TableField("limit_plan_ids")
+    private String limitPlanIds;
+
+    @TableField("limit_period")
+    private String limitPeriod;
 
     @TableField("started_at")
     private Long startedAt;
@@ -45,4 +51,3 @@ public class Giftcard {
     @TableField("updated_at")
     private Long updatedAt;
 }
-

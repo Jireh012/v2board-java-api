@@ -31,6 +31,7 @@ public class Plan {
     private Integer onetimePrice;
     private Integer resetPrice;
     private Integer resetTrafficMethod;  // 流量重置方式
+    private Integer deviceLimit;
     private Integer capacityLimit;
     private Long createdAt;
     private Long updatedAt;

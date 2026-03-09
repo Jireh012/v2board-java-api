@@ -27,7 +27,8 @@ import java.util.*;
 @RequestMapping("/api/v1/admin/server")
 public class AdminNodeController {
 
-    private static final ObjectMapper objectMapper = new ObjectMapper();
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @Autowired private ServerVmessMapper serverVmessMapper;
     @Autowired private ServerVlessMapper serverVlessMapper;

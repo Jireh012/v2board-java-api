@@ -50,6 +50,67 @@ public class OrderService {
     private ConfigService configService;
 
     /**
+     * 订单支付 — 对齐 PHP OrderService::paid()
+     * 设置 status=1, paid_at, callback_no，然后触发异步开通。
+     */
+    @Transactional
+    public boolean paid(Order order, String callbackNo) {
+        if (order == null || order.getStatus() == null || order.getStatus() != 0) {
+            return true;
+        }
+        order.setStatus(1);
+        order.setPaidAt(System.currentTimeMillis() / 1000);
+        order.setCallbackNo(callbackNo);
+        order.setUpdatedAt(System.currentTimeMillis() / 1000);
+        if (orderMapper.updateById(order) <= 0) {
+            return false;
+        }
+        try {
+            handleOrderAsync(order.getTradeNo());
+        } catch (Exception e) {
+            logger.error("paid: failed to dispatch handleOrderAsync for {}", order.getTradeNo(), e);
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * 设置佣金 — 对齐 PHP OrderService::setInvite()
+     * 根据邀请人佣金类型和费率设置订单佣金。
+     */
+    public void setInvite(Order order, User user) {
+        if (user.getInviteUserId() == null || (order.getTotalAmount() != null && order.getTotalAmount() <= 0)) {
+            return;
+        }
+        order.setInviteUserId(user.getInviteUserId());
+        User inviter = userMapper.selectById(user.getInviteUserId());
+        if (inviter == null) {
+            return;
+        }
+        boolean isCommission = false;
+        int commissionType = inviter.getCommissionType() != null ? inviter.getCommissionType() : 0;
+        switch (commissionType) {
+            case 0 -> {
+                // 系统默认：根据配置决定是仅首次还是每次
+                int commissionFirstTime = getConfigInt("commission_first_time_enable", 1);
+                isCommission = (commissionFirstTime == 0) || !haveValidOrder(user);
+            }
+            case 1 -> isCommission = true; // 每次都发放
+            case 2 -> isCommission = !haveValidOrder(user); // 仅首次
+        }
+        if (!isCommission) {
+            return;
+        }
+        long totalAmount = order.getTotalAmount() != null ? order.getTotalAmount() : 0L;
+        if (inviter.getCommissionRate() != null && inviter.getCommissionRate() > 0) {
+            order.setCommissionBalance(totalAmount * inviter.getCommissionRate() / 100);
+        } else {
+            int defaultRate = getConfigInt("invite_commission", 10);
+            order.setCommissionBalance(totalAmount * defaultRate / 100);
+        }
+    }
+
+    /**
      * 用户是否存在未完成订单（待支付或处理中）
      */
     public boolean userHasUnfinishedOrder(Long userId) {
@@ -279,6 +340,45 @@ public class OrderService {
         }
         ZonedDateTime dt = Instant.ofEpochSecond(timestamp).atZone(ZoneId.systemDefault());
         return dt.plusMonths(months).toEpochSecond();
+    }
+
+    /**
+     * 用户是否有有效订单（非待支付、非取消）— 对齐 PHP haveValidOrder()
+     */
+    private boolean haveValidOrder(User user) {
+        if (user == null || user.getId() == null) {
+            return false;
+        }
+        LambdaQueryWrapper<Order> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Order::getUserId, user.getId())
+                .notIn(Order::getStatus, 0, 2);
+        return orderMapper.selectCount(wrapper) > 0;
+    }
+
+    /**
+     * 从配置中读取整型值（先从 invite 分组中取，再从全局取）
+     */
+    @SuppressWarnings("unchecked")
+    private int getConfigInt(String key, int defaultValue) {
+        try {
+            Map<String, Object> config = configService.getFullConfig();
+            // 先从 invite 分组中查找
+            Object inviteSection = config.get("invite");
+            if (inviteSection instanceof Map) {
+                Object val = ((Map<String, Object>) inviteSection).get(key);
+                if (val instanceof Number) {
+                    return ((Number) val).intValue();
+                }
+            }
+            // 再从全局查找
+            Object val = config.get(key);
+            if (val instanceof Number) {
+                return ((Number) val).intValue();
+            }
+        } catch (Exception e) {
+            logger.error("getConfigInt: failed to load config for key={}", key, e);
+        }
+        return defaultValue;
     }
 
     /**
