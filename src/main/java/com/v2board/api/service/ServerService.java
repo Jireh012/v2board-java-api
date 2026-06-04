@@ -3,6 +3,7 @@ package com.v2board.api.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.v2board.api.mapper.ServerAnytlsMapper;
 import com.v2board.api.mapper.ServerHysteriaMapper;
+import com.v2board.api.mapper.ServerRouteMapper;
 import com.v2board.api.mapper.ServerShadowsocksMapper;
 import com.v2board.api.mapper.ServerTrojanMapper;
 import com.v2board.api.mapper.ServerTuicMapper;
@@ -11,6 +12,7 @@ import com.v2board.api.mapper.ServerVlessMapper;
 import com.v2board.api.mapper.ServerVmessMapper;
 import com.v2board.api.model.ServerAnytls;
 import com.v2board.api.model.ServerHysteria;
+import com.v2board.api.model.ServerRoute;
 import com.v2board.api.model.ServerShadowsocks;
 import com.v2board.api.model.ServerTrojan;
 import com.v2board.api.model.ServerTuic;
@@ -29,6 +31,7 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -64,6 +67,9 @@ public class ServerService {
     private ServerV2nodeMapper v2nodeMapper;
 
     @Autowired
+    private ServerRouteMapper serverRouteMapper;
+
+    @Autowired
     private ObjectMapper objectMapper;
 
     @Autowired
@@ -82,15 +88,22 @@ public class ServerService {
             List<Map<String, Object>> trojan = getAvailableTrojan(user);
             List<Map<String, Object>> hysteria = getAvailableHysteria(user);
             List<Map<String, Object>> vless = getAvailableVless(user);
+            List<Map<String, Object>> tuic = getAvailableTuic(user);
+            List<Map<String, Object>> anytls = getAvailableAnyTLS(user);
+            List<Map<String, Object>> v2node = getAvailableV2node(user);
 
-            logger.debug("Found servers - Shadowsocks: {}, VMess: {}, Trojan: {}, Hysteria: {}, VLESS: {}",
-                    shadowsocks.size(), vmess.size(), trojan.size(), hysteria.size(), vless.size());
+            logger.debug("Found servers - Shadowsocks: {}, VMess: {}, Trojan: {}, Hysteria: {}, VLESS: {}, TUIC: {}, AnyTLS: {}, V2node: {}",
+                    shadowsocks.size(), vmess.size(), trojan.size(), hysteria.size(), vless.size(),
+                    tuic.size(), anytls.size(), v2node.size());
 
             servers.addAll(shadowsocks);
             servers.addAll(vmess);
             servers.addAll(trojan);
             servers.addAll(hysteria);
             servers.addAll(vless);
+            servers.addAll(tuic);
+            servers.addAll(anytls);
+            servers.addAll(v2node);
         } catch (Exception e) {
             logger.error("Error getting available servers", e);
         }
@@ -103,15 +116,16 @@ public class ServerService {
 
         // 处理端口、在线状态和 cache_key（与 PHP 的 array_map 逻辑一致）
         return servers.stream().map(server -> {
-            // 端口转换为整数（PHP: $server['port'] = (int)$server['port']）
             Object portObj = server.get("port");
-            if (portObj instanceof String) {
-                // 如果端口是字符串且包含范围，已经在获取服务器时处理了
-                // 这里只需要转换为整数
-                try {
-                    server.put("port", Integer.parseInt((String) portObj));
-                } catch (NumberFormatException e) {
-                    server.put("port", 0);
+            if (portObj instanceof String portStr) {
+                if (portStr.contains("-")) {
+                    server.put("mport", portStr);
+                } else {
+                    try {
+                        server.put("port", Integer.parseInt(portStr.trim()));
+                    } catch (NumberFormatException e) {
+                        server.put("port", 0);
+                    }
                 }
             } else if (portObj instanceof Integer) {
                 server.put("port", portObj);
@@ -386,9 +400,21 @@ public class ServerService {
             map.put("host", server.getHost());
             map.put("port", server.getPort());
             map.put("rate", server.getRate() != null && !server.getRate().isEmpty() ? server.getRate() : "1");
+            map.put("version", server.getVersion() != null ? server.getVersion() : 1);
+            map.put("server_port", server.getServerPort());
+            map.put("server_name", server.getServerName());
+            map.put("up_mbps", server.getUpMbps() != null ? server.getUpMbps() : 0);
+            map.put("down_mbps", server.getDownMbps() != null ? server.getDownMbps() : 0);
+            map.put("obfs", server.getObfs());
+            map.put("obfs_password", server.getObfsPassword());
+            map.put("insecure", server.getInsecure() != null ? server.getInsecure() : 0);
             map.put("created_at", server.getCreatedAt());
+            map.put("updated_at", server.getUpdatedAt());
             map.put("sort", server.getSort());
             map.put("last_check_at", lastCheckAt != null ? lastCheckAt : 0L);
+            if (server.getCreatedAt() != null) {
+                map.put("server_key", Helper.getServerKey(server.getCreatedAt(), 16));
+            }
             result.add(map);
 
             logger.debug("Hysteria server {} added: {}", server.getId(), server.getName());
@@ -428,7 +454,13 @@ public class ServerService {
             map.put("rate", server.getRate() != null && !server.getRate().isEmpty() ? server.getRate() : "1");
             map.put("server_port", server.getServerPort());
             map.put("server_name", server.getServerName());
+            map.put("congestion_control", server.getCongestionControl());
+            map.put("zero_rtt_handshake", server.getZeroRttHandshake());
+            map.put("disable_sni", server.getDisableSni());
+            map.put("udp_relay_mode", server.getUdpRelayMode());
+            map.put("insecure", server.getInsecure() != null ? server.getInsecure() : 0);
             map.put("created_at", server.getCreatedAt());
+            map.put("updated_at", server.getUpdatedAt());
             map.put("sort", server.getSort());
             map.put("last_check_at", lastCheckAt != null ? lastCheckAt : 0L);
             result.add(map);
@@ -464,11 +496,14 @@ public class ServerService {
             map.put("name", server.getName());
             map.put("host", server.getHost());
             map.put("port", server.getPort());
+            map.put("network", "tcp");
             map.put("rate", server.getRate() != null && !server.getRate().isEmpty() ? server.getRate() : "1");
             map.put("server_port", server.getServerPort());
             map.put("server_name", server.getServerName());
             map.put("padding_scheme", server.getPaddingScheme());
+            map.put("insecure", server.getInsecure() != null ? server.getInsecure() : 0);
             map.put("created_at", server.getCreatedAt());
+            map.put("updated_at", server.getUpdatedAt());
             map.put("sort", server.getSort());
             map.put("last_check_at", lastCheckAt != null ? lastCheckAt : 0L);
             result.add(map);
@@ -509,12 +544,81 @@ public class ServerService {
             map.put("server_name", server.getServerName());
             map.put("protocol", server.getProtocol());
             map.put("network", server.getNetwork());
+            map.put("tls", server.getTls() != null ? server.getTls() : 0);
+            map.put("flow", server.getFlow());
+            map.put("encryption", server.getEncryption());
+            map.put("cipher", server.getCipher());
+            map.put("up_mbps", server.getUpMbps() != null ? server.getUpMbps() : 0);
+            map.put("down_mbps", server.getDownMbps() != null ? server.getDownMbps() : 0);
+            map.put("obfs", server.getObfs());
+            map.put("obfs_password", server.getObfsPassword());
+            map.put("disable_sni", server.getDisableSni());
+            map.put("udp_relay_mode", server.getUdpRelayMode());
+            map.put("zero_rtt_handshake", server.getZeroRttHandshake());
+            map.put("congestion_control", server.getCongestionControl());
+            map.put("padding_scheme", server.getPaddingScheme());
+            parseJsonField(map, "tls_settings", server.getTlsSettings(), true);
+            parseJsonField(map, "network_settings", server.getNetworkSettings(), false);
+            parseJsonField(map, "encryption_settings", server.getEncryptionSettings(), false);
+            if (map.get("encryption_settings") instanceof Map<?, ?> enc) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> encMap = (Map<String, Object>) enc;
+                encMap.remove("private_key");
+            }
             map.put("created_at", server.getCreatedAt());
+            map.put("updated_at", server.getUpdatedAt());
             map.put("sort", server.getSort());
             map.put("last_check_at", lastCheckAt != null ? lastCheckAt : 0L);
             result.add(map);
         }
         return result;
+    }
+
+    /**
+     * 按 route_id 顺序获取路由规则（对齐 PHP ServerService::getRoutes）
+     */
+    public List<Map<String, Object>> getRoutes(List<Integer> routeIds) {
+        if (routeIds == null || routeIds.isEmpty()) {
+            return List.of();
+        }
+        List<Long> ids = routeIds.stream().map(Integer::longValue).distinct().toList();
+        String order = ids.stream().map(String::valueOf).collect(Collectors.joining(","));
+        List<ServerRoute> routes = serverRouteMapper.selectList(
+                new LambdaQueryWrapper<ServerRoute>()
+                        .in(ServerRoute::getId, ids)
+                        .last("ORDER BY FIELD(id, " + order + ")"));
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (ServerRoute route : routes) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", route.getId());
+            m.put("action", route.getAction());
+            m.put("action_value", route.getActionValue());
+            if (route.getMatch() != null && !route.getMatch().isEmpty()) {
+                try {
+                    m.put("match", objectMapper.readValue(route.getMatch(), new TypeReference<Object>() {}));
+                } catch (Exception e) {
+                    m.put("match", route.getMatch());
+                }
+            }
+            result.add(m);
+        }
+        return result;
+    }
+
+    private void parseJsonField(Map<String, Object> map, String key, String json, boolean stripPrivate) {
+        if (json == null || json.isEmpty()) {
+            return;
+        }
+        try {
+            Map<String, Object> parsed = objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
+            if (stripPrivate && parsed != null) {
+                parsed.remove("private_key");
+                parsed.remove("ech_key");
+            }
+            map.put(key, parsed);
+        } catch (Exception e) {
+            logger.warn("Failed to parse {} JSON", key, e);
+        }
     }
 
     /**

@@ -6,6 +6,7 @@ import com.v2board.api.protocol.GeneralHandler;
 import com.v2board.api.service.ServerService;
 import com.v2board.api.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -50,7 +51,8 @@ public class ClientController {
      */
     public String subscribe(
             @RequestParam(required = false) String flag,
-            HttpServletRequest request) {
+            HttpServletRequest request,
+            HttpServletResponse response) {
         
         try {
             // 从拦截器设置的属性中获取用户
@@ -94,6 +96,7 @@ public class ClientController {
                 ProtocolHandler handler = selectSingBoxHandler(version);
                 if (handler != null) {
                     logger.debug("Using sing-box handler: {}", handler.getClass().getSimpleName());
+                    handler.applyResponseHeaders(user, response);
                     return handler.handle(user, servers);
                 }
             }
@@ -111,9 +114,9 @@ public class ClientController {
             
             logger.debug("Using protocol handler: {}", handler.getClass().getSimpleName());
             
+            handler.applyResponseHeaders(user, response);
             String result = handler.handle(user, servers);
             logger.debug("Generated subscribe content length: {}", result != null ? result.length() : 0);
-            
             return result;
         } catch (Exception e) {
             logger.error("Error processing subscribe request", e);
@@ -128,9 +131,29 @@ public class ClientController {
         if (flag == null || flag.isEmpty()) {
             return null;
         }
-        
-        // 遍历所有协议处理器，查找匹配的
+
+        if (flag.contains("quantumult")) {
+            for (ProtocolHandler handler : protocolHandlers) {
+                if (handler instanceof com.v2board.api.protocol.QuantumultXHandler) {
+                    return handler;
+                }
+            }
+        }
+
+        // verge 需在 clash 之前匹配（避免 UA 同时含 clash 与 verge 时误选）
+        if (flag.contains("verge")) {
+            for (ProtocolHandler handler : protocolHandlers) {
+                if (handler instanceof com.v2board.api.protocol.ClashVergeHandler) {
+                    return handler;
+                }
+            }
+        }
+
         for (ProtocolHandler handler : protocolHandlers) {
+            String name = handler.getClass().getSimpleName();
+            if (name.contains("Singbox")) {
+                continue;
+            }
             if (flag.contains(handler.getFlag())) {
                 return handler;
             }

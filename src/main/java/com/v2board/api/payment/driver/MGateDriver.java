@@ -54,7 +54,7 @@ public class MGateDriver implements PaymentDriver {
         sb.append(appSecret);
         String expectedSign = md5Hex(sb.toString());
 
-        if (!sign.equals(expectedSign)) {
+        if (!MessageDigest.isEqual(sign.getBytes(StandardCharsets.UTF_8), expectedSign.getBytes(StandardCharsets.UTF_8))) {
             return null;
         }
 

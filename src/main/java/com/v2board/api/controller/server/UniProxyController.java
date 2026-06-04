@@ -2,9 +2,11 @@ package com.v2board.api.controller.server;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.v2board.api.common.BusinessException;
+import com.v2board.api.model.ServerAnytls;
 import com.v2board.api.model.ServerHysteria;
 import com.v2board.api.model.ServerShadowsocks;
 import com.v2board.api.model.ServerTrojan;
+import com.v2board.api.model.ServerTuic;
 import com.v2board.api.model.ServerVless;
 import com.v2board.api.model.ServerVmess;
 import com.v2board.api.model.User;
@@ -210,70 +212,85 @@ public class UniProxyController {
 
         Map<String, List<String>> data = body != null ? body : new HashMap<>();
         if (data.isEmpty()) {
-            throw new BusinessException(400, "Invalid online data");
+            return ResponseEntity.ok(Map.of("data", true));
         }
-        long updateAt = System.currentTimeMillis() / 1000;
 
+        long updateAt = System.currentTimeMillis() / 1000;
         Map<String, Object> fullConfig = configService.getFullConfig();
         @SuppressWarnings("unchecked")
         Map<String, Object> serverConfig = (Map<String, Object>) fullConfig.getOrDefault("server",
                 Collections.emptyMap());
         int deviceLimitMode = getInt(serverConfig.get("device_limit_mode"), 0);
 
+        List<String> cacheKeys = new ArrayList<>();
+        for (String uid : data.keySet()) {
+            cacheKeys.add("ALIVE_IP_USER_" + uid);
+        }
+        if (cacheKeys.isEmpty()) {
+            return ResponseEntity.ok(Map.of("data", true));
+        }
+
+        List<Object> cachedList = nodeCacheService.multiGet(cacheKeys);
+        Map<String, Object> cachedData = new HashMap<>();
+        for (int i = 0; i < cacheKeys.size(); i++) {
+            cachedData.put(cacheKeys.get(i), i < cachedList.size() ? cachedList.get(i) : null);
+        }
+
         String nodeKey = ctx.nodeType + ctx.nodeId;
         for (Map.Entry<String, List<String>> entry : data.entrySet()) {
-            Long uid = Long.valueOf(entry.getKey());
-            List<String> ips = entry.getValue();
-            String key = "ALIVE_IP_USER_" + uid;
-            Object existing = nodeCacheService.get(key);
-            Map<String, Object> ipsMap;
-            if (existing instanceof Map<?, ?> map) {
-                ipsMap = new HashMap<>();
-                for (Map.Entry<?, ?> e : map.entrySet()) {
-                    ipsMap.put(String.valueOf(e.getKey()), e.getValue());
-                }
-            } else {
-                ipsMap = new HashMap<>();
+            String uidStr = entry.getKey();
+            if (!uidStr.matches("\\d+")) {
+                continue;
             }
+            List<String> ips = entry.getValue();
+            if (ips == null) {
+                continue;
+            }
+            String key = "ALIVE_IP_USER_" + uidStr;
+            Map<String, Object> ipsMap = toMutableMap(cachedData.get(key));
 
             Map<String, Object> currentNode = new HashMap<>();
             currentNode.put("aliveips", ips);
             currentNode.put("lastupdateAt", updateAt);
             ipsMap.put(nodeKey, currentNode);
 
-            Iterator<Map.Entry<String, Object>> it = ipsMap.entrySet().iterator();
-            while (it.hasNext()) {
-                Map.Entry<String, Object> e = it.next();
+            ipsMap.entrySet().removeIf(e -> {
+                if ("alive_ip".equals(e.getKey())) {
+                    return false;
+                }
                 Object val = e.getValue();
                 if (val instanceof Map<?, ?> map) {
                     Object last = map.get("lastupdateAt");
                     if (last instanceof Number num) {
-                        if (updateAt - num.longValue() > 100) {
-                            it.remove();
-                        }
+                        return updateAt - num.longValue() > 100;
                     }
                 }
-            }
+                return false;
+            });
 
-            int count = 0;
+            int count;
             if (deviceLimitMode == 1) {
                 Set<String> ipset = new HashSet<>();
-                for (Object val : ipsMap.values()) {
+                for (Map.Entry<String, Object> e : ipsMap.entrySet()) {
+                    if ("alive_ip".equals(e.getKey())) continue;
+                    Object val = e.getValue();
                     if (val instanceof Map<?, ?> map) {
                         Object aliveips = map.get("aliveips");
                         if (aliveips instanceof Collection<?> col) {
                             for (Object ipNode : col) {
                                 String s = String.valueOf(ipNode);
                                 int idx = s.indexOf('_');
-                                String ip = idx > 0 ? s.substring(0, idx) : s;
-                                ipset.add(ip);
+                                ipset.add(idx > 0 ? s.substring(0, idx) : s);
                             }
                         }
                     }
                 }
                 count = ipset.size();
             } else {
-                for (Object val : ipsMap.values()) {
+                count = 0;
+                for (Map.Entry<String, Object> e : ipsMap.entrySet()) {
+                    if ("alive_ip".equals(e.getKey())) continue;
+                    Object val = e.getValue();
                     if (val instanceof Map<?, ?> map) {
                         Object aliveips = map.get("aliveips");
                         if (aliveips instanceof Collection<?> col) {
@@ -331,12 +348,45 @@ public class UniProxyController {
             }
             case "hysteria" -> {
                 if (server instanceof ServerHysteria s) {
+                    resp.put("version", s.getVersion() != null ? s.getVersion() : 1);
                     resp.put("host", s.getHost());
-                    resp.put("server_port", parsePort(s.getPort()));
+                    resp.put("server_port", s.getServerPort() != null ? s.getServerPort() : parsePort(s.getPort()));
+                    resp.put("server_name", s.getServerName());
+                    resp.put("up_mbps", s.getUpMbps() != null ? s.getUpMbps() : 0);
+                    resp.put("down_mbps", s.getDownMbps() != null ? s.getDownMbps() : 0);
+                    if (Integer.valueOf(1).equals(s.getVersion())) {
+                        resp.put("obfs", s.getObfsPassword());
+                    } else if (Integer.valueOf(2).equals(s.getVersion())) {
+                        boolean ignoreBw = (s.getUpMbps() == null || s.getUpMbps() == 0)
+                                && (s.getDownMbps() == null || s.getDownMbps() == 0);
+                        resp.put("ignore_client_bandwidth", ignoreBw);
+                        resp.put("obfs", s.getObfs());
+                        resp.put("obfs-password", s.getObfsPassword());
+                    }
+                }
+            }
+            case "tuic" -> {
+                if (server instanceof ServerTuic s) {
+                    resp.put("server_port", s.getServerPort());
+                    resp.put("server_name", s.getServerName());
+                    resp.put("congestion_control", s.getCongestionControl());
+                    resp.put("zero_rtt_handshake", s.getZeroRttHandshake() != null && s.getZeroRttHandshake() == 1);
+                }
+            }
+            case "anytls" -> {
+                if (server instanceof ServerAnytls s) {
+                    resp.put("server_port", s.getServerPort());
+                    resp.put("server_name", s.getServerName());
+                    resp.put("padding_scheme", s.getPaddingScheme());
                 }
             }
             default -> {
             }
+        }
+
+        List<Integer> routeIds = extractRouteIds(server);
+        if (routeIds != null && !routeIds.isEmpty()) {
+            resp.put("routes", serverService.getRoutes(routeIds));
         }
 
         Map<String, Object> fullConfig = configService.getFullConfig();
@@ -421,18 +471,13 @@ public class UniProxyController {
                 groupIds.addAll(s.getGroupId());
             rate = parseRate(s.getRate());
         } else if (server instanceof ServerVless s) {
-            if (s.getGroupId() != null) {
-                for (Object g : s.getGroupId()) {
-                    if (g instanceof Number num) {
-                        groupIds.add(num.intValue());
-                    } else if (g instanceof String str && !str.isEmpty()) {
-                        try {
-                            groupIds.add(Integer.parseInt(str));
-                        } catch (NumberFormatException ignore) {
-                        }
-                    }
-                }
-            }
+            addGroupIds(groupIds, s.getGroupId());
+            rate = parseRate(s.getRate());
+        } else if (server instanceof ServerTuic s) {
+            addGroupIds(groupIds, s.getGroupId());
+            rate = parseRate(s.getRate());
+        } else if (server instanceof ServerAnytls s) {
+            addGroupIds(groupIds, s.getGroupId());
             rate = parseRate(s.getRate());
         }
 
@@ -513,6 +558,42 @@ public class UniProxyController {
         } catch (NumberFormatException e) {
             return 1.0;
         }
+    }
+
+    private void addGroupIds(List<Integer> groupIds, List<?> serverGroupIds) {
+        if (serverGroupIds == null) return;
+        for (Object g : serverGroupIds) {
+            if (g instanceof Number num) {
+                groupIds.add(num.intValue());
+            } else if (g instanceof String str && !str.isEmpty()) {
+                try {
+                    groupIds.add(Integer.parseInt(str));
+                } catch (NumberFormatException ignore) {
+                }
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> toMutableMap(Object existing) {
+        Map<String, Object> ipsMap = new HashMap<>();
+        if (existing instanceof Map<?, ?> map) {
+            for (Map.Entry<?, ?> e : map.entrySet()) {
+                ipsMap.put(String.valueOf(e.getKey()), e.getValue());
+            }
+        }
+        return ipsMap;
+    }
+
+    private List<Integer> extractRouteIds(Object server) {
+        if (server instanceof ServerShadowsocks s) return s.getRouteId();
+        if (server instanceof ServerVmess s) return s.getRouteId();
+        if (server instanceof ServerTrojan s) return s.getRouteId();
+        if (server instanceof ServerHysteria s) return s.getRouteId();
+        if (server instanceof ServerVless s) return s.getRouteId();
+        if (server instanceof ServerTuic s) return s.getRouteId();
+        if (server instanceof ServerAnytls s) return s.getRouteId();
+        return null;
     }
 
     private static class NodeContext {

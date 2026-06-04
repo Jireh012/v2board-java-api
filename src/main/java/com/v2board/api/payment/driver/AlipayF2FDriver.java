@@ -4,17 +4,7 @@ import com.v2board.api.common.BusinessException;
 import com.v2board.api.payment.PaymentDriver;
 import jakarta.servlet.http.HttpServletRequest;
 
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.net.URI;
-import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.TreeMap;
@@ -48,7 +38,7 @@ public class AlipayF2FDriver implements PaymentDriver {
         }
 
         String sign = params.remove("sign");
-        String signType = params.remove("sign_type");
+        params.remove("sign_type");
         if (sign == null || sign.isEmpty()) {
             return null;
         }

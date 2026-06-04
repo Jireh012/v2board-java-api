@@ -330,13 +330,21 @@ public class UserService {
     }
 
     /**
-     * 更新密码
+     * BCrypt 编码密码（对齐 PHP password_hash PASSWORD_DEFAULT）
+     */
+    public String encodePassword(String rawPassword) {
+        return passwordEncoder.encode(rawPassword);
+    }
+
+    /**
+     * 更新密码（存储 BCrypt 哈希）
      */
     public void updatePassword(User user, String newPassword) {
         if (user == null || newPassword == null) {
             return;
         }
-        user.setPassword(newPassword);
+        user.setPassword(encodePassword(newPassword));
+        user.setUpdatedAt(System.currentTimeMillis() / 1000);
         userMapper.updateById(user);
     }
 

@@ -3,9 +3,9 @@ package com.v2board.api.controller.admin.server;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.v2board.api.common.ApiResponse;
-import com.v2board.api.common.BusinessException;
 import com.v2board.api.mapper.*;
 import com.v2board.api.model.*;
+import com.v2board.api.service.ConfigService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -40,6 +40,9 @@ public class AdminManageController {
     @Autowired
     private ServerV2nodeMapper serverV2nodeMapper;
 
+    @Autowired
+    private ConfigService configService;
+
     /**
      * 获取所有节点列表（合并所有协议），按 sort 排序
      */
@@ -64,7 +67,6 @@ public class AdminManageController {
         addServersWithType(all, serverV2nodeMapper.selectList(
                 new LambdaQueryWrapper<ServerV2node>().orderByAsc(ServerV2node::getSort)), "v2node");
 
-        // 按 sort 排序
         all.sort(Comparator.comparingInt(a -> {
             Object s = a.get("sort");
             return s instanceof Number ? ((Number) s).intValue() : 0;
@@ -93,40 +95,81 @@ public class AdminManageController {
         for (Map.Entry<String, Object> entry : body.entrySet()) {
             String type = entry.getKey();
             BaseMapper<?> mapper = mapperMap.get(type);
-            if (mapper == null) continue;
+            if (mapper == null) {
+                continue;
+            }
 
-            Map<String, Object> sortMap;
-            if (entry.getValue() instanceof Map) {
-                sortMap = (Map<String, Object>) entry.getValue();
-            } else continue;
+            if (!(entry.getValue() instanceof Map<?, ?> rawSortMap)) {
+                continue;
+            }
+            Map<String, Object> sortMap = (Map<String, Object>) rawSortMap;
 
             for (Map.Entry<String, Object> e : sortMap.entrySet()) {
                 Long id = Long.valueOf(e.getKey());
                 int sortVal = e.getValue() instanceof Number ? ((Number) e.getValue()).intValue() : 0;
-                updateSort(mapper, id, sortVal, type);
+                updateSort(mapper, id, sortVal);
             }
         }
         return ApiResponse.success(true);
     }
 
-    private void updateSort(BaseMapper<?> mapper, Long id, int sort, String type) {
+    @SuppressWarnings("unchecked")
+    private void updateSort(BaseMapper<?> mapper, Long id, int sort) {
         Object entity = mapper.selectById(id);
-        if (entity == null) return;
+        if (entity == null) {
+            return;
+        }
         try {
             entity.getClass().getMethod("setSort", Integer.class).invoke(entity, sort);
             entity.getClass().getMethod("setUpdatedAt", Long.class).invoke(entity, System.currentTimeMillis() / 1000);
             ((BaseMapper<Object>) mapper).updateById(entity);
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
     }
 
     @SuppressWarnings("unchecked")
     private void addServersWithType(List<Map<String, Object>> target, List<?> servers, String type) {
+        String apiHost = "";
+        String apiKey = "";
+        if ("v2node".equals(type)) {
+            try {
+                Map<String, Object> full = configService.getFullConfig();
+                Object serverObj = full.get("server");
+                Map<String, Object> serverCfg = serverObj instanceof Map<?, ?> m
+                        ? (Map<String, Object>) m : Map.of();
+                apiHost = String.valueOf(serverCfg.getOrDefault("server_api_url", ""));
+                if (apiHost.isEmpty()) {
+                    Object siteObj = full.get("site");
+                    Map<String, Object> site = siteObj instanceof Map<?, ?> sm
+                            ? (Map<String, Object>) sm : Map.of();
+                    apiHost = String.valueOf(site.getOrDefault("app_url", ""));
+                }
+                apiKey = String.valueOf(serverCfg.getOrDefault("server_token", ""));
+            } catch (Exception ignored) {
+            }
+        }
+
         for (Object s : servers) {
             try {
-                Map<String, Object> map = objectMapper.convertValue(s, Map.class);
+                Map<String, Object> map = objectMapper.convertValue(s,
+                        objectMapper.getTypeFactory().constructMapType(LinkedHashMap.class, String.class, Object.class));
                 map.put("type", type);
+                if ("v2node".equals(type) && map.get("id") != null) {
+                    int nodeId = ((Number) map.get("id")).intValue();
+                    map.put("install_command", String.format(
+                            "wget -N https://raw.githubusercontent.com/wyx2685/v2node/master/script/install.sh && bash install.sh --api-host %s --node-id %d --api-key %s",
+                            shellQuote(apiHost), nodeId, shellQuote(apiKey)));
+                }
                 target.add(map);
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
         }
+    }
+
+    private static String shellQuote(String value) {
+        if (value == null) {
+            return "''";
+        }
+        return "'" + value.replace("'", "'\\''") + "'";
     }
 }

@@ -154,7 +154,8 @@ public class PaymentService {
             case "EPay" -> buildForm(
                     field("url", "URL", ""),
                     field("pid", "PID", ""),
-                    field("key", "KEY", "")
+                    field("key", "KEY", ""),
+                    field("type", "TYPE", "支付类型，如: alipay, wxpay, qqpay")
             );
             case "MGate" -> buildForm(
                     field("mgate_url", "API地址", ""),

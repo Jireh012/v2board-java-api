@@ -74,9 +74,10 @@ public class DynamicRouteConfig implements ApplicationListener<ContextRefreshedE
                 
                 // 获取 subscribe 方法
                 Method subscribeMethod = ClientController.class.getMethod(
-                    "subscribe", 
-                    String.class, 
-                    jakarta.servlet.http.HttpServletRequest.class
+                    "subscribe",
+                    String.class,
+                    jakarta.servlet.http.HttpServletRequest.class,
+                    jakarta.servlet.http.HttpServletResponse.class
                 );
                 
                 if (subscribeMethod == null) {

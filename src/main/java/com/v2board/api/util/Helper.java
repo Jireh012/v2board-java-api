@@ -2,14 +2,62 @@ package com.v2board.api.util;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.bouncycastle.crypto.generators.X25519KeyPairGenerator;
+import org.bouncycastle.crypto.params.X25519KeyGenerationParameters;
+import org.bouncycastle.crypto.params.X25519PrivateKeyParameters;
+import org.bouncycastle.crypto.params.X25519PublicKeyParameters;
+
+import java.net.URLEncoder;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.util.Base64;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Random;
 
 public class Helper {
+
+    /**
+     * 对齐 PHP Helper::guid($format)
+     * format=true 返回标准 UUID；否则返回 32 位十六进制字符串（用于 token）
+     */
+    public static String guid(boolean format) {
+        java.util.UUID uuid = java.util.UUID.randomUUID();
+        if (format) {
+            return uuid.toString();
+        }
+        try {
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            byte[] digest = md.digest(uuid.toString().getBytes(StandardCharsets.UTF_8));
+            return bytesToHex(digest);
+        } catch (Exception e) {
+            return uuid.toString().replace("-", "");
+        }
+    }
+
+    public static String guid() {
+        return guid(false);
+    }
+
+    public static boolean emailSuffixVerify(String email, Object suffixs) {
+        if (email == null || !email.contains("@")) {
+            return false;
+        }
+        String suffix = email.substring(email.indexOf('@') + 1).toLowerCase();
+        java.util.List<String> list;
+        if (suffixs instanceof java.util.Collection<?> col) {
+            list = col.stream().map(String::valueOf).map(String::toLowerCase).toList();
+        } else if (suffixs instanceof String s) {
+            list = java.util.Arrays.stream(s.split(",")).map(String::trim).map(String::toLowerCase).toList();
+        } else {
+            return false;
+        }
+        return list.contains(suffix);
+    }
     
     /**
      * UUID 转 Base64
@@ -209,6 +257,306 @@ public class Helper {
             return subscribeUrl + path;
         }
         return path;
+    }
+
+    public static String formatHost(String host) {
+        if (host == null) {
+            return "";
+        }
+        if (host.contains(":") && !host.startsWith("[")) {
+            return "[" + host + "]";
+        }
+        return host;
+    }
+
+    public static String encodeURIComponent(String value) {
+        if (value == null) {
+            return "";
+        }
+        return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
+    }
+
+    /**
+     * 对齐 PHP Helper::buildUri — v2node 按 protocol 分发
+     */
+    public static String buildUri(String uuid, Map<String, Object> server) {
+        if (server == null) {
+            return "";
+        }
+        String type = String.valueOf(server.get("type"));
+        if ("v2node".equals(type)) {
+            Object protocol = server.get("protocol");
+            if (protocol != null) {
+                type = String.valueOf(protocol);
+            }
+        }
+        return switch (type) {
+            case "shadowsocks" -> buildShadowsocksUri(uuid, server);
+            case "vmess" -> ""; // GeneralHandler 已有实现
+            case "vless" -> "";
+            case "trojan" -> buildTrojanUri(uuid, server);
+            case "hysteria", "hysteria2" -> buildHysteria2Uri(uuid, server);
+            case "tuic" -> buildTuicUri(uuid, server);
+            case "anytls" -> buildAnytlsUri(uuid, server);
+            default -> "";
+        };
+    }
+
+    @SuppressWarnings("unchecked")
+    public static String buildAnytlsUri(String password, Map<String, Object> server) {
+        Map<String, Object> tlsSettings = server.get("tls_settings") instanceof Map<?, ?> m
+                ? (Map<String, Object>) m
+                : (server.get("tlsSettings") instanceof Map<?, ?> m2 ? (Map<String, Object>) m2 : Map.of());
+        Map<String, String> config = new LinkedHashMap<>();
+        config.put("type", server.get("network") != null ? String.valueOf(server.get("network")) : "tcp");
+        Object insecure = server.get("insecure");
+        if (insecure == null && tlsSettings.get("allow_insecure") != null) {
+            insecure = tlsSettings.get("allow_insecure");
+        }
+        config.put("insecure", String.valueOf(insecure != null ? insecure : 0));
+        if (tlsSettings.get("fingerprint") != null) {
+            config.put("fp", String.valueOf(tlsSettings.get("fingerprint")));
+        } else {
+            config.put("fp", "chrome");
+        }
+        if (server.get("server_name") != null) {
+            config.put("sni", String.valueOf(server.get("server_name")));
+        } else if (tlsSettings.get("server_name") != null) {
+            config.put("sni", String.valueOf(tlsSettings.get("server_name")));
+        }
+        Object tls = server.get("tls");
+        if (tls instanceof Number n && n.intValue() == 2) {
+            config.put("security", "reality");
+            if (tlsSettings.get("public_key") != null) {
+                config.put("pbk", String.valueOf(tlsSettings.get("public_key")));
+            }
+            if (tlsSettings.get("short_id") != null) {
+                config.put("sid", String.valueOf(tlsSettings.get("short_id")));
+            }
+        }
+        if (server.get("network") != null && server.get("network_settings") != null) {
+            appendNetworkQuery(server, config);
+        } else if (server.get("network") != null && server.get("networkSettings") != null) {
+            Map<String, Object> copy = new LinkedHashMap<>(server);
+            copy.put("network_settings", server.get("networkSettings"));
+            appendNetworkQuery(copy, config);
+        }
+        String remote = formatHost(String.valueOf(server.get("host")));
+        String port = String.valueOf(server.get("port"));
+        String name = encodeURIComponent(String.valueOf(server.get("name")));
+        return "anytls://" + password + "@" + remote + ":" + port + "/?" + toQuery(config) + "#" + name + "\r\n";
+    }
+
+    @SuppressWarnings("unchecked")
+    public static String buildTuicUri(String password, Map<String, Object> server) {
+        Map<String, Object> tlsSettings = server.get("tls_settings") instanceof Map<?, ?> m
+                ? (Map<String, Object>) m : Map.of();
+        Map<String, String> config = new LinkedHashMap<>();
+        if (server.get("server_name") != null) {
+            config.put("sni", String.valueOf(server.get("server_name")));
+        } else if (tlsSettings.get("server_name") != null) {
+            config.put("sni", String.valueOf(tlsSettings.get("server_name")));
+        }
+        config.put("alpn", "h3");
+        if (server.get("congestion_control") != null) {
+            config.put("congestion_control", String.valueOf(server.get("congestion_control")));
+        }
+        Object insecure = server.get("insecure");
+        if (insecure == null && tlsSettings.get("allow_insecure") != null) {
+            insecure = tlsSettings.get("allow_insecure");
+        }
+        config.put("allow_insecure", String.valueOf(insecure != null ? insecure : 0));
+        if (server.get("disable_sni") != null) {
+            config.put("disable_sni", String.valueOf(server.get("disable_sni")));
+        }
+        if (server.get("udp_relay_mode") != null) {
+            config.put("udp_relay_mode", String.valueOf(server.get("udp_relay_mode")));
+        }
+        String remote = formatHost(String.valueOf(server.get("host")));
+        String port = String.valueOf(server.get("port"));
+        String name = encodeURIComponent(String.valueOf(server.get("name")));
+        return "tuic://" + password + ":" + password + "@" + remote + ":" + port + "?" + toQuery(config) + "#" + name + "\r\n";
+    }
+
+    @SuppressWarnings("unchecked")
+    public static String buildHysteria2Uri(String password, Map<String, Object> server) {
+        Map<String, Object> tlsSettings = server.get("tls_settings") instanceof Map<?, ?> m
+                ? (Map<String, Object>) m : Map.of();
+        String remote = formatHost(String.valueOf(server.get("host")));
+        String name = encodeURIComponent(String.valueOf(server.get("name")));
+        String portField = String.valueOf(server.get("port"));
+        String[] parts = portField.split(",");
+        String firstPort = parts[0];
+        if (firstPort.contains("-")) {
+            firstPort = firstPort.split("-")[0];
+        }
+        Object insecure = tlsSettings.getOrDefault("allow_insecure", 0);
+        String sni = tlsSettings.get("server_name") != null ? String.valueOf(tlsSettings.get("server_name")) : "";
+        StringBuilder uri = new StringBuilder();
+        uri.append("hysteria2://").append(password).append("@").append(remote).append(":").append(firstPort)
+                .append("/?insecure=").append(insecure).append("&sni=").append(sni);
+        if (server.get("obfs") != null && server.get("obfs_password") != null) {
+            uri.append("&obfs=").append(server.get("obfs"))
+                    .append("&obfs-password=").append(encodeURIComponent(String.valueOf(server.get("obfs_password"))));
+        }
+        if (parts.length != 1 || parts[0].contains("-")) {
+            Object mport = server.get("mport");
+            if (mport != null) {
+                uri.append("&mport=").append(mport);
+            }
+        }
+        return uri + "#" + name + "\r\n";
+    }
+
+    public static String buildHysteriaUri(String password, Map<String, Object> server) {
+        Object version = server.get("version");
+        if (version instanceof Number n && n.intValue() == 2) {
+            return buildHysteria2Uri(password, server);
+        }
+        String remote = formatHost(String.valueOf(server.get("host")));
+        String name = encodeURIComponent(String.valueOf(server.get("name")));
+        String portField = String.valueOf(server.get("port"));
+        String[] parts = portField.split(",");
+        String firstPort = parts[0];
+        if (firstPort.contains("-")) {
+            firstPort = firstPort.split("-")[0];
+        }
+        Object insecure = server.getOrDefault("insecure", 0);
+        String sni = server.get("server_name") != null ? String.valueOf(server.get("server_name")) : "";
+        StringBuilder uri = new StringBuilder();
+        uri.append("hysteria://").append(remote).append(":").append(firstPort)
+                .append("/?protocol=udp&auth=").append(password)
+                .append("&insecure=").append(insecure).append("&peer=").append(sni)
+                .append("&upmbps=").append(server.getOrDefault("down_mbps", 0))
+                .append("&downmbps=").append(server.getOrDefault("up_mbps", 0));
+        if (server.get("obfs") != null && server.get("obfs_password") != null) {
+            uri.append("&obfs=").append(server.get("obfs"))
+                    .append("&obfsParam").append(encodeURIComponent(String.valueOf(server.get("obfs_password"))));
+        }
+        if (parts.length != 1 || parts[0].contains("-")) {
+            Object mport = server.get("mport");
+            if (mport != null) {
+                uri.append("&mport=").append(mport);
+            }
+        }
+        return uri + "#" + name + "\r\n";
+    }
+
+    public static String buildTrojanUri(String password, Map<String, Object> server) {
+        String host = formatHost(String.valueOf(server.get("host")));
+        int port = server.get("port") instanceof Number n ? n.intValue() : Integer.parseInt(String.valueOf(server.get("port")));
+        String serverName = server.get("server_name") != null ? String.valueOf(server.get("server_name")) : "";
+        Object allowInsecure = server.getOrDefault("allow_insecure", false);
+        String name = encodeURIComponent(String.valueOf(server.get("name")));
+        String query = "allowInsecure=" + allowInsecure + "&peer=" + serverName + "&sni=" + serverName;
+        return "trojan://" + password + "@" + host + ":" + port + "?" + query + "#" + name + "\r\n";
+    }
+
+    public static String buildShadowsocksUri(String uuid, Map<String, Object> server) {
+        return "";
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void appendNetworkQuery(Map<String, Object> server, Map<String, String> config) {
+        String network = String.valueOf(server.get("network"));
+        Object settingsObj = server.get("network_settings");
+        if (!(settingsObj instanceof Map<?, ?>)) {
+            settingsObj = server.get("networkSettings");
+        }
+        if (!(settingsObj instanceof Map<?, ?> settings)) {
+            return;
+        }
+        Map<String, Object> ns = (Map<String, Object>) settings;
+        switch (network) {
+            case "ws" -> {
+                if (ns.get("path") != null) config.put("path", String.valueOf(ns.get("path")));
+                if (ns.get("headers") instanceof Map<?, ?> headers && headers.get("Host") != null) {
+                    config.put("host", String.valueOf(headers.get("Host")));
+                }
+            }
+            case "grpc" -> {
+                if (ns.get("serviceName") != null) config.put("serviceName", String.valueOf(ns.get("serviceName")));
+            }
+            case "xhttp" -> {
+                if (ns.get("path") != null) config.put("path", String.valueOf(ns.get("path")));
+                if (ns.get("host") != null) config.put("host", String.valueOf(ns.get("host")));
+                config.put("mode", ns.get("mode") != null ? String.valueOf(ns.get("mode")) : "auto");
+                if (ns.get("extra") != null) {
+                    try {
+                        config.put("extra", new ObjectMapper().writeValueAsString(ns.get("extra")));
+                    } catch (Exception ignored) {
+                    }
+                }
+            }
+            default -> {
+            }
+        }
+    }
+
+    private static String toQuery(Map<String, String> params) {
+        StringBuilder sb = new StringBuilder();
+        boolean first = true;
+        for (Map.Entry<String, String> e : params.entrySet()) {
+            if (e.getValue() == null) continue;
+            if (!first) sb.append('&');
+            first = false;
+            sb.append(encodeURIComponent(e.getKey())).append('=').append(encodeURIComponent(e.getValue()));
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 生成 ECH 密钥对（对齐 PHP Helper::generateEchKeyPair）
+     */
+    public static Map<String, String> generateEchKeyPair(String outerSni) {
+        X25519KeyPairGenerator gen = new X25519KeyPairGenerator();
+        gen.init(new X25519KeyGenerationParameters(new SecureRandom()));
+        var kp = gen.generateKeyPair();
+        byte[] privateKey = ((X25519PrivateKeyParameters) kp.getPrivate()).getEncoded();
+        byte[] publicKey = ((X25519PublicKeyParameters) kp.getPublic()).getEncoded();
+
+        int configId = new SecureRandom().nextInt(256);
+        byte[] suites = new byte[] {0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x02, 0x00, 0x01, 0x00, 0x03};
+        byte[] outerBytes = outerSni.getBytes(StandardCharsets.UTF_8);
+
+        ByteBuffer configData = ByteBuffer.allocate(256);
+        configData.put((byte) configId);
+        configData.putShort((short) 0x0020);
+        configData.putShort((short) 32);
+        configData.put(publicKey);
+        configData.putShort((short) suites.length);
+        configData.put(suites);
+        configData.put((byte) 0);
+        configData.put((byte) outerBytes.length);
+        configData.put(outerBytes);
+        configData.putShort((short) 0);
+        configData.flip();
+        byte[] configBytes = new byte[configData.remaining()];
+        configData.get(configBytes);
+
+        ByteBuffer echConfig = ByteBuffer.allocate(4 + configBytes.length);
+        echConfig.putShort((short) 0xfe0d);
+        echConfig.putShort((short) configBytes.length);
+        echConfig.put(configBytes);
+        echConfig.flip();
+        byte[] echConfigBytes = new byte[echConfig.remaining()];
+        echConfig.get(echConfigBytes);
+
+        ByteBuffer echKeys = ByteBuffer.allocate(2 + echConfigBytes.length + 2 + 1 + 2 + 32);
+        echKeys.putShort((short) echConfigBytes.length);
+        echKeys.put(echConfigBytes);
+        echKeys.putShort((short) 1);
+        echKeys.put((byte) configId);
+        echKeys.putShort((short) 32);
+        echKeys.put(privateKey);
+        echKeys.flip();
+        byte[] echKeysBytes = new byte[echKeys.remaining()];
+        echKeys.get(echKeysBytes);
+
+        Map<String, String> result = new LinkedHashMap<>();
+        result.put("ech_key", Base64.getEncoder().encodeToString(echKeysBytes));
+        result.put("ech_config", Base64.getEncoder().encodeToString(echConfigBytes));
+        return result;
     }
 }
 

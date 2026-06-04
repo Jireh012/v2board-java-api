@@ -39,7 +39,10 @@ public class EPayDriver implements PaymentDriver {
         // 签名参数（按 PHP 版本 ksort 排序）
         TreeMap<String, String> signParams = new TreeMap<>();
         signParams.put("pid", pid);
-        signParams.put("type", "alipay");
+        Object typeConfig = config.get("type");
+        if (typeConfig != null && !String.valueOf(typeConfig).isEmpty()) {
+            signParams.put("type", String.valueOf(typeConfig));
+        }
         signParams.put("out_trade_no", tradeNo);
         signParams.put("notify_url", notifyUrl);
         signParams.put("return_url", returnUrl);
@@ -115,7 +118,7 @@ public class EPayDriver implements PaymentDriver {
         signStr.append(key);
         String expectedSign = md5Hex(signStr.toString());
 
-        if (!sign.equals(expectedSign)) {
+        if (!md5Equals(sign, expectedSign)) {
             return null;
         }
 
@@ -127,6 +130,13 @@ public class EPayDriver implements PaymentDriver {
 
     private String encode(String s) {
         return URLEncoder.encode(s, StandardCharsets.UTF_8);
+    }
+
+    private static boolean md5Equals(String a, String b) {
+        if (a == null || b == null) {
+            return false;
+        }
+        return MessageDigest.isEqual(a.getBytes(StandardCharsets.UTF_8), b.getBytes(StandardCharsets.UTF_8));
     }
 
     private String md5Hex(String s) {

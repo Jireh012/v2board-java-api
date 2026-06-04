@@ -27,58 +27,59 @@ public class GeneralHandler implements ProtocolHandler {
     
     @Override
     public String handle(User user, List<Map<String, Object>> servers) {
-        if (servers == null || servers.isEmpty()) {
-            logger.warn("No servers provided for subscription");
+        String plain = buildPlainUriContent(user, servers);
+        if (plain.isEmpty()) {
             return "";
         }
-        
+        return Base64.getEncoder().encodeToString(plain.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * 生成未 Base64 的订阅 URI 列表（供 V2rayNG / Shadowrocket 等复用）
+     */
+    public String buildPlainUriContent(User user, List<Map<String, Object>> servers) {
+        return buildPlainUriContent(user, servers, null);
+    }
+
+    public String buildPlainUriContent(User user, List<Map<String, Object>> servers,
+                                       java.util.function.Predicate<Map<String, Object>> include) {
+        if (servers == null || servers.isEmpty() || user == null) {
+            return "";
+        }
+        String uuid = user.getUuid();
+        if (uuid == null || uuid.isEmpty()) {
+            return "";
+        }
         StringBuilder uri = new StringBuilder();
-        
         for (Map<String, Object> server : servers) {
+            if (include != null && !include.test(server)) {
+                continue;
+            }
             try {
-                String type = (String) server.get("type");
-                if (type == null) {
-                    logger.warn("Server type is null, skipping server: {}", server.get("name"));
-                    continue;
-                }
-                
-                String uuid = user.getUuid();
-                if (uuid == null || uuid.isEmpty()) {
-                    logger.warn("User UUID is null or empty");
-                    continue;
-                }
-                
-                switch (type) {
-                    case "vmess":
-                        uri.append(buildVmess(uuid, server));
-                        break;
-                    case "vless":
-                        uri.append(buildVless(uuid, server));
-                        break;
-                    case "shadowsocks":
-                        uri.append(buildShadowsocks(uuid, server));
-                        break;
-                    case "trojan":
-                        uri.append(buildTrojan(uuid, server));
-                        break;
-                    default:
-                        logger.debug("Unknown server type: {}, skipping", type);
-                        break;
-                }
+                uri.append(buildPlainUriForServer(uuid, server));
             } catch (Exception e) {
                 logger.error("Error building URI for server: {}", server.get("name"), e);
             }
         }
-        
-        if (uri.length() == 0) {
-            logger.warn("No valid server URIs generated");
+        return uri.toString();
+    }
+
+    public String buildPlainUriForServer(String uuid, Map<String, Object> server) {
+        String type = server.get("type") != null ? String.valueOf(server.get("type")) : null;
+        if (type == null) {
             return "";
         }
-        
-        // Base64 编码
-        String result = Base64.getEncoder().encodeToString(uri.toString().getBytes(StandardCharsets.UTF_8));
-        logger.debug("Generated {} bytes of subscribe content", result.length());
-        return result;
+        return switch (type) {
+            case "vmess" -> buildVmess(uuid, server);
+            case "vless" -> buildVless(uuid, server);
+            case "shadowsocks" -> buildShadowsocks(uuid, server);
+            case "trojan" -> buildTrojan(uuid, server);
+            case "hysteria", "hysteria2" -> Helper.buildHysteriaUri(uuid, server);
+            case "tuic" -> Helper.buildTuicUri(uuid, server);
+            case "anytls" -> Helper.buildAnytlsUri(uuid, server);
+            case "v2node" -> buildV2node(uuid, server);
+            default -> "";
+        };
     }
     
     /**
@@ -533,6 +534,29 @@ public class GeneralHandler implements ProtocolHandler {
         }
     }
     
+    /**
+     * v2node 按 protocol 构建订阅 URI
+     */
+    private String buildV2node(String uuid, Map<String, Object> server) {
+        Object protocolObj = server.get("protocol");
+        if (protocolObj == null) {
+            return "";
+        }
+        String protocol = String.valueOf(protocolObj);
+        Map<String, Object> s = new HashMap<>(server);
+        s.put("type", protocol);
+        return switch (protocol) {
+            case "vmess" -> buildVmess(uuid, s);
+            case "vless" -> buildVless(uuid, s);
+            case "shadowsocks" -> ""; // shadowsocks v2node 需 2022 密钥，暂由专用 handler 处理
+            case "trojan" -> Helper.buildTrojanUri(uuid, s);
+            case "hysteria2" -> Helper.buildHysteria2Uri(uuid, s);
+            case "tuic" -> Helper.buildTuicUri(uuid, s);
+            case "anytls" -> Helper.buildAnytlsUri(uuid, s);
+            default -> "";
+        };
+    }
+
     /**
      * 构建 Trojan URI
      */

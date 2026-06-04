@@ -10,17 +10,17 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Clash 协议处理器（对齐 PHP ClashMeta 规则生成）
+ * Clash Meta / Clash Verge / Nyanpasu 等（flag 含 meta）
  */
 @Component
-public class ClashHandler implements ProtocolHandler {
+public class ClashMetaHandler implements ProtocolHandler {
 
     @Autowired
     private ConfigService configService;
 
     @Override
     public String getFlag() {
-        return "clash";
+        return "meta";
     }
 
     @Override
@@ -43,23 +43,13 @@ public class ClashHandler implements ProtocolHandler {
     @Override
     public void applyResponseHeaders(User user, HttpServletResponse response) {
         String appName = "V2Board";
-        String appUrl = "";
         try {
             Map<String, Object> full = configService.getFullConfig();
-            if (full.get("site") instanceof Map<?, ?> m) {
-                if (m.get("app_name") != null) {
-                    appName = String.valueOf(m.get("app_name"));
-                }
-                if (m.get("app_url") != null) {
-                    appUrl = String.valueOf(m.get("app_url"));
-                }
+            if (full.get("site") instanceof Map<?, ?> m && m.get("app_name") != null) {
+                appName = String.valueOf(m.get("app_name"));
             }
         } catch (Exception ignored) {
         }
         SubscribeHeaders.applyClashMeta(response, user, appName);
-        if (response != null && !appUrl.isEmpty()) {
-            response.setHeader("profile-web-page-url", appUrl);
-        }
     }
 }
-

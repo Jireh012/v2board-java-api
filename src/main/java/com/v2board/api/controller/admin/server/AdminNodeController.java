@@ -5,6 +5,7 @@ import com.v2board.api.common.ApiResponse;
 import com.v2board.api.common.BusinessException;
 import com.v2board.api.mapper.*;
 import com.v2board.api.model.*;
+import com.v2board.api.util.Helper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -186,23 +187,20 @@ public class AdminNodeController {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private void preprocessV2node(Map<String, Object> body) {
         String protocol = (String) body.get("protocol");
         if (protocol != null) {
-            // anytls 强制 tls
             if ("anytls".equals(protocol) && Integer.valueOf(0).equals(toInt(body.get("tls")))) {
                 body.put("tls", 1);
             }
-            // hysteria2, trojan, tuic 强制 tls=1
             if (Set.of("hysteria2", "trojan", "tuic").contains(protocol)) {
                 body.put("tls", 1);
             }
-            // shadowsocks 默认 cipher
             if ("shadowsocks".equals(protocol) && !body.containsKey("cipher")) {
                 body.put("cipher", "aes-128-gcm");
             }
         }
-        // network != tcp 时清除 flow
         String network = (String) body.get("network");
         String encryption = (String) body.get("encryption");
         if (network != null && !"tcp".equals(network) && !"mlkem768x25519plus".equals(encryption)) {
@@ -212,6 +210,59 @@ public class AdminNodeController {
         if (!body.containsKey("down_mbps")) body.put("down_mbps", 0);
         if (body.get("obfs") == null || body.get("obfs").toString().isEmpty()) {
             body.put("obfs_password", null);
+        }
+
+        Map<String, Object> tlsSettings = null;
+        if (body.get("tls_settings") instanceof Map<?, ?> m) {
+            tlsSettings = new HashMap<>((Map<String, Object>) m);
+        }
+        if (tlsSettings != null) {
+            if ("custom".equals(tlsSettings.get("ech"))) {
+                Object echServerName = tlsSettings.get("ech_server_name");
+                if (echServerName == null || echServerName.toString().isEmpty()) {
+                    tlsSettings.put("ech", "");
+                } else {
+                    boolean needKey = isEmpty(tlsSettings.get("ech_key")) || isEmpty(tlsSettings.get("ech_config"));
+                    if (needKey) {
+                        Map<String, String> echPair = Helper.generateEchKeyPair(echServerName.toString());
+                        if (isEmpty(tlsSettings.get("ech_key"))) {
+                            tlsSettings.put("ech_key", echPair.get("ech_key"));
+                        }
+                        if (isEmpty(tlsSettings.get("ech_config"))) {
+                            tlsSettings.put("ech_config", echPair.get("ech_config"));
+                        }
+                    }
+                }
+            }
+            body.put("tls_settings", tlsSettings);
+        }
+
+        if (body.get("network_settings") instanceof Map<?, ?> nsRaw) {
+            Map<String, Object> ns = new HashMap<>((Map<String, Object>) nsRaw);
+            if (ns.containsKey("acceptProxyProtocol")) {
+                ns.put("acceptProxyProtocol", Boolean.parseBoolean(String.valueOf(ns.get("acceptProxyProtocol"))));
+            }
+            if ("xhttp".equals(network) && ns.get("extra") instanceof Map<?, ?> extraRaw) {
+                Map<String, Object> extra = new HashMap<>((Map<String, Object>) extraRaw);
+                normalizeBoolExtra(extra, "xPaddingObfsMode");
+                normalizeBoolExtra(extra, "noGRPCHeader");
+                normalizeBoolExtra(extra, "noSSEHeader");
+                if (extra.get("scMaxBufferedPosts") != null) {
+                    extra.put("scMaxBufferedPosts", Integer.parseInt(String.valueOf(extra.get("scMaxBufferedPosts"))));
+                }
+                ns.put("extra", extra);
+            }
+            body.put("network_settings", ns);
+        }
+    }
+
+    private static boolean isEmpty(Object v) {
+        return v == null || v.toString().isEmpty();
+    }
+
+    private static void normalizeBoolExtra(Map<String, Object> extra, String key) {
+        if (extra.containsKey(key)) {
+            extra.put(key, Boolean.parseBoolean(String.valueOf(extra.get(key))));
         }
     }
 

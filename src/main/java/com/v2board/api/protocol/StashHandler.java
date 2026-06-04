@@ -4,23 +4,24 @@ import com.v2board.api.model.User;
 import com.v2board.api.service.ConfigService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
 
 /**
- * Clash 协议处理器（对齐 PHP ClashMeta 规则生成）
+ * 对齐 PHP App\Protocols\Stash（使用 stash 或 clash 规则模板）
  */
 @Component
-public class ClashHandler implements ProtocolHandler {
+public class StashHandler implements ProtocolHandler {
 
     @Autowired
     private ConfigService configService;
 
     @Override
     public String getFlag() {
-        return "clash";
+        return "stash";
     }
 
     @Override
@@ -37,29 +38,22 @@ public class ClashHandler implements ProtocolHandler {
             }
         } catch (Exception ignored) {
         }
-        return ClashMetaBuilder.build(servers, user.getUuid(), appName, "rules/default.clash.yaml");
+        String template = new ClassPathResource("rules/default.stash.yaml").exists()
+                ? "rules/default.stash.yaml"
+                : "rules/default.clash.yaml";
+        return ClashMetaBuilder.build(servers, user.getUuid(), appName, template);
     }
 
     @Override
     public void applyResponseHeaders(User user, HttpServletResponse response) {
         String appName = "V2Board";
-        String appUrl = "";
         try {
             Map<String, Object> full = configService.getFullConfig();
-            if (full.get("site") instanceof Map<?, ?> m) {
-                if (m.get("app_name") != null) {
-                    appName = String.valueOf(m.get("app_name"));
-                }
-                if (m.get("app_url") != null) {
-                    appUrl = String.valueOf(m.get("app_url"));
-                }
+            if (full.get("site") instanceof Map<?, ?> m && m.get("app_name") != null) {
+                appName = String.valueOf(m.get("app_name"));
             }
         } catch (Exception ignored) {
         }
         SubscribeHeaders.applyClashMeta(response, user, appName);
-        if (response != null && !appUrl.isEmpty()) {
-            response.setHeader("profile-web-page-url", appUrl);
-        }
     }
 }
-

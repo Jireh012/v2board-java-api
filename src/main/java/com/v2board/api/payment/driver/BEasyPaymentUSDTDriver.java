@@ -142,7 +142,7 @@ public class BEasyPaymentUSDTDriver implements PaymentDriver {
         signStr.append(apiToken);
         String expectedSign = md5Hex(signStr.toString());
 
-        if (!signature.equals(expectedSign)) {
+        if (!MessageDigest.isEqual(signature.getBytes(StandardCharsets.UTF_8), expectedSign.getBytes(StandardCharsets.UTF_8))) {
             return null;
         }
 

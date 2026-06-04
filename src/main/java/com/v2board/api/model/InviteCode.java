@@ -23,6 +23,9 @@ public class InviteCode {
      */
     private Integer status;
 
+    /** 邀请链接访问次数 */
+    private Integer pv;
+
     @TableField("created_at")
     private Long createdAt;
 
