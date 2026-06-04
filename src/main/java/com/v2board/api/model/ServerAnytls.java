@@ -16,7 +16,7 @@ public class ServerAnytls {
     private Long id;
     private String name;
     private String host;
-    private Integer port;
+    private String port;
 
     /** 流量倍率 */
     private String rate;

@@ -16,16 +16,15 @@ public class ServerV2node {
     private Long id;
     private String name;
     private String host;
-    private Integer port;
+
+    /** 面板端口，可为范围字符串如 1000-2000 */
+    private String port;
 
     /** 流量倍率 */
     private String rate;
 
     @TableField("server_port")
     private Integer serverPort;
-
-    @TableField("server_name")
-    private String serverName;
 
     @TableField("listen_ip")
     private String listenIp;

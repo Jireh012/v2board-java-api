@@ -52,13 +52,19 @@ public final class ClashMetaBuilder {
 
         List<Map<String, Object>> groups = config.get("proxy-groups") instanceof List<?> gl
                 ? (List<Map<String, Object>>) config.get("proxy-groups") : new ArrayList<>();
+        String mainGroupName = appName != null && !appName.isEmpty() ? appName : "V2Board";
         for (Map<String, Object> group : groups) {
             mergeProxyGroup(group, proxies);
         }
         groups.removeIf(g -> {
+            Object name = g.get("name");
+            if (mainGroupName.equals(String.valueOf(name)) || "$app_name".equals(String.valueOf(name))) {
+                return false;
+            }
             Object p = g.get("proxies");
             return !(p instanceof List<?> list) || list.isEmpty();
         });
+        ensureMainProxyGroup(groups, mainGroupName, proxies);
         config.put("proxy-groups", groups);
 
         DumperOptions options = new DumperOptions();
@@ -97,6 +103,35 @@ public final class ClashMetaBuilder {
             groupProxies.addAll(proxyNames);
         }
         group.put("proxies", groupProxies);
+    }
+
+    private static void ensureMainProxyGroup(List<Map<String, Object>> groups, String mainGroupName,
+                                             List<String> proxyNames) {
+        for (Map<String, Object> group : groups) {
+            String name = String.valueOf(group.get("name"));
+            if (!mainGroupName.equals(name) && !"$app_name".equals(name)) {
+                continue;
+            }
+            if ("$app_name".equals(name)) {
+                group.put("name", mainGroupName);
+            }
+            List<String> proxies = group.get("proxies") instanceof List<?> list
+                    ? new ArrayList<>((List<String>) list) : new ArrayList<>();
+            if (proxies.isEmpty()) {
+                proxies.add("自动选择");
+                proxies.add("故障转移");
+                proxies.addAll(proxyNames);
+                group.put("proxies", proxies);
+            }
+            return;
+        }
+        Map<String, Object> main = new LinkedHashMap<>();
+        main.put("name", mainGroupName);
+        main.put("type", "select");
+        List<String> proxies = new ArrayList<>(List.of("自动选择", "故障转移"));
+        proxies.addAll(proxyNames);
+        main.put("proxies", proxies);
+        groups.add(0, main);
     }
 
     @SuppressWarnings("unchecked")
@@ -471,7 +506,21 @@ public final class ClashMetaBuilder {
         }
     }
 
+    /**
+     * 对齐 PHP isRegex：preg_match($exp, '') !== false。
+     * PHP 对无分隔符的「自动选择」等组名会判为非正则；Java Pattern.compile 会误判为 true。
+     */
     private static boolean isRegex(String exp) {
+        if (exp == null || exp.isEmpty()) {
+            return false;
+        }
+        if ("自动选择".equals(exp) || "故障转移".equals(exp)
+                || "DIRECT".equals(exp) || "REJECT".equals(exp) || "GLOBAL".equals(exp)) {
+            return false;
+        }
+        if (!exp.matches(".*[\\\\.^$|?*+\\[\\]{}()].*")) {
+            return false;
+        }
         try {
             Pattern.compile(exp);
             return true;

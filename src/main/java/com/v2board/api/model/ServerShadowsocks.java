@@ -16,6 +16,10 @@ public class ServerShadowsocks {
     private String name;
     private String host;
     private String port;
+
+    @TableField("server_port")
+    private Integer serverPort;
+
     private String cipher;
     /** 流量倍率，如 1、1.5、2 */
     private String rate;
@@ -28,7 +32,7 @@ public class ServerShadowsocks {
     /**
      * 混淆配置，对应 PHP 中的 obfs_settings（JSON）
      */
-    @TableField(typeHandler = JacksonTypeHandler.class)
+    @TableField(value = "obfs_settings", typeHandler = JacksonTypeHandler.class)
     private Object obfsSettings;
     
     @TableField("`show`")

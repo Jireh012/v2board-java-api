@@ -16,6 +16,10 @@ public class ServerVmess {
     private String name;
     private String host;
     private String port;
+
+    @TableField("server_port")
+    private Integer serverPort;
+
     /** 流量倍率 */
     private String rate;
     private String network;

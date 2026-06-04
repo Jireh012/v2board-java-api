@@ -541,7 +541,6 @@ public class ServerService {
             map.put("port", server.getPort());
             map.put("rate", server.getRate() != null && !server.getRate().isEmpty() ? server.getRate() : "1");
             map.put("server_port", server.getServerPort());
-            map.put("server_name", server.getServerName());
             map.put("protocol", server.getProtocol());
             map.put("network", server.getNetwork());
             map.put("tls", server.getTls() != null ? server.getTls() : 0);
@@ -558,6 +557,7 @@ public class ServerService {
             map.put("congestion_control", server.getCongestionControl());
             map.put("padding_scheme", server.getPaddingScheme());
             parseJsonField(map, "tls_settings", server.getTlsSettings(), true);
+            map.put("server_name", serverNameFromTlsSettings(map.get("tls_settings")));
             parseJsonField(map, "network_settings", server.getNetworkSettings(), false);
             parseJsonField(map, "encryption_settings", server.getEncryptionSettings(), false);
             if (map.get("encryption_settings") instanceof Map<?, ?> enc) {
@@ -603,6 +603,21 @@ public class ServerService {
             result.add(m);
         }
         return result;
+    }
+
+    /**
+     * v2node 无 server_name 列，SNI 存于 tls_settings（对齐 PHP / install.sql）
+     */
+    @SuppressWarnings("unchecked")
+    private String serverNameFromTlsSettings(Object tlsSettings) {
+        if (!(tlsSettings instanceof Map<?, ?> tls)) {
+            return null;
+        }
+        Object sn = ((Map<String, Object>) tls).get("server_name");
+        if (sn == null) {
+            sn = ((Map<String, Object>) tls).get("serverName");
+        }
+        return sn != null ? String.valueOf(sn) : null;
     }
 
     private void parseJsonField(Map<String, Object> map, String key, String json, boolean stripPrivate) {
