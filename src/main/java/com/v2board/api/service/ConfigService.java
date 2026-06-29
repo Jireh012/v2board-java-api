@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.v2board.api.mapper.SystemConfigMapper;
 import com.v2board.api.model.SystemConfig;
+import com.v2board.api.util.V2boardPhpConfigLoader;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -29,6 +30,8 @@ public class ConfigService {
 
     @Value("${v2board.app-name:V2Board}")
     private String appName;
+    @Value("${v2board.php-config-path:}")
+    private String phpConfigPath;
     @Value("${v2board.app-url:}")
     private String appUrl;
     @Value("${v2board.subscribe-url:}")
@@ -78,6 +81,7 @@ public class ConfigService {
      */
     public Map<String, Object> getFullConfig() throws Exception {
         Map<String, Object> defaults = buildDefaults();
+        mergePhpFlatConfig(defaults, V2boardPhpConfigLoader.load(phpConfigPath));
         SystemConfig row = systemConfigMapper.selectOne(
                 new LambdaQueryWrapper<SystemConfig>().eq(SystemConfig::getName, SystemConfig.NAME_V2BOARD));
         if (row != null && StringUtils.hasText(row.getValue())) {
@@ -85,6 +89,32 @@ public class ConfigService {
             deepMerge(defaults, stored);
         }
         return defaults;
+    }
+
+    /** 对齐 PHP config('v2board.app_name')，供订阅模板 $app_name 替换。 */
+    public String getAppName() {
+        try {
+            Map<String, Object> full = getFullConfig();
+            if (full.get("site") instanceof Map<?, ?> site) {
+                Object name = site.get("app_name");
+                if (name != null && StringUtils.hasText(String.valueOf(name))) {
+                    return String.valueOf(name).trim();
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return StringUtils.hasText(appName) ? appName.trim() : "V2Board";
+    }
+
+    public String getAppUrl() {
+        try {
+            Map<String, Object> full = getFullConfig();
+            if (full.get("site") instanceof Map<?, ?> site && site.get("app_url") != null) {
+                return String.valueOf(site.get("app_url")).trim();
+            }
+        } catch (Exception ignored) {
+        }
+        return appUrl != null ? appUrl : "";
     }
 
     /**
@@ -120,6 +150,64 @@ public class ConfigService {
                 deepMerge((Map<String, Object>) tgtVal, (Map<String, Object>) srcVal);
             } else {
                 target.put(e.getKey(), srcVal);
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void mergePhpFlatConfig(Map<String, Object> defaults, Map<String, Object> flat) {
+        if (flat == null || flat.isEmpty()) {
+            return;
+        }
+        putPhpSection(defaults, "ticket", flat, "ticket_status");
+        putPhpSection(defaults, "deposit", flat, "deposit_bounus");
+        putPhpSection(defaults, "invite", flat,
+                "invite_force", "invite_commission", "invite_gen_limit", "invite_never_expire",
+                "commission_first_time_enable", "commission_auto_check_enable",
+                "commission_withdraw_limit", "commission_withdraw_method", "withdraw_close_enable",
+                "commission_distribution_enable", "commission_distribution_l1",
+                "commission_distribution_l2", "commission_distribution_l3");
+        putPhpSection(defaults, "site", flat,
+                "logo", "force_https", "stop_register", "app_name", "app_description", "app_url",
+                "subscribe_url", "subscribe_path", "try_out_plan_id", "try_out_hour", "tos_url",
+                "currency", "currency_symbol");
+        putPhpSection(defaults, "subscribe", flat,
+                "plan_change_enable", "reset_traffic_method", "surplus_enable", "allow_new_period",
+                "new_order_event_id", "renew_order_event_id", "change_order_event_id",
+                "show_info_to_server_enable", "show_subscribe_method", "show_subscribe_expire");
+        putPhpSection(defaults, "frontend", flat,
+                "frontend_theme", "frontend_theme_sidebar", "frontend_theme_header",
+                "frontend_theme_color", "frontend_background_url");
+        putPhpSection(defaults, "server", flat,
+                "server_api_url", "server_token", "server_pull_interval", "server_push_interval",
+                "server_node_report_min_traffic", "server_device_online_min_traffic", "device_limit_mode");
+        putPhpSection(defaults, "email", flat,
+                "email_template", "email_host", "email_port", "email_username", "email_password",
+                "email_encryption", "email_from_address");
+        putPhpSection(defaults, "telegram", flat,
+                "telegram_bot_enable", "telegram_bot_token", "telegram_discuss_link");
+        putPhpSection(defaults, "app", flat,
+                "windows_version", "windows_download_url", "macos_version", "macos_download_url",
+                "android_version", "android_download_url");
+        putPhpSection(defaults, "safe", flat,
+                "email_verify", "safe_mode_enable", "secure_path", "email_whitelist_enable",
+                "email_whitelist_suffix", "email_gmail_limit_enable", "recaptcha_enable",
+                "recaptcha_key", "recaptcha_site_key", "register_limit_by_ip_enable",
+                "register_limit_count", "register_limit_expire", "password_limit_enable",
+                "password_limit_count", "password_limit_expire");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void putPhpSection(Map<String, Object> defaults, String section, Map<String, Object> flat,
+                                      String... keys) {
+        Object sec = defaults.get(section);
+        if (!(sec instanceof Map<?, ?>)) {
+            return;
+        }
+        Map<String, Object> target = (Map<String, Object>) sec;
+        for (String key : keys) {
+            if (flat.containsKey(key)) {
+                target.put(key, flat.get(key));
             }
         }
     }

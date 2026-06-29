@@ -59,6 +59,7 @@ v2board:
   show-subscribe-expire: 5  # TOTP过期时间（分钟）
   allow-new-period: 0  # 是否允许新周期：0-否，1-是
   app-name: ${APP_NAME:V2Board}
+  php-config-path: ${V2BOARD_PHP_CONFIG_PATH:}
   app-url: ${APP_URL:}
   invite-gen-limit: ${INVITE_GEN_LIMIT:5}
   invite-commission: ${INVITE_COMMISSION:10}

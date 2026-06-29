@@ -27,19 +27,6 @@ public class SingboxHandler implements ProtocolHandler {
 
     @Override
     public void applyResponseHeaders(User user, HttpServletResponse response) {
-        String appName = resolveAppName();
-        SubscribeHeaders.applySingbox(response, user, appName);
-    }
-
-    private String resolveAppName() {
-        try {
-            Map<String, Object> full = configService.getFullConfig();
-            Object site = full.get("site");
-            if (site instanceof Map<?, ?> m && m.get("app_name") != null) {
-                return String.valueOf(m.get("app_name"));
-            }
-        } catch (Exception ignored) {
-        }
-        return "V2Board";
+        SubscribeHeaders.applySingbox(response, user, configService.getAppName());
     }
 }

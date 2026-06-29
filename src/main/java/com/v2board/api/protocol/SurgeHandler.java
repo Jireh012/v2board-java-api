@@ -42,7 +42,7 @@ public class SurgeHandler implements ProtocolHandler {
         if (user == null || servers == null) {
             return "";
         }
-        String appName = resolveAppName();
+        String appName = configService.getAppName();
         String subsLink = Helper.getSubscribeUrl(
                 user.getToken(), user.getId(), subscribeMethod, subscribePath, subscribeUrlConfig, subscribeExpire);
         String subsDomain = resolveHost();
@@ -55,20 +55,9 @@ public class SurgeHandler implements ProtocolHandler {
         if (response == null) {
             return;
         }
-        String appName = resolveAppName();
+        String appName = configService.getAppName();
         response.setHeader("content-disposition",
                 "attachment;filename*=UTF-8''" + java.net.URLEncoder.encode(appName, StandardCharsets.UTF_8) + ".conf");
-    }
-
-    private String resolveAppName() {
-        try {
-            Map<String, Object> full = configService.getFullConfig();
-            if (full.get("site") instanceof Map<?, ?> m && m.get("app_name") != null) {
-                return String.valueOf(m.get("app_name"));
-            }
-        } catch (Exception ignored) {
-        }
-        return "V2Board";
     }
 
     private static String resolveHost() {

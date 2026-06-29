@@ -29,31 +29,14 @@ public class StashHandler implements ProtocolHandler {
         if (user == null || servers == null || servers.isEmpty()) {
             return "";
         }
-        String appName = "V2Board";
-        try {
-            Map<String, Object> full = configService.getFullConfig();
-            Object site = full.get("site");
-            if (site instanceof Map<?, ?> m && m.get("app_name") != null) {
-                appName = String.valueOf(m.get("app_name"));
-            }
-        } catch (Exception ignored) {
-        }
         String template = new ClassPathResource("rules/default.stash.yaml").exists()
                 ? "rules/default.stash.yaml"
                 : "rules/default.clash.yaml";
-        return ClashMetaBuilder.build(servers, user.getUuid(), appName, template);
+        return ClashMetaBuilder.build(servers, user.getUuid(), configService.getAppName(), template);
     }
 
     @Override
     public void applyResponseHeaders(User user, HttpServletResponse response) {
-        String appName = "V2Board";
-        try {
-            Map<String, Object> full = configService.getFullConfig();
-            if (full.get("site") instanceof Map<?, ?> m && m.get("app_name") != null) {
-                appName = String.valueOf(m.get("app_name"));
-            }
-        } catch (Exception ignored) {
-        }
-        SubscribeHeaders.applyClashMeta(response, user, appName);
+        SubscribeHeaders.applyClashMeta(response, user, configService.getAppName());
     }
 }

@@ -36,18 +36,6 @@ public class V2rayTunHandler implements ProtocolHandler {
 
     @Override
     public void applyResponseHeaders(User user, HttpServletResponse response) {
-        String appName = resolveAppName();
-        SubscribeHeaders.applyV2rayTun(response, user, appName);
-    }
-
-    private String resolveAppName() {
-        try {
-            Map<String, Object> full = configService.getFullConfig();
-            if (full.get("site") instanceof Map<?, ?> m && m.get("app_name") != null) {
-                return String.valueOf(m.get("app_name"));
-            }
-        } catch (Exception ignored) {
-        }
-        return "V2Board";
+        SubscribeHeaders.applyV2rayTun(response, user, configService.getAppName());
     }
 }
