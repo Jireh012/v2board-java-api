@@ -254,6 +254,12 @@ public class AdminNodeController {
             }
             body.put("network_settings", ns);
         }
+
+        // 对齐 PHP admin：空 tags 存 null
+        Object xff = body.get("trusted_x_forwarded_for");
+        if (xff instanceof List<?> list && list.isEmpty()) {
+            body.put("trusted_x_forwarded_for", null);
+        }
     }
 
     private static boolean isEmpty(Object v) {

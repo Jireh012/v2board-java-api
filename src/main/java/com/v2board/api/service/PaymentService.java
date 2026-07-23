@@ -108,7 +108,7 @@ public class PaymentService {
         return List.of(
                 "AlipayF2F", "WechatPayNative", "EPay", "MGate",
                 "StripeAlipay", "StripeWepay", "StripeCredit", "StripeCheckout", "StripeALL",
-                "BTCPay", "Coinbase", "CoinPayments", "BEasyPaymentUSDT"
+                "BTCPay", "Coinbase", "CoinPayments", "BEasyPaymentUSDT", "Epusdt"
         );
     }
 
@@ -211,6 +211,14 @@ public class PaymentService {
                     field("bepusdt_url", "API 地址", "您的 BEPUSDT API 接口地址(例如: https://xxx.com)"),
                     field("bepusdt_apitoken", "API Token", "您的 BEPUSDT API Token"),
                     field("bepusdt_trade_type", "交易类型", "您的 BEPUSDT 交易类型")
+            );
+            case "Epusdt" -> buildForm(
+                    field("epusdt_url", "API 地址", "Epusdt API 接口地址(例如: https://xxx.com)"),
+                    field("epusdt_pid", "PID", "Epusdt 后台的 pid"),
+                    field("epusdt_token", "Token", "Epusdt 后台的 secret_key"),
+                    field("epusdt_currency", "法币", "默认 cny"),
+                    field("epusdt_asset", "代币", "默认 usdt"),
+                    field("epusdt_network", "网络", "留空时进入 GMPay 选择链路界面，填写时按该网络直接发起订单")
             );
             default -> new HashMap<>();
         };

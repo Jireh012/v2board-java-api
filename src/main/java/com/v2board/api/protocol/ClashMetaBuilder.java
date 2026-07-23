@@ -217,6 +217,14 @@ public final class ClashMetaBuilder {
         } else if ("grpc".equals(network)) {
             array.put("network", "grpc");
             applyGrpc(array, ns);
+        } else if ("xhttp".equals(network) && ns != null) {
+            array.put("network", "xhttp");
+            Map<String, Object> xhttp = new LinkedHashMap<>();
+            if (ns.get("path") != null) xhttp.put("path", ns.get("path"));
+            if (ns.get("host") != null) xhttp.put("host", ns.get("host"));
+            if (ns.get("mode") != null) xhttp.put("mode", ns.get("mode"));
+            if (ns.get("extra") != null) xhttp.put("extra", ns.get("extra"));
+            array.put("xhttp-opts", xhttp);
         }
         return array;
     }
@@ -269,6 +277,7 @@ public final class ClashMetaBuilder {
             if (ns.get("path") != null) xhttp.put("path", ns.get("path"));
             if (ns.get("host") != null) xhttp.put("host", ns.get("host"));
             if (ns.get("mode") != null) xhttp.put("mode", ns.get("mode"));
+            if (ns.get("extra") != null) xhttp.put("extra", ns.get("extra"));
             array.put("xhttp-opts", xhttp);
         }
         return array;

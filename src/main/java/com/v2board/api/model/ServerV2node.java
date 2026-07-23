@@ -81,6 +81,10 @@ public class ServerV2node {
     @TableField(value = "network_settings")
     private String networkSettings;
 
+    /** 信任的 X-Forwarded-For 头（JSON 数组），对齐 PHP trusted_x_forwarded_for */
+    @TableField(value = "trusted_x_forwarded_for", typeHandler = JacksonTypeHandler.class)
+    private List<String> trustedXForwardedFor;
+
     @TableField(value = "encryption_settings")
     private String encryptionSettings;
 

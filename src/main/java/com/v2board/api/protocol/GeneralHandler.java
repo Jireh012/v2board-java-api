@@ -248,9 +248,9 @@ public class GeneralHandler implements ProtocolHandler {
                 params.put("security", "tls");
             }
             
-            // 处理flow字段
+            // 处理flow字段：无 TLS 时忽略（对齐 PHP Clash / #339）
             Object flowObj = server.get("flow");
-            if (flowObj != null) {
+            if (tls != null && tls != 0 && flowObj != null && !String.valueOf(flowObj).isEmpty()) {
                 params.put("flow", String.valueOf(flowObj));
             }
             

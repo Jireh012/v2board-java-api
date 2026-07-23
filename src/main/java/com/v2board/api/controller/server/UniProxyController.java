@@ -7,6 +7,7 @@ import com.v2board.api.model.ServerHysteria;
 import com.v2board.api.model.ServerShadowsocks;
 import com.v2board.api.model.ServerTrojan;
 import com.v2board.api.model.ServerTuic;
+import com.v2board.api.model.ServerV2node;
 import com.v2board.api.model.ServerVless;
 import com.v2board.api.model.ServerVmess;
 import com.v2board.api.model.User;
@@ -14,6 +15,7 @@ import com.v2board.api.service.ConfigService;
 import com.v2board.api.service.NodeCacheService;
 import com.v2board.api.service.ServerService;
 import com.v2board.api.service.UserService;
+import com.v2board.api.util.Helper;
 import jakarta.servlet.http.HttpServletRequest;
 import org.msgpack.jackson.dataformat.MessagePackFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -380,6 +382,11 @@ public class UniProxyController {
                     resp.put("padding_scheme", s.getPaddingScheme());
                 }
             }
+            case "v2node" -> {
+                if (server instanceof ServerV2node s) {
+                    resp.putAll(buildV2nodeUniProxyConfig(s));
+                }
+            }
             default -> {
             }
         }
@@ -477,6 +484,9 @@ public class UniProxyController {
             addGroupIds(groupIds, s.getGroupId());
             rate = parseRate(s.getRate());
         } else if (server instanceof ServerAnytls s) {
+            addGroupIds(groupIds, s.getGroupId());
+            rate = parseRate(s.getRate());
+        } else if (server instanceof ServerV2node s) {
             addGroupIds(groupIds, s.getGroupId());
             rate = parseRate(s.getRate());
         }
@@ -593,7 +603,41 @@ public class UniProxyController {
         if (server instanceof ServerVless s) return s.getRouteId();
         if (server instanceof ServerTuic s) return s.getRouteId();
         if (server instanceof ServerAnytls s) return s.getRouteId();
+        if (server instanceof ServerV2node s) return s.getRouteId();
         return null;
+    }
+
+    private Map<String, Object> buildV2nodeUniProxyConfig(ServerV2node s) {
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("listen_ip", s.getListenIp());
+        resp.put("server_port", s.getServerPort());
+        resp.put("network", s.getNetwork());
+        resp.put("network_settings", parseJsonMap(s.getNetworkSettings()));
+        resp.put("trusted_x_forwarded_for", s.getTrustedXForwardedFor());
+        resp.put("protocol", s.getProtocol());
+        resp.put("tls", s.getTls());
+        resp.put("tls_settings", parseJsonMap(s.getTlsSettings()));
+        resp.put("encryption", s.getEncryption());
+        resp.put("encryption_settings", parseJsonMap(s.getEncryptionSettings()));
+        resp.put("flow", s.getFlow());
+        resp.put("cipher", s.getCipher());
+        resp.put("congestion_control", s.getCongestionControl());
+        resp.put("zero_rtt_handshake", s.getZeroRttHandshake() != null && s.getZeroRttHandshake() == 1);
+        resp.put("up_mbps", s.getUpMbps());
+        resp.put("down_mbps", s.getDownMbps());
+        resp.put("obfs", s.getObfs());
+        resp.put("obfs_password", s.getObfsPassword());
+        resp.put("padding_scheme", s.getPaddingScheme());
+        String cipher = s.getCipher();
+        if ("2022-blake3-aes-128-gcm".equals(cipher) && s.getCreatedAt() != null) {
+            resp.put("server_key", Helper.getServerKey(s.getCreatedAt(), 16));
+        } else if ("2022-blake3-aes-256-gcm".equals(cipher) && s.getCreatedAt() != null) {
+            resp.put("server_key", Helper.getServerKey(s.getCreatedAt(), 32));
+        }
+        int up = s.getUpMbps() != null ? s.getUpMbps() : 0;
+        int down = s.getDownMbps() != null ? s.getDownMbps() : 0;
+        resp.put("ignore_client_bandwidth", up == 0 && down == 0);
+        return resp;
     }
 
     private static class NodeContext {

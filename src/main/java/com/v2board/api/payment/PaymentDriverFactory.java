@@ -29,6 +29,7 @@ public class PaymentDriverFactory {
         drivers.put("Coinbase", new CoinbaseDriver());
         drivers.put("CoinPayments", new CoinPaymentsDriver());
         drivers.put("BEasyPaymentUSDT", new BEasyPaymentUSDTDriver());
+        drivers.put("Epusdt", new EpusdtDriver());
     }
 
     public PaymentDriver getDriver(String method) {

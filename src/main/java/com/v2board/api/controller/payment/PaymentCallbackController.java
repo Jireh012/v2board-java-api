@@ -87,7 +87,7 @@ public class PaymentCallbackController {
         // __processing 标记表示 Stripe 两步验签的中间态（source.chargeable），直接返回成功
         if ("true".equals(notifyResult.get("__processing"))) {
             response.setStatus(200);
-            writeSuccessResponse(response, method);
+            writeSuccessResponse(response, method, notifyResult.get("custom_result"));
             return;
         }
 
@@ -112,7 +112,7 @@ public class PaymentCallbackController {
         if (order.getStatus() != 0) {
             // 已处理过的订单直接返回成功
             response.setStatus(200);
-            writeSuccessResponse(response, method);
+            writeSuccessResponse(response, method, notifyResult.get("custom_result"));
             return;
         }
 
@@ -141,14 +141,15 @@ public class PaymentCallbackController {
         }
 
         response.setStatus(200);
-        writeSuccessResponse(response, method);
+        writeSuccessResponse(response, method, notifyResult.get("custom_result"));
     }
 
-    /**
-     * 根据支付方式返回合适的成功响应。
-     * 不同支付网关期望不同的成功响应格式。
-     */
-    private void writeSuccessResponse(HttpServletResponse response, String method) throws IOException {
+    private void writeSuccessResponse(HttpServletResponse response, String method, String customResult) throws IOException {
+        if (customResult != null && !customResult.isEmpty()) {
+            response.setContentType("text/plain; charset=UTF-8");
+            response.getWriter().write(customResult);
+            return;
+        }
         if ("WechatPayNative".equalsIgnoreCase(method)) {
             // 微信支付期望 XML 响应
             response.setContentType("application/xml; charset=UTF-8");
