@@ -5,6 +5,7 @@ import com.v2board.api.protocol.ProtocolHandler;
 import com.v2board.api.protocol.GeneralHandler;
 import com.v2board.api.service.ServerService;
 import com.v2board.api.service.UserService;
+import com.v2board.api.service.external.ExternalSubscribeNodeService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.v2board.api.util.Helper;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,12 +27,20 @@ import java.util.regex.Pattern;
 public class ClientController {
     
     private static final Logger logger = LoggerFactory.getLogger(ClientController.class);
+
+    /** 自有面板节点名前缀 */
+    private static final String SAFE_NODE_PREFIX = "🔒 ";
+    /** 第三方订阅节点名前缀 */
+    private static final String UNSAFE_NODE_PREFIX = "⚠️ ";
     
     @Autowired
     private UserService userService;
     
     @Autowired
     private ServerService serverService;
+
+    @Autowired
+    private ExternalSubscribeNodeService externalSubscribeNodeService;
     
     @Autowired
     private GeneralHandler generalHandler;
@@ -70,10 +80,17 @@ public class ClientController {
                 return "";
             }
             
-            // 获取可用服务器
-            List<Map<String, Object>> servers = serverService.getAvailableServers(user);
-            logger.debug("Found {} available servers for user {}", servers.size(), user.getEmail());
-            
+            // 获取可用服务器（面板节点 + 第三方连通节点）
+            List<Map<String, Object>> panelServers = serverService.getAvailableServers(user);
+            List<Map<String, Object>> externalServers = externalSubscribeNodeService.listReachableAsServerMaps();
+            applyNodeSecurityMarkers(panelServers, SAFE_NODE_PREFIX);
+            applyNodeSecurityMarkers(externalServers, UNSAFE_NODE_PREFIX);
+            List<Map<String, Object>> servers = new ArrayList<>(panelServers.size() + externalServers.size());
+            servers.addAll(panelServers);
+            servers.addAll(externalServers);
+            logger.debug("Found {} panel + {} external servers for user {}",
+                    panelServers.size(), externalServers.size(), user.getEmail());
+
             if (servers.isEmpty()) {
                 logger.warn("No available servers found for user {}", user.getEmail());
                 return "";
@@ -218,6 +235,76 @@ public class ClientController {
         return null;
     }
     
+    /**
+     * 为节点名称增加安全标记（同步 clash_proxy.name / singbox_outbound.tag）。
+     */
+    @SuppressWarnings("unchecked")
+    private void applyNodeSecurityMarkers(List<Map<String, Object>> servers, String prefix) {
+        if (servers == null || servers.isEmpty() || prefix == null || prefix.isEmpty()) {
+            return;
+        }
+        for (Map<String, Object> server : servers) {
+            if (server == null) {
+                continue;
+            }
+            Object raw = server.get("name");
+            if (raw == null) {
+                continue;
+            }
+            String name = String.valueOf(raw).trim();
+            if (name.isEmpty()) {
+                continue;
+            }
+            if (name.startsWith(SAFE_NODE_PREFIX) || name.startsWith(UNSAFE_NODE_PREFIX)) {
+                continue;
+            }
+            String marked = prefix + name;
+            server.put("name", marked);
+
+            Object clash = server.get("clash_proxy");
+            if (clash instanceof Map<?, ?> clashMap) {
+                ((Map<String, Object>) clashMap).put("name", marked);
+            }
+            Object outbound = server.get("singbox_outbound");
+            if (outbound instanceof Map<?, ?> outboundMap) {
+                ((Map<String, Object>) outboundMap).put("tag", marked);
+            }
+            Object shareUri = server.get("share_uri");
+            if (shareUri != null) {
+                String rewritten = rewriteShareUriName(String.valueOf(shareUri), marked);
+                if (rewritten != null) {
+                    server.put("share_uri", rewritten);
+                }
+            }
+        }
+    }
+
+    /** 替换分享链接 # 后的节点备注名。 */
+    private static String rewriteShareUriName(String shareUri, String newName) {
+        if (shareUri == null || shareUri.isBlank() || newName == null) {
+            return shareUri;
+        }
+        String uri = shareUri.trim();
+        boolean crlf = uri.endsWith("\r\n");
+        boolean lf = !crlf && uri.endsWith("\n");
+        if (crlf) {
+            uri = uri.substring(0, uri.length() - 2);
+        } else if (lf) {
+            uri = uri.substring(0, uri.length() - 1);
+        }
+        int hash = uri.indexOf('#');
+        String base = hash >= 0 ? uri.substring(0, hash) : uri;
+        String encoded = Helper.encodeURIComponent(newName);
+        String result = base + "#" + encoded;
+        if (crlf) {
+            return result + "\r\n";
+        }
+        if (lf) {
+            return result + "\n";
+        }
+        return result;
+    }
+
     /**
      * 设置订阅信息到服务器列表
      * PHP: setSubscribeInfoToServers(&$servers, $user)

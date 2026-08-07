@@ -1,0 +1,71 @@
+# V2Board Java API + UI
+# MySQL / Redis 使用外部第三方数据源（不在本 compose 中启动）
+#
+# 目录约定（同级）：
+#   repos/
+#     v2board-java-api/   ← 在此目录执行 docker compose
+#     v2board-ui/
+#
+# 使用：
+#   cp .env.example .env   # 填写外部 DB/Redis 与 APP_KEY
+#   docker compose up -d --build
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: v2board-java-api:latest
+    container_name: v2board-api
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-8080}:8080"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      SING_BOX_PATH: /usr/local/bin/sing-box
+      DB_HOST: ${DB_HOST:-host.docker.internal}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_NAME: ${DB_NAME:-v2board}
+      DB_USERNAME: ${DB_USERNAME:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-}
+      DB_SSL: ${DB_SSL:-false}
+      REDIS_HOST: ${REDIS_HOST:-host.docker.internal}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_DATABASE: ${REDIS_DATABASE:-0}
+      REDIS_TIMEOUT: ${REDIS_TIMEOUT:-3000ms}
+      REDIS_SSL: ${REDIS_SSL:-false}
+      REDIS_CACHE_DB: ${REDIS_CACHE_DB:-1}
+      APP_KEY: ${APP_KEY:-base64:your-secret-key-here}
+      APP_NAME: ${APP_NAME:-V2Board}
+      APP_URL: ${APP_URL:-}
+      SUBSCRIBE_PATH: ${SUBSCRIBE_PATH:-}
+      EXTERNAL_PROBE_URL: ${EXTERNAL_PROBE_URL:-https://www.gstatic.com/generate_204}
+      EXTERNAL_PROBE_TIMEOUT_MS: ${EXTERNAL_PROBE_TIMEOUT_MS:-8000}
+      EXTERNAL_PROBE_CONCURRENCY: ${EXTERNAL_PROBE_CONCURRENCY:-4}
+      EXTERNAL_SUBSCRIBE_CRON: ${EXTERNAL_SUBSCRIBE_CRON:-0 */30 * * * *}
+    extra_hosts:
+      # 便于容器访问宿主机上的 MySQL/Redis（Linux 需 Docker 20.10+）
+      - "host.docker.internal:host-gateway"
+    networks:
+      - v2board
+
+  web:
+    build:
+      context: ${UI_CONTEXT:-../v2board-ui}
+      dockerfile: Dockerfile
+    image: v2board-ui:latest
+    container_name: v2board-web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-80}:80"
+    depends_on:
+      - api
+    networks:
+      - v2board
+
+networks:
+  v2board:
+    driver: bridge

@@ -24,6 +24,19 @@ public final class ClashMetaBuilder {
 
         for (Map<String, Object> item : servers) {
             Map<String, Object> server = new LinkedHashMap<>(item);
+            if ("external".equals(String.valueOf(server.get("type"))) || Boolean.TRUE.equals(server.get("external"))) {
+                Map<String, Object> externalProxy = asMap(server.get("clash_proxy"));
+                if (externalProxy != null && !externalProxy.isEmpty()) {
+                    // 始终使用外层已打标的 name（如 ⚠️），避免保留第三方原始别名
+                    externalProxy = new LinkedHashMap<>(externalProxy);
+                    if (server.get("name") != null) {
+                        externalProxy.put("name", server.get("name"));
+                    }
+                    proxy.add(externalProxy);
+                    proxies.add(String.valueOf(externalProxy.getOrDefault("name", server.get("name"))));
+                }
+                continue;
+            }
             if ("v2node".equals(server.get("type")) && server.get("protocol") != null) {
                 server.put("type", String.valueOf(server.get("protocol")));
             }
@@ -548,6 +561,14 @@ public final class ClashMetaBuilder {
 
     private static String str(Object o) {
         return o == null ? "" : String.valueOf(o);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> asMap(Object o) {
+        if (o instanceof Map<?, ?> m) {
+            return (Map<String, Object>) m;
+        }
+        return null;
     }
 
     private static int intVal(Object o) {

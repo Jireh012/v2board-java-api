@@ -66,8 +66,9 @@ public class ServerV2node {
     @TableField("obfs_password")
     private String obfsPassword;
 
+    /** JSON 数组元素可能是 String 或 Integer（与 ServerVless / PHP 写入一致） */
     @TableField(value = "group_id", typeHandler = JacksonTypeHandler.class)
-    private List<Integer> groupId;
+    private List<Object> groupId;
 
     @TableField(value = "route_id", typeHandler = JacksonTypeHandler.class)
     private List<Integer> routeId;

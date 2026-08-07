@@ -62,6 +62,31 @@ mvn spring-boot:run
 http://localhost:8080/api/v1/client/subscribe?token=your_user_token
 ```
 
+### 5. Docker Compose 部署（推荐）
+
+MySQL / Redis **不**随 compose 启动，需自行提供第三方实例，并通过 `.env` 接入。
+
+目录约定：`v2board-java-api` 与 `v2board-ui` 放在同级目录。
+
+```bash
+cd v2board-java-api
+cp .env.example .env
+# 编辑 .env：填写 DB_* / REDIS_* / APP_KEY
+
+# 首次部署请在外部 MySQL 执行：
+#   src/main/resources/db/v2_external_subscribe.sql
+#   （以及 PHP V2Board 既有表结构）
+
+docker compose up -d --build
+```
+
+- 前端：`http://localhost`（`WEB_PORT`，默认 80，Nginx 反代 `/api`）
+- API：`http://localhost:8080`（`API_PORT`）
+- 宿主机上的 DB/Redis：`.env` 中可设 `DB_HOST=host.docker.internal`、`REDIS_HOST=host.docker.internal`
+- 镜像内已内置 `sing-box`，用于第三方订阅源连通性探测
+
+更多变量说明见 [ENV_CONFIG.md](./ENV_CONFIG.md)。
+
 ## API 接口
 
 ### 订阅接口

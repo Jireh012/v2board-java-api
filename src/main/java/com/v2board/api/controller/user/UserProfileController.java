@@ -13,6 +13,7 @@ import com.v2board.api.model.Plan;
 import com.v2board.api.model.Ticket;
 import com.v2board.api.model.User;
 import com.v2board.api.service.AuthService;
+import com.v2board.api.service.ConfigService;
 import com.v2board.api.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -47,6 +48,9 @@ public class UserProfileController {
 
     @Autowired
     private AuthService authService;
+
+    @Autowired
+    private ConfigService configService;
 
     @Value("${v2board.app-url:}")
     private String appUrl;
@@ -179,15 +183,7 @@ public class UserProfileController {
         current.setUuid(java.util.UUID.randomUUID().toString());
         current.setToken(java.util.UUID.randomUUID().toString().replace("-", ""));
         userMapper.updateById(current);
-        String subscribeUrl = com.v2board.api.util.Helper.getSubscribeUrl(
-                current.getToken(),
-                current.getId(),
-                0,
-                "/api/v1/client/subscribe",
-                "",
-                5
-        );
-        return ApiResponse.success(subscribeUrl);
+        return ApiResponse.success(configService.buildSubscribeUrl(current.getToken(), current.getId()));
     }
 
     /**

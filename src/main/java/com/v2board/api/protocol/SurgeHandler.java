@@ -2,10 +2,8 @@ package com.v2board.api.protocol;
 
 import com.v2board.api.model.User;
 import com.v2board.api.service.ConfigService;
-import com.v2board.api.util.Helper;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
@@ -20,18 +18,6 @@ public class SurgeHandler implements ProtocolHandler {
     @Autowired
     private ConfigService configService;
 
-    @Value("${v2board.show-subscribe-method:0}")
-    private Integer subscribeMethod;
-
-    @Value("${v2board.subscribe-path:}")
-    private String subscribePath;
-
-    @Value("${v2board.subscribe-url:}")
-    private String subscribeUrlConfig;
-
-    @Value("${v2board.show-subscribe-expire:5}")
-    private Integer subscribeExpire;
-
     @Override
     public String getFlag() {
         return "surge";
@@ -43,8 +29,7 @@ public class SurgeHandler implements ProtocolHandler {
             return "";
         }
         String appName = configService.getAppName();
-        String subsLink = Helper.getSubscribeUrl(
-                user.getToken(), user.getId(), subscribeMethod, subscribePath, subscribeUrlConfig, subscribeExpire);
+        String subsLink = configService.buildSubscribeUrl(user.getToken(), user.getId());
         String subsDomain = resolveHost();
         return SurgeBuilder.build(servers, user, appName, subsLink, subsDomain);
     }

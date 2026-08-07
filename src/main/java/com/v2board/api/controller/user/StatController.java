@@ -8,6 +8,7 @@ import com.v2board.api.mapper.StatUserMapper;
 import com.v2board.api.mapper.PlanMapper;
 import com.v2board.api.model.Plan;
 import com.v2board.api.service.CacheService;
+import com.v2board.api.service.ConfigService;
 import com.v2board.api.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,20 +38,8 @@ public class StatController {
     @Autowired
     private CacheService cacheService;
 
-    @org.springframework.beans.factory.annotation.Value("${v2board.allow-new-period:0}")
-    private Integer allowNewPeriod;
-
-    @org.springframework.beans.factory.annotation.Value("${v2board.show-subscribe-method:0}")
-    private Integer subscribeMethod;
-
-    @org.springframework.beans.factory.annotation.Value("${v2board.subscribe-path:/api/v1/client/subscribe}")
-    private String subscribePath;
-
-    @org.springframework.beans.factory.annotation.Value("${v2board.subscribe-url:}")
-    private String subscribeUrlConfig;
-
-    @org.springframework.beans.factory.annotation.Value("${v2board.show-subscribe-expire:5}")
-    private Integer subscribeExpire;
+    @Autowired
+    private ConfigService configService;
 
     /**
      * 订阅相关统计信息（兼容 PHP UserController::getSubscribe 返回结构）。
@@ -83,19 +72,11 @@ public class StatController {
         Integer aliveIp = cacheService.getAliveIpCount(user.getId());
         data.put("alive_ip", aliveIp != null ? aliveIp : 0);
 
-        // 订阅链接
-        String subscribeUrl = com.v2board.api.util.Helper.getSubscribeUrl(
-                user.getToken(),
-                user.getId(),
-                subscribeMethod,
-                subscribePath,
-                subscribeUrlConfig,
-                subscribeExpire
-        );
-        data.put("subscribe_url", subscribeUrl);
+        // 订阅链接：subscribe_url / path 优先读 DB 系统配置
+        data.put("subscribe_url", configService.buildSubscribeUrl(user.getToken(), user.getId()));
 
         data.put("reset_day", userService.getResetDay(user));
-        data.put("allow_new_period", allowNewPeriod != null ? allowNewPeriod : 0);
+        data.put("allow_new_period", configService.getAllowNewPeriod());
 
         return ApiResponse.success(data);
     }

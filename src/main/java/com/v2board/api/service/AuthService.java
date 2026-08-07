@@ -243,23 +243,35 @@ public class AuthService {
         }
     }
     /**
-     * 获取密钥字节数组
-     * 支持base64:前缀的配置格式
+     * 获取密钥字节数组。
+     * 支持 Laravel 格式 {@code base64:xxxx}；合法 APP_KEY 解码后为 32 字节。
+     * 若配置为占位符或长度不足 256 bit，则 SHA-256 派生到 32 字节，避免 jjwt WeakKeyException。
      */
     private byte[] getSecretKeyBytes() {
-        if (appKey.startsWith("base64:")) {
+        byte[] keyBytes;
+        if (appKey != null && appKey.startsWith("base64:")) {
             String base64Key = appKey.substring(7);
             try {
-                // 标准 base64 解析（对接 Laravel APP_KEY=base64:xxxx）
-                return java.util.Base64.getDecoder().decode(base64Key);
+                keyBytes = java.util.Base64.getDecoder().decode(base64Key);
             } catch (IllegalArgumentException e) {
-                // 当配置值不是合法 base64（例如默认的 your-secret-key-here 占位符）时，
-                // 回退为普通字符串键，避免 Illegal base64 character 错误。
                 logger.warn("Invalid base64 app.key, fallback to raw string key: {}", e.getMessage());
-                return base64Key.getBytes(StandardCharsets.UTF_8);
+                keyBytes = base64Key.getBytes(StandardCharsets.UTF_8);
+            }
+        } else {
+            keyBytes = (appKey != null ? appKey : "").getBytes(StandardCharsets.UTF_8);
+        }
+        // HS256 要求密钥 >= 256 bit；Laravel 正式 APP_KEY 解码后恰好 32 字节
+        if (keyBytes.length < 32) {
+            logger.warn("app.key is only {} bits (<256). Deriving SHA-256 key. "
+                            + "Set a real Laravel APP_KEY (base64:...) for production / PHP JWT compatibility.",
+                    keyBytes.length * 8);
+            try {
+                return java.security.MessageDigest.getInstance("SHA-256").digest(keyBytes);
+            } catch (java.security.NoSuchAlgorithmException e) {
+                throw new IllegalStateException("SHA-256 not available", e);
             }
         }
-        return appKey.getBytes(StandardCharsets.UTF_8);
+        return keyBytes;
     }
 }
 

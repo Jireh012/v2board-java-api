@@ -69,6 +69,21 @@ public class GeneralHandler implements ProtocolHandler {
         if (type == null) {
             return "";
         }
+        if ("external".equals(type) || Boolean.TRUE.equals(server.get("external"))) {
+            Object uri = server.get("share_uri");
+            if (uri == null || String.valueOf(uri).isBlank()) {
+                return "";
+            }
+            String share = String.valueOf(uri).trim();
+            Object nameObj = server.get("name");
+            if (nameObj != null && !String.valueOf(nameObj).isBlank()) {
+                String marked = String.valueOf(nameObj).trim();
+                int hash = share.indexOf('#');
+                String base = hash >= 0 ? share.substring(0, hash) : share;
+                share = base + "#" + Helper.encodeURIComponent(marked);
+            }
+            return share.endsWith("\r\n") || share.endsWith("\n") ? share : share + "\r\n";
+        }
         return switch (type) {
             case "vmess" -> buildVmess(uuid, server);
             case "vless" -> buildVless(uuid, server);

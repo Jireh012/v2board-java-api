@@ -175,6 +175,8 @@ public class AdminNodeController {
         switch (type) {
             case "hysteria" -> preprocessHysteria(body);
             case "v2node" -> preprocessV2node(body);
+            case "vless" -> preprocessVless(body);
+            case "vmess" -> preprocessVmess(body);
             default -> {}
         }
     }
@@ -184,6 +186,121 @@ public class AdminNodeController {
         if (!body.containsKey("down_mbps")) body.put("down_mbps", 0);
         if (body.get("obfs") == null || body.get("obfs").toString().isEmpty()) {
             body.put("obfs_password", null);
+        }
+    }
+
+    /** 对齐 PHP VlessController：Reality 密钥补全 + tls/network JSON 落库 */
+    private void preprocessVless(Map<String, Object> body) {
+        String network = body.get("network") != null ? body.get("network").toString() : null;
+        if (network != null && !"tcp".equals(network)) {
+            body.put("flow", null);
+        }
+        normalizeAndStringifyTlsSettings(body, true);
+        stringifyIfObject(body, "network_settings");
+        stringifyIfObject(body, "encryption_settings");
+    }
+
+    /** 对齐 PHP Vmess：tlsSettings/networkSettings 等 JSON 字段序列化 */
+    private void preprocessVmess(Map<String, Object> body) {
+        // 兼容前端 snake_case 与 PHP camelCase
+        if (body.containsKey("tls_settings") && !body.containsKey("tlsSettings")) {
+            body.put("tlsSettings", body.get("tls_settings"));
+        }
+        if (body.containsKey("network_settings") && !body.containsKey("networkSettings")) {
+            body.put("networkSettings", body.get("network_settings"));
+        }
+        normalizeAndStringifyTlsSettings(body, false);
+        // normalize 写入 tls_settings，同步到 tlsSettings
+        if (body.containsKey("tls_settings")) {
+            body.put("tlsSettings", body.get("tls_settings"));
+        }
+        stringifyIfObject(body, "networkSettings");
+        stringifyIfObject(body, "network_settings");
+        stringifyIfObject(body, "dnsSettings");
+        stringifyIfObject(body, "dns_settings");
+        stringifyIfObject(body, "ruleSettings");
+        stringifyIfObject(body, "rule_settings");
+    }
+
+    /**
+     * 解析 tls_settings，按需补全 Reality 密钥，再写回 JSON 字符串。
+     * @param supportReality 是否处理 tls=2 Reality（vless/v2node）
+     */
+    @SuppressWarnings("unchecked")
+    private void normalizeAndStringifyTlsSettings(Map<String, Object> body, boolean supportReality) {
+        Object raw = body.get("tls_settings");
+        if (raw == null) {
+            raw = body.get("tlsSettings");
+        }
+        Map<String, Object> tlsSettings = null;
+        if (raw instanceof Map<?, ?> m) {
+            tlsSettings = new HashMap<>((Map<String, Object>) m);
+        } else if (raw instanceof String s && !s.isBlank()) {
+            try {
+                tlsSettings = objectMapper.readValue(s,
+                        objectMapper.getTypeFactory().constructMapType(HashMap.class, String.class, Object.class));
+            } catch (Exception ignored) {
+                tlsSettings = new HashMap<>();
+            }
+        }
+
+        Integer tlsMode = toInt(body.get("tls"));
+        boolean tlsEnabled = tlsMode != null && tlsMode > 0;
+        if (!tlsEnabled) {
+            if (raw == null) {
+                body.put("tls_settings", null);
+            } else if (!(raw instanceof String)) {
+                stringifyJsonField(body, "tls_settings", tlsSettings != null ? tlsSettings : Map.of());
+            }
+            return;
+        }
+        if (tlsSettings == null) {
+            tlsSettings = new HashMap<>();
+        }
+
+        if (supportReality && Integer.valueOf(2).equals(tlsMode)) {
+            if (isEmpty(tlsSettings.get("public_key")) || isEmpty(tlsSettings.get("private_key"))) {
+                Map<String, String> reality = Helper.generateRealityKeyPair();
+                if (isEmpty(tlsSettings.get("public_key"))) {
+                    tlsSettings.put("public_key", reality.get("public_key"));
+                }
+                if (isEmpty(tlsSettings.get("private_key"))) {
+                    tlsSettings.put("private_key", reality.get("private_key"));
+                }
+                if (isEmpty(tlsSettings.get("short_id"))) {
+                    tlsSettings.put("short_id", reality.get("short_id"));
+                }
+            }
+            if (isEmpty(tlsSettings.get("server_port"))) {
+                tlsSettings.put("server_port", "443");
+            }
+        }
+
+        if ("custom".equals(String.valueOf(tlsSettings.get("ech")))) {
+            Object echServerName = tlsSettings.get("ech_server_name");
+            if (echServerName == null || echServerName.toString().isEmpty()) {
+                tlsSettings.put("ech", "");
+            } else {
+                boolean needKey = isEmpty(tlsSettings.get("ech_key")) || isEmpty(tlsSettings.get("ech_config"));
+                if (needKey) {
+                    Map<String, String> echPair = Helper.generateEchKeyPair(echServerName.toString());
+                    if (isEmpty(tlsSettings.get("ech_key"))) {
+                        tlsSettings.put("ech_key", echPair.get("ech_key"));
+                    }
+                    if (isEmpty(tlsSettings.get("ech_config"))) {
+                        tlsSettings.put("ech_config", echPair.get("ech_config"));
+                    }
+                }
+            }
+        }
+
+        stringifyJsonField(body, "tls_settings", tlsSettings);
+    }
+
+    private void stringifyIfObject(Map<String, Object> body, String key) {
+        Object v = body.get(key);
+        if (v instanceof Map<?, ?> || v instanceof List<?>) {
+            stringifyJsonField(body, key, v);
         }
     }
 
@@ -212,31 +329,6 @@ public class AdminNodeController {
             body.put("obfs_password", null);
         }
 
-        Map<String, Object> tlsSettings = null;
-        if (body.get("tls_settings") instanceof Map<?, ?> m) {
-            tlsSettings = new HashMap<>((Map<String, Object>) m);
-        }
-        if (tlsSettings != null) {
-            if ("custom".equals(tlsSettings.get("ech"))) {
-                Object echServerName = tlsSettings.get("ech_server_name");
-                if (echServerName == null || echServerName.toString().isEmpty()) {
-                    tlsSettings.put("ech", "");
-                } else {
-                    boolean needKey = isEmpty(tlsSettings.get("ech_key")) || isEmpty(tlsSettings.get("ech_config"));
-                    if (needKey) {
-                        Map<String, String> echPair = Helper.generateEchKeyPair(echServerName.toString());
-                        if (isEmpty(tlsSettings.get("ech_key"))) {
-                            tlsSettings.put("ech_key", echPair.get("ech_key"));
-                        }
-                        if (isEmpty(tlsSettings.get("ech_config"))) {
-                            tlsSettings.put("ech_config", echPair.get("ech_config"));
-                        }
-                    }
-                }
-            }
-            body.put("tls_settings", tlsSettings);
-        }
-
         if (body.get("network_settings") instanceof Map<?, ?> nsRaw) {
             Map<String, Object> ns = new HashMap<>((Map<String, Object>) nsRaw);
             if (ns.containsKey("acceptProxyProtocol")) {
@@ -255,6 +347,10 @@ public class AdminNodeController {
             body.put("network_settings", ns);
         }
 
+        normalizeAndStringifyTlsSettings(body, true);
+        stringifyIfObject(body, "network_settings");
+        stringifyIfObject(body, "encryption_settings");
+
         // 对齐 PHP admin：空 tags 存 null
         Object xff = body.get("trusted_x_forwarded_for");
         if (xff instanceof List<?> list && list.isEmpty()) {
@@ -264,6 +360,22 @@ public class AdminNodeController {
 
     private static boolean isEmpty(Object v) {
         return v == null || v.toString().isEmpty();
+    }
+
+    private void stringifyJsonField(Map<String, Object> body, String key, Object value) {
+        if (value == null) {
+            body.put(key, null);
+            return;
+        }
+        if (value instanceof String) {
+            body.put(key, value);
+            return;
+        }
+        try {
+            body.put(key, objectMapper.writeValueAsString(value));
+        } catch (Exception e) {
+            throw new BusinessException(500, key + " 序列化失败");
+        }
     }
 
     private static void normalizeBoolExtra(Map<String, Object> extra, String key) {

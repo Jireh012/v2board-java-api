@@ -35,6 +35,20 @@ public final class SingboxBuilder {
         List<Map<String, Object>> proxies = new ArrayList<>();
         for (Map<String, Object> item : servers) {
             Map<String, Object> server = new LinkedHashMap<>(item);
+            if ("external".equals(str(server.get("type"))) || Boolean.TRUE.equals(server.get("external"))) {
+                Object outboundObj = server.get("singbox_outbound");
+                if (outboundObj instanceof Map<?, ?> m) {
+                    Map<String, Object> outbound = new LinkedHashMap<>((Map<String, Object>) m);
+                    // 始终使用外层已打标的 name（如 ⚠️）
+                    if (server.get("name") != null && !str(server.get("name")).isEmpty()) {
+                        outbound.put("tag", server.get("name"));
+                    } else if (outbound.get("tag") == null || str(outbound.get("tag")).isEmpty()) {
+                        outbound.put("tag", server.get("name"));
+                    }
+                    proxies.add(outbound);
+                }
+                continue;
+            }
             if ("v2node".equals(str(server.get("type"))) && server.get("protocol") != null) {
                 server.put("type", str(server.get("protocol")));
             }

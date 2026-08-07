@@ -506,6 +506,37 @@ public class Helper {
     }
 
     /**
+     * 生成 Reality / X25519 密钥对（对齐 PHP SodiumCompat::crypto_box_keypair + url-safe base64）。
+     * 返回 public_key / private_key / short_id（sha1(private_key) 前 8 位）。
+     */
+    public static Map<String, String> generateRealityKeyPair() {
+        X25519KeyPairGenerator gen = new X25519KeyPairGenerator();
+        gen.init(new X25519KeyGenerationParameters(new SecureRandom()));
+        var kp = gen.generateKeyPair();
+        byte[] privateKey = ((X25519PrivateKeyParameters) kp.getPrivate()).getEncoded();
+        byte[] publicKey = ((X25519PublicKeyParameters) kp.getPublic()).getEncoded();
+        String privateKeyB64 = base64EncodeUrlSafe(privateKey);
+        String publicKeyB64 = base64EncodeUrlSafe(publicKey);
+        String shortId;
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-1");
+            byte[] digest = md.digest(privateKeyB64.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder();
+            for (byte b : digest) {
+                hex.append(String.format("%02x", b));
+            }
+            shortId = hex.substring(0, 8);
+        } catch (Exception e) {
+            shortId = privateKeyB64.substring(0, Math.min(8, privateKeyB64.length()));
+        }
+        Map<String, String> result = new LinkedHashMap<>();
+        result.put("public_key", publicKeyB64);
+        result.put("private_key", privateKeyB64);
+        result.put("short_id", shortId);
+        return result;
+    }
+
+    /**
      * 生成 ECH 密钥对（对齐 PHP Helper::generateEchKeyPair）
      */
     public static Map<String, String> generateEchKeyPair(String outerSni) {

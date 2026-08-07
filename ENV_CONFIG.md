@@ -92,6 +92,39 @@ export SUBSCRIBE_PATH=""  # 可选，留空则使用默认路径
 | `APP_KEY` | JWT密钥（需要与PHP项目的APP_KEY保持一致） | `base64:your-secret-key-here` | `base64:xxxxx` |
 | `SUBSCRIBE_PATH` | 订阅路径（留空则使用默认路径 `/api/v1/client/subscribe`） | 空 | `/rss_subscribe` |
 
+### 第三方订阅源（external-subscribe）
+
+| 变量名 | 说明 | 默认值 | 示例 |
+|--------|------|--------|------|
+| `SING_BOX_PATH` | 本机 sing-box 可执行文件路径 | `sing-box` | `/usr/local/bin/sing-box` |
+| `EXTERNAL_PROBE_URL` | 连通性探测 URL（不测速） | `https://www.gstatic.com/generate_204` | `https://www.gstatic.com/generate_204` |
+| `EXTERNAL_PROBE_TIMEOUT_MS` | 单节点探测超时（毫秒） | `8000` | `10000` |
+| `EXTERNAL_PROBE_CONCURRENCY` | 并发探测数 | `4` | `8` |
+| `EXTERNAL_SUBSCRIBE_CRON` | 同步 cron（Spring 6 域） | `0 */30 * * * *` | `0 0 * * * *` |
+
+部署前需手工执行 DDL：`src/main/resources/db/v2_external_subscribe.sql`，并确保 API 主机可执行 `sing-box`。
+
+### Docker Compose
+
+| 变量名 | 说明 | 默认值 |
+|--------|------|--------|
+| `API_PORT` | 宿主机映射的 API 端口 | `8080` |
+| `WEB_PORT` | 宿主机映射的前端端口 | `80` |
+| `UI_CONTEXT` | `v2board-ui` 构建上下文路径 | `../v2board-ui` |
+
+Compose **不包含** MySQL / Redis 服务。将 `.env.example` 复制为 `.env` 后填写外部数据源即可：
+
+```bash
+cp .env.example .env
+docker compose up -d --build
+```
+
+- 访问宿主机数据库/Redis：使用 `host.docker.internal`（compose 已配置 `extra_hosts`）
+- 访问远端实例：直接填写 IP 或域名，并确保网络与防火墙放行
+- API 镜像构建时已预装 `sing-box`（见根目录 `Dockerfile`），默认路径 `/usr/local/bin/sing-box`
+- 可通过构建参数覆盖版本：`docker build --build-arg SING_BOX_VERSION=1.13.16 .`
+- 容器内环境变量 `SING_BOX_PATH` 已默认指向该二进制；一般无需再改
+
 ## 注意事项
 
 1. **APP_KEY 配置**：必须与 PHP 项目的 `APP_KEY` 保持一致，否则 JWT 认证会失败

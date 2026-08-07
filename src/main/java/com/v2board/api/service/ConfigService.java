@@ -6,10 +6,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.v2board.api.mapper.SystemConfigMapper;
 import com.v2board.api.model.SystemConfig;
 import com.v2board.api.util.V2boardPhpConfigLoader;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -115,6 +118,227 @@ public class ConfigService {
         } catch (Exception ignored) {
         }
         return appUrl != null ? appUrl : "";
+    }
+
+    /**
+     * 站点订阅 URL 基址（可逗号分隔多个）。
+     * 优先 DB site.subscribe_url → site.app_url → yml；
+     * 全部为空时回退到当前 HTTP 请求的 origin（localhost / 局域网 IP / 反代 Host 均可）。
+     */
+    public String getSubscribeUrlBase() {
+        String configured = getConfiguredSubscribeUrlBase();
+        if (StringUtils.hasText(configured)) {
+            return configured;
+        }
+        return resolveCurrentRequestOrigin();
+    }
+
+    /** 仅配置层基址，不含当前请求回退。 */
+    public String getConfiguredSubscribeUrlBase() {
+        try {
+            Map<String, Object> full = getFullConfig();
+            if (full.get("site") instanceof Map<?, ?> site) {
+                String fromDb = str(site.get("subscribe_url"));
+                if (StringUtils.hasText(fromDb)) {
+                    return normalizeSubscribeBases(fromDb);
+                }
+                String fromApp = str(site.get("app_url"));
+                if (StringUtils.hasText(fromApp)) {
+                    return normalizeSubscribeBases(fromApp);
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        if (StringUtils.hasText(subscribeUrl)) {
+            return normalizeSubscribeBases(subscribeUrl.trim());
+        }
+        if (StringUtils.hasText(appUrl)) {
+            return normalizeSubscribeBases(appUrl.trim());
+        }
+        return "";
+    }
+
+    /**
+     * 从当前请求解析对外可访问的 origin，例如 http://192.168.1.10:8080。
+     * 识别 X-Forwarded-Proto / X-Forwarded-Host / Host；开启 force_https 时强制 https。
+     */
+    public String resolveCurrentRequestOrigin() {
+        try {
+            ServletRequestAttributes attrs =
+                    (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            if (attrs == null || attrs.getRequest() == null) {
+                return "";
+            }
+            return buildOriginFromRequest(attrs.getRequest());
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    private String buildOriginFromRequest(HttpServletRequest request) {
+        String scheme = firstForwardedValue(request.getHeader("X-Forwarded-Proto"));
+        if (!StringUtils.hasText(scheme)) {
+            scheme = request.getScheme();
+        }
+        if (isForceHttps()) {
+            scheme = "https";
+        }
+        if (!StringUtils.hasText(scheme)) {
+            scheme = "http";
+        }
+        scheme = scheme.toLowerCase();
+
+        String host = firstForwardedValue(request.getHeader("X-Forwarded-Host"));
+        if (!StringUtils.hasText(host)) {
+            host = request.getHeader("Host");
+        }
+        if (StringUtils.hasText(host)) {
+            return normalizeSubscribeBases(scheme + "://" + host.trim());
+        }
+
+        String serverName = request.getServerName();
+        if (!StringUtils.hasText(serverName)) {
+            return "";
+        }
+        int port = request.getServerPort();
+        String forwardedPort = firstForwardedValue(request.getHeader("X-Forwarded-Port"));
+        if (StringUtils.hasText(forwardedPort)) {
+            try {
+                port = Integer.parseInt(forwardedPort.trim());
+            } catch (NumberFormatException ignored) {
+                // keep serverPort
+            }
+        }
+
+        StringBuilder origin = new StringBuilder();
+        origin.append(scheme).append("://").append(serverName);
+        boolean defaultHttp = "http".equals(scheme) && port == 80;
+        boolean defaultHttps = "https".equals(scheme) && port == 443;
+        if (port > 0 && !defaultHttp && !defaultHttps) {
+            origin.append(':').append(port);
+        }
+        return origin.toString();
+    }
+
+    private boolean isForceHttps() {
+        Integer v = intFromGroup("site", "force_https");
+        return v != null && v == 1;
+    }
+
+    private static String firstForwardedValue(String header) {
+        if (!StringUtils.hasText(header)) {
+            return "";
+        }
+        String first = header.split(",")[0].trim();
+        return first;
+    }
+
+    /** 订阅路径，优先 DB site.subscribe_path。 */
+    public String getSubscribePath() {
+        try {
+            Map<String, Object> full = getFullConfig();
+            if (full.get("site") instanceof Map<?, ?> site) {
+                String path = str(site.get("subscribe_path"));
+                if (StringUtils.hasText(path)) {
+                    return path.startsWith("/") ? path : "/" + path;
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        if (StringUtils.hasText(subscribePath)) {
+            return subscribePath.startsWith("/") ? subscribePath : "/" + subscribePath;
+        }
+        return "/api/v1/client/subscribe";
+    }
+
+    public int getShowSubscribeMethod() {
+        Integer v = intFromGroup("subscribe", "show_subscribe_method");
+        if (v != null) {
+            return v;
+        }
+        return showSubscribeMethod != null ? showSubscribeMethod : 0;
+    }
+
+    public int getShowSubscribeExpire() {
+        Integer v = intFromGroup("subscribe", "show_subscribe_expire");
+        if (v != null) {
+            return v;
+        }
+        return showSubscribeExpire != null ? showSubscribeExpire : 5;
+    }
+
+    public int getAllowNewPeriod() {
+        Integer v = intFromGroup("subscribe", "allow_new_period");
+        if (v != null) {
+            return v;
+        }
+        return allowNewPeriod != null ? allowNewPeriod : 0;
+    }
+
+    /**
+     * 按当前系统配置生成用户订阅完整链接（DB 动态配置优先于 yml）。
+     */
+    public String buildSubscribeUrl(String token, Long userId) {
+        return com.v2board.api.util.Helper.getSubscribeUrl(
+                token,
+                userId,
+                getShowSubscribeMethod(),
+                getSubscribePath(),
+                getSubscribeUrlBase(),
+                getShowSubscribeExpire()
+        );
+    }
+
+    private Integer intFromGroup(String group, String key) {
+        try {
+            Map<String, Object> full = getFullConfig();
+            if (full.get(group) instanceof Map<?, ?> map && map.get(key) != null) {
+                Object raw = map.get(key);
+                if (raw instanceof Number n) {
+                    return n.intValue();
+                }
+                if (raw instanceof Boolean b) {
+                    return b ? 1 : 0;
+                }
+                String s = String.valueOf(raw).trim();
+                if (s.isEmpty()) {
+                    return null;
+                }
+                return Integer.parseInt(s);
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
+    private static String str(Object value) {
+        return value == null ? "" : String.valueOf(value).trim();
+    }
+
+    /** 去掉各基址尾部斜杠，避免与 path 拼接成 // */
+    private static String normalizeSubscribeBases(String bases) {
+        if (!StringUtils.hasText(bases)) {
+            return "";
+        }
+        String[] parts = bases.split(",");
+        StringBuilder sb = new StringBuilder();
+        for (String part : parts) {
+            if (part == null) {
+                continue;
+            }
+            String t = part.trim();
+            while (t.endsWith("/")) {
+                t = t.substring(0, t.length() - 1);
+            }
+            if (t.isEmpty()) {
+                continue;
+            }
+            if (sb.length() > 0) {
+                sb.append(',');
+            }
+            sb.append(t);
+        }
+        return sb.toString();
     }
 
     /**

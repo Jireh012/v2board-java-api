@@ -7,6 +7,8 @@ import com.v2board.api.mapper.*;
 import com.v2board.api.model.*;
 import com.v2board.api.service.ConfigService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -19,6 +21,8 @@ import java.util.*;
 @RestController
 @RequestMapping("/api/v1/admin/server/manage")
 public class AdminManageController {
+
+    private static final Logger logger = LoggerFactory.getLogger(AdminManageController.class);
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -161,7 +165,8 @@ public class AdminManageController {
                             shellQuote(apiHost), nodeId, shellQuote(apiKey)));
                 }
                 target.add(map);
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                logger.error("Failed to convert {} server to map: {}", type, e.getMessage(), e);
             }
         }
     }
