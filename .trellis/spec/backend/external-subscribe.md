@@ -136,3 +136,11 @@ public void syncOne(Long id) {
 3. DB status + startup/pre-sync recovery — chosen.
 
 **Decision**: Persist `running/success/failed` in MySQL; recover zombies on `ApplicationReadyEvent` and whenever a new sync acquires the process lock.
+
+---
+
+## Related: Client node naming
+
+Reachable external nodes enter subscribe output via `ExternalSubscribeNodeService.listReachableAsServerMaps()` (`type=external`).
+
+Panel vs external **display name prefixes** (`🔒 ` / `⚠️ `) and Clash/Sing-box/share-URI sync rules live in [subscribe-delivery.md](./subscribe-delivery.md) — do not only mutate `server.name`.

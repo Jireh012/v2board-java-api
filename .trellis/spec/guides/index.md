@@ -38,6 +38,7 @@ These guides help you **ask the right questions before coding**.
 - [ ] UI / command code starts casting raw payload fields directly
 - [ ] Reading PHP-written JSON columns into typed Java lists (`group_id`, etc.) → [database-guidelines.md](../backend/database-guidelines.md)
 - [ ] Persisting job status in DB while locking in memory → [external-subscribe.md](../backend/external-subscribe.md)
+- [ ] Building user `subscribe_url` or marking panel/external node names → [subscribe-delivery.md](../backend/subscribe-delivery.md)
 
 → Read [Cross-Layer Thinking Guide](./cross-layer-thinking-guide.md)
 

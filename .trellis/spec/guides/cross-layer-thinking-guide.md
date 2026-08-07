@@ -57,6 +57,8 @@ Before implementing server-admin or external-subscribe features, confirm:
 
 - [ ] PHP JSON arrays may contain **string** ids — do not force `List<Integer>` (see `../backend/database-guidelines.md`)
 - [ ] Durable `running` / in-progress flags have **startup recovery** if the worker lock is process-local (see `../backend/external-subscribe.md`)
+- [ ] Subscribe links: prefer DB `site.subscribe_url` / `app_url`, then request origin — never only boot `@Value` (see `../backend/subscribe-delivery.md`)
+- [ ] External Clash/Sing-box names must follow outer marked `server.name` (see `../backend/subscribe-delivery.md`)
 - [ ] List aggregators that convert entities with Jackson **log** conversion failures (silent catch = missing rows in UI)
 
 ---
