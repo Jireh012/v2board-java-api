@@ -9,6 +9,8 @@ import com.v2board.api.model.ExternalSubscribeNode;
 import com.v2board.api.model.ExternalSubscribeSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -43,12 +45,44 @@ public class ExternalSubscribeSyncService {
         this.probeService = probeService;
     }
 
+    /**
+     * 进程内同步任务在重启后必然中断，但 DB 可能仍残留 running。
+     * 启动时清理这些僵尸状态，避免前端一直显示「同步中」。
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    public void onApplicationReady() {
+        int n = recoverInterruptedSyncs("服务重启，同步中断");
+        if (n > 0) {
+            logger.warn("Recovered {} interrupted external-subscribe sync state(s) after startup", n);
+        }
+    }
+
+    /**
+     * 将 last_sync_status=running 的记录标记为 failed。
+     * 单实例下拿到内存锁后，库中残留的 running 一定属于已死亡的任务。
+     */
+    public int recoverInterruptedSyncs(String message) {
+        List<ExternalSubscribeSource> stuck = sourceMapper.selectList(
+                new LambdaQueryWrapper<ExternalSubscribeSource>()
+                        .eq(ExternalSubscribeSource::getLastSyncStatus, "running"));
+        if (stuck.isEmpty()) {
+            return 0;
+        }
+        long now = System.currentTimeMillis() / 1000;
+        for (ExternalSubscribeSource source : stuck) {
+            finish(source, "failed", truncate(message, 1000), now);
+            logger.warn("Marked interrupted sync as failed: sourceId={}", source.getId());
+        }
+        return stuck.size();
+    }
+
     public void syncAll() {
         if (!running.compareAndSet(false, true)) {
             logger.info("External subscribe sync already running, skip");
             return;
         }
         try {
+            recoverInterruptedSyncs("上次同步异常中断");
             List<ExternalSubscribeSource> sources = sourceMapper.selectList(
                     new LambdaQueryWrapper<ExternalSubscribeSource>().eq(ExternalSubscribeSource::getEnable, 1));
             for (ExternalSubscribeSource source : sources) {
@@ -68,6 +102,11 @@ public class ExternalSubscribeSyncService {
             throw new BusinessException(500, "同步任务正在进行中，请稍后再试");
         }
         try {
+            recoverInterruptedSyncs("上次同步异常中断");
+            source = sourceMapper.selectById(id);
+            if (source == null) {
+                throw new BusinessException(500, "订阅源不存在");
+            }
             syncSourceInternal(source);
         } finally {
             running.set(false);
