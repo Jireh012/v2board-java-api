@@ -17,6 +17,7 @@ Shares PHP `v2_user` / `v2_ticket` tables. JSON is SNAKE_CASE. User traffic on t
 | `balance`, `commission_balance` | cents | yuan `/100` |
 | `transfer_enable`, `u`, `d` | **bytes** | GB `/1073741824` on display; `*1073741824` on save |
 | `expired_at`, `created_at`, … | unix seconds | custom DateTimePicker or local string |
+| `t` | unix seconds \| null/0 | 最近使用（节点流量上报写入）；列表「最近使用」列 |
 | `remarks` | text nullable | list column + edit textarea |
 | `is_admin`, `is_staff`, `banned` | 0/1 | toggles / selects |
 
@@ -48,7 +49,9 @@ DB: `v2_user.remarks` TEXT NULL; `v2_user.is_staff` TINYINT.
 | `remarks` | string \| null — always include in `userToMap`; update accepts key even if `""` |
 | `is_staff` | 0 \| 1 |
 | filter key `remarks` | condition `模糊` → SQL LIKE |
-| filter keys | `id`, `email`, `plan_id`, `transfer_enable`, `d`, `invite_user_id`, `invite_by_email`, `banned`, `uuid`, `token`, `remarks` |
+| filter key `expired` | virtual; see scenario below |
+| filter keys | `id`, `email`, `plan_id`, `transfer_enable`, `d`, `invite_user_id`, `invite_by_email`, `banned`, `uuid`, `token`, `remarks`, `expired` |
+| `sort` / `sort_type` | see scenario below |
 
 List row also exposes `plan_name`, `total_used` (= u+d bytes).
 
@@ -90,6 +93,75 @@ m.put("is_staff", u.getIsStaff());
 if (params.containsKey("remarks")) {
     Object r = params.get("remarks");
     user.setRemarks(r == null ? null : String.valueOf(r));
+}
+```
+
+---
+
+## Scenario: List expired filter + total_used sort
+
+### 1. Scope / Trigger
+
+- Trigger: Admin UI needs 已过期/未过期筛选 and 已用流量排序; `total_used` is not a DB column.
+
+### 2. Signatures
+
+```
+GET /api/v1/admin/user/fetch?current&pageSize&sort&sort_type&filter[i][key|condition|value]
+```
+
+### 3. Contracts
+
+| Item | Contract |
+|------|----------|
+| `sort=total_used` | `ORDER BY (IFNULL(u,0)+IFNULL(d,0)) ASC\|DESC` — fixed expression only |
+| `sort=expired_at` | column `orderBy` on `expired_at` (null = 长期；MySQL NULL 排序规则) |
+| other `sort` | must match `^[a-zA-Z_][a-zA-Z0-9_]*$` or fall back to `created_at` |
+| `sort_type` | `ASC` \| `DESC`; invalid → `DESC` |
+| default sort | `created_at` + `DESC` |
+| filter `expired` + `=` + `1` | `expired_at IS NOT NULL AND expired_at < now` (unix sec) |
+| filter `expired` + `=` + `0` | `expired_at IS NULL OR expired_at >= now` (长期 = 未过期) |
+| other `expired` condition/value | ignore filter |
+| `selectCount` | before attaching `ORDER BY` / `LIMIT` via `wrapper.last` |
+
+UI (`AdminUsersView`): expired quick tabs; traffic header toggles `total_used` DESC↔ASC; clear resets to `created_at DESC` + expired all.
+
+### 4. Validation & Error Matrix
+
+| Condition | Behavior |
+|-----------|----------|
+| illegal sort identifier | coerce to `created_at` |
+| `expired` value not `0`/`1` | skip that filter |
+| `pageSize < 10` | coerce to 10 |
+
+### 5. Good / Base / Bad Cases
+
+- **Good**: `expired=0` includes `expired_at=null`; `sort=total_used&sort_type=DESC` orders by u+d.
+- **Base**: No expired filter / default sort → same as pre-feature.
+- **Bad**: `sort=u);DROP TABLE` → rejected by identifier regex, not interpolated into SQL.
+
+### 6. Tests Required
+
+- fetch with `expired=1` excludes null `expired_at` and future expiry.
+- fetch with `expired=0` includes null and `expired_at >= now`.
+- `sort=total_used` order matches `(u+d)`; `total` unchanged by sort.
+- remarks `模糊` still LIKE-matches.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```java
+wrapper.orderBy(true, asc, sort); // sort=total_used → unknown column / injection risk
+```
+
+#### Correct
+
+```java
+if ("total_used".equals(sort)) {
+    wrapper.last("ORDER BY (IFNULL(u,0)+IFNULL(d,0)) " + dir + " LIMIT ...");
+} else if (sort.matches("^[a-zA-Z_][a-zA-Z0-9_]*$")) {
+    wrapper.orderBy(true, asc, sort);
 }
 ```
 

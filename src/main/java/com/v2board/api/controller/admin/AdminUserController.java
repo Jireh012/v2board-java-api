@@ -36,7 +36,7 @@ public class AdminUserController {
 
     private static final Set<String> ALLOWED_FILTER_KEYS = Set.of(
             "id", "email", "plan_id", "transfer_enable", "d", "invite_user_id",
-            "invite_by_email", "banned", "uuid", "token", "remarks"
+            "invite_by_email", "banned", "uuid", "token", "remarks", "expired"
     );
     private static final Set<String> ALLOWED_CONDITIONS = Set.of(
             ">", "<", "=", ">=", "<=", "模糊", "!="
@@ -52,15 +52,28 @@ public class AdminUserController {
             @RequestParam(value = "sort_type", defaultValue = "DESC") String sortType) {
         if (pageSize < 10) pageSize = 10;
         if (!sortType.equals("ASC") && !sortType.equals("DESC")) sortType = "DESC";
+        // Identifier-only: block ORDER BY injection while keeping legacy column-name sorts.
+        if (sort == null || !sort.matches("^[a-zA-Z_][a-zA-Z0-9_]*$")) {
+            sort = "created_at";
+        }
 
-        QueryWrapper<User> wrapper = new QueryWrapper<>();
-        wrapper.orderBy(true, "ASC".equals(sortType), sort);
-        applyFilters(request, wrapper);
+        // Count wrapper must not carry ORDER BY (total_used is not a DB column).
+        QueryWrapper<User> countWrapper = new QueryWrapper<>();
+        applyFilters(request, countWrapper);
+        long total = userMapper.selectCount(countWrapper);
 
-        long total = userMapper.selectCount(wrapper);
+        QueryWrapper<User> listWrapper = new QueryWrapper<>();
+        applyFilters(request, listWrapper);
         int offset = (current - 1) * pageSize;
-        wrapper.last("LIMIT " + offset + "," + pageSize);
-        List<User> users = userMapper.selectList(wrapper);
+        if ("total_used".equals(sort)) {
+            // Fixed expression only — never interpolate user-provided column names into ORDER BY.
+            String dir = "ASC".equals(sortType) ? "ASC" : "DESC";
+            listWrapper.last("ORDER BY (IFNULL(u,0)+IFNULL(d,0)) " + dir + " LIMIT " + offset + "," + pageSize);
+        } else {
+            listWrapper.orderBy(true, "ASC".equals(sortType), sort);
+            listWrapper.last("LIMIT " + offset + "," + pageSize);
+        }
+        List<User> users = userMapper.selectList(listWrapper);
 
         List<Plan> plans = planMapper.selectList(new LambdaQueryWrapper<>());
         Map<Long, String> planNameMap = new HashMap<>();
@@ -366,6 +379,18 @@ public class AdminUserController {
             }
             if ("plan_id".equals(key) && "null".equals(value)) {
                 wrapper.isNull("plan_id");
+                continue;
+            }
+            if ("expired".equals(key)) {
+                if (!"=".equals(condition)) continue;
+                long now = System.currentTimeMillis() / 1000;
+                if ("1".equals(value)) {
+                    // 已过期：有到期时间且早于当前
+                    wrapper.isNotNull("expired_at").lt("expired_at", now);
+                } else if ("0".equals(value)) {
+                    // 未过期：长期有效 或 未到到期日
+                    wrapper.and(w -> w.isNull("expired_at").or().ge("expired_at", now));
+                }
                 continue;
             }
             if ("模糊".equals(condition)) {
