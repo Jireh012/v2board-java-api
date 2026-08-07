@@ -1,19 +1,22 @@
 package com.v2board.api.service;
 
-import com.v2board.api.model.User;
+import com.v2board.api.mapper.UserLoginLogMapper;
 import com.v2board.api.mapper.UserMapper;
+import com.v2board.api.model.User;
+import com.v2board.api.model.UserLoginLog;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
+import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import javax.crypto.SecretKey;
-import jakarta.servlet.http.HttpServletRequest;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.HashMap;
@@ -27,6 +30,9 @@ public class AuthService {
     
     @Autowired
     private UserMapper userMapper;
+
+    @Autowired
+    private UserLoginLogMapper userLoginLogMapper;
     
     @Autowired
     private CacheService cacheService;
@@ -64,6 +70,7 @@ public class AuthService {
 
         // 写入会话缓存，key 形如 USER_SESSIONS_1
         addSession(user.getId(), session, request, jwt);
+        recordLogin(user, request);
 
         Map<String, Object> result = new HashMap<>();
         result.put("token", user.getToken());
@@ -72,6 +79,52 @@ public class AuthService {
         result.put("is_admin", isAdmin);
         result.put("auth_data", jwt);
         return result;
+    }
+
+    /**
+     * 持久化登录记录 + 更新 last_login_at。失败不影响登录本身。
+     */
+    private void recordLogin(User user, HttpServletRequest request) {
+        long now = System.currentTimeMillis() / 1000;
+        try {
+            User patch = new User();
+            patch.setId(user.getId());
+            patch.setLastLoginAt(now);
+            patch.setUpdatedAt(now);
+            userMapper.updateById(patch);
+            user.setLastLoginAt(now);
+        } catch (Exception e) {
+            logger.warn("Failed to update last_login_at for user {}", user.getId(), e);
+        }
+        try {
+            UserLoginLog log = new UserLoginLog();
+            log.setUserId(user.getId());
+            log.setIp(resolveClientIp(request));
+            log.setUserAgent(truncate(request != null ? request.getHeader("User-Agent") : null, 512));
+            log.setCreatedAt(now);
+            userLoginLogMapper.insert(log);
+        } catch (Exception e) {
+            logger.warn("Failed to insert login log for user {} (table v2_user_login_log may be missing)",
+                    user.getId(), e);
+        }
+    }
+
+    private static String resolveClientIp(HttpServletRequest request) {
+        if (request == null) return "";
+        String xff = request.getHeader("X-Forwarded-For");
+        if (StringUtils.hasText(xff)) {
+            String first = xff.split(",")[0].trim();
+            if (StringUtils.hasText(first)) return truncate(first, 64);
+        }
+        String realIp = request.getHeader("X-Real-IP");
+        if (StringUtils.hasText(realIp)) return truncate(realIp.trim(), 64);
+        String remote = request.getRemoteAddr();
+        return remote != null ? truncate(remote, 64) : "";
+    }
+
+    private static String truncate(String s, int max) {
+        if (s == null) return null;
+        return s.length() <= max ? s : s.substring(0, max);
     }
     
     /**

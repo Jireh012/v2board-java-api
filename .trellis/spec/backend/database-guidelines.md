@@ -116,6 +116,17 @@ try {
 
 ---
 
+## Gotcha: Money vs traffic units
+
+| Concept | Unit in `v2_*` |
+|---------|----------------|
+| Order / coupon amount / giftcard balance | **Cents** |
+| Plan `transfer_enable` | **GB** (user table uses bytes after assign) |
+
+See [admin-commerce.md](./admin-commerce.md) for API contracts.
+
+---
+
 ## Common Mistakes
 
 ### Common Mistake: Strict Java types for PHP JSON

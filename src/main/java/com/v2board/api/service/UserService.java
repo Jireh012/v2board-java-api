@@ -204,12 +204,16 @@ public class UserService {
                             stat.setUserId(userId);
                             stat.setServerRate(rate);
                             stat.setRecordAt(today);
+                            stat.setRecordType("d");
                             stat.setU(incU);
                             stat.setD(incD);
                             stat.setCreatedAt(nowTs);
                             stat.setUpdatedAt(nowTs);
                             statUserMapper.insert(stat);
                         } else {
+                            if (stat.getRecordType() == null || stat.getRecordType().isBlank()) {
+                                stat.setRecordType("d");
+                            }
                             stat.setU(stat.getU() + incU);
                             stat.setD(stat.getD() + incD);
                             stat.setUpdatedAt(nowTs);

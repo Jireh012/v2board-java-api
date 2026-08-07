@@ -74,10 +74,13 @@ public class AdminTicketController {
             wrapper.in(Ticket::getReplyStatus, replyStatus);
         }
         if (StringUtils.hasText(email)) {
-            User user = userMapper.selectOne(
-                    new LambdaQueryWrapper<User>().eq(User::getEmail, email));
-            if (user != null) {
-                wrapper.eq(Ticket::getUserId, user.getId());
+            // 邮箱模糊匹配对应用户，再按 user_id IN 过滤
+            List<User> users = userMapper.selectList(
+                    new LambdaQueryWrapper<User>().like(User::getEmail, email.trim()));
+            if (users.isEmpty()) {
+                wrapper.eq(Ticket::getUserId, -1L);
+            } else {
+                wrapper.in(Ticket::getUserId, users.stream().map(User::getId).toList());
             }
         }
         Page<Ticket> page = new Page<>(current, pageSize);

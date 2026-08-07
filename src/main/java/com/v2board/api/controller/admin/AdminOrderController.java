@@ -74,6 +74,21 @@ public class AdminOrderController {
 
         Map<String, Object> data = orderToMap(order);
 
+        if (order.getPlanId() != null) {
+            Plan plan = planMapper.selectById(order.getPlanId());
+            if (plan != null) {
+                data.put("plan_name", plan.getName());
+            }
+        }
+
+        if (order.getUserId() != null) {
+            User user = userMapper.selectById(order.getUserId());
+            if (user != null) {
+                data.put("email", user.getEmail());
+                data.put("remarks", user.getRemarks());
+            }
+        }
+
         // 查询佣金日志
         List<CommissionLog> commissionLogs = commissionLogMapper.selectList(
                 new LambdaQueryWrapper<CommissionLog>().eq(CommissionLog::getTradeNo, order.getTradeNo())

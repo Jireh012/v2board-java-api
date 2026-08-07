@@ -66,6 +66,8 @@ void syncOne(Long id);                     // acquire lock → recover → sync 
 | `last_sync_message` | string \| null | Truncated to ≤1000 chars on write |
 | `last_sync_at` | number \| null | Unix seconds |
 
+> **UI**: Admin「上次同步」must show **status + `last_sync_at` time + message** together. Do not use `message || fmtTime(at)` — when message exists the timestamp disappears.
+
 ### 4. Validation & Error Matrix
 
 | Condition | Result |

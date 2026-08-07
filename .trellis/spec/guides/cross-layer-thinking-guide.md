@@ -60,6 +60,11 @@ Before implementing server-admin or external-subscribe features, confirm:
 - [ ] Subscribe links: prefer DB `site.subscribe_url` / `app_url`, then request origin — never only boot `@Value` (see `../backend/subscribe-delivery.md`)
 - [ ] External Clash/Sing-box names must follow outer marked `server.name` (see `../backend/subscribe-delivery.md`)
 - [ ] List aggregators that convert entities with Jackson **log** conversion failures (silent catch = missing rows in UI)
+- [ ] Admin commerce: money in **cents**, plan traffic in **GB**, coupon type 1≠percent (see `../backend/admin-commerce.md`)
+- [ ] Order detail joins user `email`/`remarks` + `plan_name` (list rows need not include email)
+- [ ] Admin user: `remarks`/`is_staff` mapped; user traffic **bytes** vs plan **GB** (see `../backend/admin-user.md`)
+- [ ] Ticket reply is form-urlencoded `@RequestParam`, not JSON body
+- [ ] Clearing nullable admin fields requires `LambdaUpdateWrapper`, not bare `updateById`
 
 ---
 

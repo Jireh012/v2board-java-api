@@ -31,11 +31,12 @@ public class AdminUserController {
     @Autowired private InviteCodeMapper inviteCodeMapper;
     @Autowired private TicketMapper ticketMapper;
     @Autowired private TicketMessageMapper ticketMessageMapper;
+    @Autowired private UserLoginLogMapper userLoginLogMapper;
     @Autowired private ConfigService configService;
 
     private static final Set<String> ALLOWED_FILTER_KEYS = Set.of(
             "id", "email", "plan_id", "transfer_enable", "d", "invite_user_id",
-            "invite_by_email", "banned", "uuid", "token"
+            "invite_by_email", "banned", "uuid", "token", "remarks"
     );
     private static final Set<String> ALLOWED_CONDITIONS = Set.of(
             ">", "<", "=", ">=", "<=", "模糊", "!="
@@ -163,8 +164,13 @@ public class AdminUserController {
         setIfPresent(params, "expired_at", v -> user.setExpiredAt(toLong(v)));
         setIfPresent(params, "banned", v -> user.setBanned(toInt(v)));
         setIfPresent(params, "is_admin", v -> user.setIsAdmin(toInt(v)));
+        setIfPresent(params, "is_staff", v -> user.setIsStaff(toInt(v)));
         setIfPresent(params, "u", v -> user.setU(toLong(v)));
         setIfPresent(params, "d", v -> user.setD(toLong(v)));
+        if (params.containsKey("remarks")) {
+            Object r = params.get("remarks");
+            user.setRemarks(r == null ? null : String.valueOf(r));
+        }
 
         user.setUpdatedAt(System.currentTimeMillis() / 1000);
         if (userMapper.updateById(user) <= 0) {
@@ -252,8 +258,44 @@ public class AdminUserController {
             ticketMessageMapper.delete(new LambdaQueryWrapper<TicketMessage>().eq(TicketMessage::getTicketId, t.getId()));
         }
         ticketMapper.delete(new LambdaQueryWrapper<Ticket>().eq(Ticket::getUserId, id));
+        userLoginLogMapper.delete(new LambdaQueryWrapper<UserLoginLog>().eq(UserLoginLog::getUserId, id));
         userMapper.deleteById(id);
         return ApiResponse.success(true);
+    }
+
+    /**
+     * 用户登录记录分页，供管理端「TA 的登录」。
+     */
+    @GetMapping("/getLoginLog")
+    public ApiResponse<Map<String, Object>> getLoginLog(
+            @RequestParam("user_id") Long userId,
+            @RequestParam(value = "current", defaultValue = "1") int current,
+            @RequestParam(value = "pageSize", defaultValue = "10") int pageSize) {
+        if (userId == null) {
+            throw new BusinessException(500, "参数错误");
+        }
+        if (current < 1) current = 1;
+        if (pageSize < 10) pageSize = 10;
+        if (pageSize > 100) pageSize = 100;
+
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new BusinessException(500, "用户不存在");
+        }
+
+        LambdaQueryWrapper<UserLoginLog> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(UserLoginLog::getUserId, userId).orderByDesc(UserLoginLog::getCreatedAt);
+        long total = userLoginLogMapper.selectCount(wrapper);
+        int offset = (current - 1) * pageSize;
+        wrapper.last("LIMIT " + offset + "," + pageSize);
+        List<UserLoginLog> records = userLoginLogMapper.selectList(wrapper);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("data", records);
+        result.put("total", total);
+        result.put("email", user.getEmail());
+        result.put("last_login_at", user.getLastLoginAt());
+        return ApiResponse.success(result);
     }
 
     // ==================== resetSecret ====================
@@ -358,6 +400,7 @@ public class AdminUserController {
         m.put("device_limit", u.getDeviceLimit());
         m.put("banned", u.getBanned());
         m.put("is_admin", u.getIsAdmin());
+        m.put("is_staff", u.getIsStaff());
         m.put("balance", u.getBalance());
         m.put("commission_balance", u.getCommissionBalance());
         m.put("commission_type", u.getCommissionType());
@@ -367,6 +410,8 @@ public class AdminUserController {
         m.put("invite_user_id", u.getInviteUserId());
         m.put("telegram_id", u.getTelegramId());
         m.put("t", u.getT());
+        m.put("remarks", u.getRemarks());
+        m.put("last_login_at", u.getLastLoginAt());
         m.put("created_at", u.getCreatedAt());
         m.put("updated_at", u.getUpdatedAt());
         return m;

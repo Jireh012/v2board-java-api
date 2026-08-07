@@ -146,22 +146,66 @@ public class AdminStatController {
     }
 
     /**
-     * GET /api/v1/admin/stat/getStatUser — 用户流量统计详情（分页）
+     * GET /api/v1/admin/stat/getStatUser — 用户流量按天统计（分页）。
+     * 同一天多倍率行合并为一条：u/d 求和；倍率取流量加权平均（仅一条时即原值）。
      */
     @GetMapping("/getStatUser")
     public ApiResponse<Map<String, Object>> getStatUser(
             @RequestParam("user_id") Long userId,
             @RequestParam(value = "current", defaultValue = "1") int current,
             @RequestParam(value = "pageSize", defaultValue = "10") int pageSize) {
+        if (current < 1) current = 1;
         if (pageSize < 10) pageSize = 10;
-        LambdaQueryWrapper<StatUser> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(StatUser::getUserId, userId).orderByDesc(StatUser::getRecordAt);
-        long total = statUserMapper.selectCount(wrapper);
-        int offset = (current - 1) * pageSize;
-        wrapper.last("LIMIT " + offset + "," + pageSize);
-        List<StatUser> records = statUserMapper.selectList(wrapper);
+
+        List<StatUser> raw = statUserMapper.selectList(
+                new LambdaQueryWrapper<StatUser>()
+                        .eq(StatUser::getUserId, userId)
+                        .orderByDesc(StatUser::getRecordAt)
+        );
+
+        // LinkedHashMap keeps insertion order; re-sort by day desc after merge
+        Map<Long, long[]> dayBytes = new HashMap<>(); // [u, d]
+        Map<Long, Double> dayWeightedRateNum = new HashMap<>();
+        Map<Long, Long> dayWeightedRateDen = new HashMap<>();
+
+        for (StatUser s : raw) {
+            if (s.getRecordAt() == null) continue;
+            long day = s.getRecordAt();
+            long u = s.getU() != null ? s.getU() : 0L;
+            long d = s.getD() != null ? s.getD() : 0L;
+            long[] bytes = dayBytes.computeIfAbsent(day, k -> new long[2]);
+            bytes[0] += u;
+            bytes[1] += d;
+            double rate = s.getServerRate() != null ? s.getServerRate() : 1.0;
+            long traffic = u + d;
+            dayWeightedRateNum.merge(day, rate * Math.max(traffic, 1L), Double::sum);
+            dayWeightedRateDen.merge(day, Math.max(traffic, 1L), Long::sum);
+        }
+
+        List<Long> days = new ArrayList<>(dayBytes.keySet());
+        days.sort(Comparator.reverseOrder());
+
+        int total = days.size();
+        int from = Math.min((current - 1) * pageSize, total);
+        int to = Math.min(from + pageSize, total);
+        List<Map<String, Object>> page = new ArrayList<>();
+        for (int i = from; i < to; i++) {
+            Long day = days.get(i);
+            long[] bytes = dayBytes.get(day);
+            long den = dayWeightedRateDen.getOrDefault(day, 1L);
+            double rate = dayWeightedRateNum.getOrDefault(day, (double) den) / den;
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("record_at", day);
+            row.put("u", bytes[0]);
+            row.put("d", bytes[1]);
+            row.put("server_rate", Math.round(rate * 100.0) / 100.0);
+            row.put("record_type", "d");
+            row.put("user_id", userId);
+            page.add(row);
+        }
+
         Map<String, Object> result = new HashMap<>();
-        result.put("data", records);
+        result.put("data", page);
         result.put("total", total);
         return ApiResponse.success(result);
     }

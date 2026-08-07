@@ -70,14 +70,19 @@ public class AdminGroupController {
         List<Map<String, Object>> result = new ArrayList<>();
         for (ServerGroup g : groups) {
             Map<String, Object> map = groupToMap(g);
+            int gid = g.getId().intValue();
             // user_count
             LambdaQueryWrapper<User> uw = new LambdaQueryWrapper<>();
-            uw.eq(User::getGroupId, g.getId().intValue());
+            uw.eq(User::getGroupId, gid);
             map.put("user_count", userMapper.selectCount(uw));
+            // plan_count
+            LambdaQueryWrapper<Plan> pw = new LambdaQueryWrapper<>();
+            pw.eq(Plan::getGroupId, gid);
+            map.put("plan_count", planMapper.selectCount(pw));
             // server_count
             long serverCount = 0;
             for (List<Integer> gids : allGroupIds) {
-                if (gids != null && gids.contains(g.getId().intValue())) {
+                if (gids != null && gids.contains(gid)) {
                     serverCount++;
                 }
             }
@@ -152,21 +157,9 @@ public class AdminGroupController {
         return map;
     }
 
-    @SuppressWarnings("unchecked")
     private void collectGroupIds(List<List<Integer>> target, List<?> servers, String type) {
         for (Object s : servers) {
-            List<Integer> gids = null;
-            try {
-                java.lang.reflect.Method m = s.getClass().getMethod("getGroupId");
-                Object val = m.invoke(s);
-                if (val instanceof List) {
-                    gids = new ArrayList<>();
-                    for (Object item : (List<?>) val) {
-                        if (item instanceof Number) gids.add(((Number) item).intValue());
-                    }
-                }
-            } catch (Exception ignored) {}
-            target.add(gids);
+            target.add(readServerGroupIds(s));
         }
     }
 
@@ -181,19 +174,71 @@ public class AdminGroupController {
                 || isGroupInList(serverV2nodeMapper.selectList(null), gid);
     }
 
-    @SuppressWarnings("unchecked")
     private boolean isGroupInList(List<?> servers, int gid) {
         for (Object s : servers) {
-            try {
-                java.lang.reflect.Method m = s.getClass().getMethod("getGroupId");
-                Object val = m.invoke(s);
-                if (val instanceof List) {
-                    for (Object item : (List<?>) val) {
-                        if (item instanceof Number && ((Number) item).intValue() == gid) return true;
-                    }
-                }
-            } catch (Exception ignored) {}
+            List<Integer> gids = readServerGroupIds(s);
+            if (gids != null && gids.contains(gid)) {
+                return true;
+            }
         }
         return false;
+    }
+
+    /**
+     * 读取节点 group_id。库中多为 JSON 数组，元素可能是数字或字符串（如 ["1"]）。
+     */
+    private List<Integer> readServerGroupIds(Object server) {
+        if (server == null) {
+            return null;
+        }
+        try {
+            Object val = server.getClass().getMethod("getGroupId").invoke(server);
+            return normalizeGroupIds(val);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private List<Integer> normalizeGroupIds(Object val) {
+        if (val == null) {
+            return null;
+        }
+        List<Integer> gids = new ArrayList<>();
+        if (val instanceof List<?> list) {
+            for (Object item : list) {
+                Integer id = toGroupId(item);
+                if (id != null) {
+                    gids.add(id);
+                }
+            }
+            return gids;
+        }
+        Integer single = toGroupId(val);
+        if (single != null) {
+            gids.add(single);
+            return gids;
+        }
+        return null;
+    }
+
+    private Integer toGroupId(Object item) {
+        if (item == null) {
+            return null;
+        }
+        if (item instanceof Number num) {
+            return num.intValue();
+        }
+        if (item instanceof String str) {
+            String s = str.trim();
+            if (s.isEmpty()) {
+                return null;
+            }
+            try {
+                return Integer.parseInt(s);
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
     }
 }

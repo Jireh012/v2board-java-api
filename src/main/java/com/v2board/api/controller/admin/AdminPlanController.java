@@ -1,6 +1,7 @@
 package com.v2board.api.controller.admin;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.v2board.api.common.ApiResponse;
 import com.v2board.api.common.BusinessException;
 import com.v2board.api.mapper.OrderMapper;
@@ -62,6 +63,17 @@ public class AdminPlanController {
     @PostMapping("/save")
     public ApiResponse<Boolean> save(@RequestBody Plan body,
             @RequestParam(value = "force_update", required = false, defaultValue = "false") boolean forceUpdate) {
+        if (body.getName() == null || body.getName().trim().isEmpty()) {
+            throw new BusinessException(500, "套餐名称不能为空");
+        }
+        if (body.getGroupId() == null) {
+            throw new BusinessException(500, "权限组不能为空");
+        }
+        if (body.getTransferEnable() == null) {
+            throw new BusinessException(500, "流量不能为空");
+        }
+
+        long now = System.currentTimeMillis() / 1000;
         if (body.getId() != null) {
             Plan plan = planMapper.selectById(body.getId());
             if (plan == null) {
@@ -73,21 +85,62 @@ public class AdminPlanController {
                 List<User> users = userMapper.selectList(wrapper);
                 for (User u : users) {
                     u.setGroupId(body.getGroupId());
-                    if (body.getTransferEnable() != null) {
-                        u.setTransferEnable(body.getTransferEnable() * 1073741824L);
-                    }
-                    // speed_limit 字段可在 User 模型扩展后一并更新
+                    u.setTransferEnable(body.getTransferEnable() * 1073741824L);
+                    u.setSpeedLimit(body.getSpeedLimit());
+                    u.setDeviceLimit(body.getDeviceLimit());
                     userMapper.updateById(u);
                 }
             }
-            body.setCreatedAt(plan.getCreatedAt());
-            planMapper.updateById(body);
+            LambdaUpdateWrapper<Plan> uw = new LambdaUpdateWrapper<>();
+            uw.eq(Plan::getId, plan.getId())
+                    .set(Plan::getName, body.getName().trim())
+                    .set(Plan::getGroupId, body.getGroupId())
+                    .set(Plan::getTransferEnable, body.getTransferEnable())
+                    .set(Plan::getContent, body.getContent())
+                    .set(Plan::getSpeedLimit, body.getSpeedLimit())
+                    .set(Plan::getDeviceLimit, body.getDeviceLimit())
+                    .set(Plan::getCapacityLimit, body.getCapacityLimit())
+                    .set(Plan::getResetTrafficMethod, body.getResetTrafficMethod())
+                    .set(Plan::getMonthPrice, body.getMonthPrice())
+                    .set(Plan::getQuarterPrice, body.getQuarterPrice())
+                    .set(Plan::getHalfYearPrice, body.getHalfYearPrice())
+                    .set(Plan::getYearPrice, body.getYearPrice())
+                    .set(Plan::getTwoYearPrice, body.getTwoYearPrice())
+                    .set(Plan::getThreeYearPrice, body.getThreeYearPrice())
+                    .set(Plan::getOnetimePrice, body.getOnetimePrice())
+                    .set(Plan::getResetPrice, body.getResetPrice())
+                    .set(Plan::getShow, body.getShow() != null ? body.getShow() : plan.getShow())
+                    .set(Plan::getRenew, body.getRenew() != null ? body.getRenew() : plan.getRenew())
+                    .set(Plan::getSort, body.getSort() != null ? body.getSort() : plan.getSort())
+                    .set(Plan::getUpdatedAt, now);
+            if (planMapper.update(null, uw) <= 0) {
+                throw new BusinessException(500, "保存失败");
+            }
             return ApiResponse.success(true);
         }
-        long now = System.currentTimeMillis() / 1000;
-        body.setCreatedAt(now);
-        body.setUpdatedAt(now);
-        if (planMapper.insert(body) <= 0) {
+        Plan plan = new Plan();
+        plan.setName(body.getName().trim());
+        plan.setGroupId(body.getGroupId());
+        plan.setTransferEnable(body.getTransferEnable());
+        plan.setContent(body.getContent());
+        plan.setSpeedLimit(body.getSpeedLimit());
+        plan.setDeviceLimit(body.getDeviceLimit());
+        plan.setCapacityLimit(body.getCapacityLimit());
+        plan.setResetTrafficMethod(body.getResetTrafficMethod());
+        plan.setMonthPrice(body.getMonthPrice());
+        plan.setQuarterPrice(body.getQuarterPrice());
+        plan.setHalfYearPrice(body.getHalfYearPrice());
+        plan.setYearPrice(body.getYearPrice());
+        plan.setTwoYearPrice(body.getTwoYearPrice());
+        plan.setThreeYearPrice(body.getThreeYearPrice());
+        plan.setOnetimePrice(body.getOnetimePrice());
+        plan.setResetPrice(body.getResetPrice());
+        plan.setShow(body.getShow() != null ? body.getShow() : 0);
+        plan.setRenew(body.getRenew() != null ? body.getRenew() : 1);
+        plan.setSort(body.getSort());
+        plan.setCreatedAt(now);
+        plan.setUpdatedAt(now);
+        if (planMapper.insert(plan) <= 0) {
             throw new BusinessException(500, "创建失败");
         }
         return ApiResponse.success(true);
