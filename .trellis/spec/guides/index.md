@@ -36,6 +36,8 @@ These guides help you **ask the right questions before coding**.
 - [ ] You're not sure where to put some logic
 - [ ] You are adding an event kind, JSONL record, RPC payload, or config field
 - [ ] UI / command code starts casting raw payload fields directly
+- [ ] Reading PHP-written JSON columns into typed Java lists (`group_id`, etc.) → [database-guidelines.md](../backend/database-guidelines.md)
+- [ ] Persisting job status in DB while locking in memory → [external-subscribe.md](../backend/external-subscribe.md)
 
 → Read [Cross-Layer Thinking Guide](./cross-layer-thinking-guide.md)
 

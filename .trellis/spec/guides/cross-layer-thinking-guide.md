@@ -51,13 +51,23 @@ For each boundary:
 
 ---
 
+## Project-Specific Boundary Checks
+
+Before implementing server-admin or external-subscribe features, confirm:
+
+- [ ] PHP JSON arrays may contain **string** ids — do not force `List<Integer>` (see `../backend/database-guidelines.md`)
+- [ ] Durable `running` / in-progress flags have **startup recovery** if the worker lock is process-local (see `../backend/external-subscribe.md`)
+- [ ] List aggregators that convert entities with Jackson **log** conversion failures (silent catch = missing rows in UI)
+
+---
+
 ## Common Cross-Layer Mistakes
 
 ### Mistake 1: Implicit Format Assumptions
 
-**Bad**: Assuming date format without checking
+**Bad**: Assuming date format without checking; assuming JSON number arrays are always numeric
 
-**Good**: Explicit format conversion at boundaries
+**Good**: Explicit format conversion at boundaries; use loose types (`List<Object>`) for PHP-compatible JSON
 
 ### Mistake 2: Scattered Validation
 
