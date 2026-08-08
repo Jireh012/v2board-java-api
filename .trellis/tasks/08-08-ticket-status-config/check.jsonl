@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/admin-user.md", "reason": "ticket.ticket_status gate contract for save/withdraw/getSubscribe and TicketView hide-on-2"}
+{"file": ".trellis/tasks/08-08-ticket-status-config/prd.md", "reason": "AC1–AC4 acceptance criteria for DB-backed ticket open policy"}
+{"file": ".trellis/tasks/08-08-ticket-status-config/design.md", "reason": "ConfigService getter, controller wiring, UI hide create"}
+{"file": ".trellis/tasks/08-08-ticket-status-config/implement.md", "reason": "execution checklist for getter/tests/UI/spec"}

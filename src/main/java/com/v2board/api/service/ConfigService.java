@@ -307,6 +307,18 @@ public class ConfigService {
         return allowNewPeriod != null ? allowNewPeriod : 0;
     }
 
+    /**
+     * 工单开单策略：0 全部可用；1 仅有已完成/折抵订单用户；2 禁止开单。
+     * 读 DB {@code ticket.ticket_status}，缺省回落 yml {@code v2board.ticket-status}。
+     */
+    public int getTicketStatus() {
+        Integer v = intFromGroup("ticket", "ticket_status");
+        if (v != null) {
+            return v;
+        }
+        return ticketStatus != null ? ticketStatus : 0;
+    }
+
     /** 1 = users may change to a different plan while current sub is active. */
     public int getPlanChangeEnable() {
         Integer v = intFromGroup("subscribe", "plan_change_enable");

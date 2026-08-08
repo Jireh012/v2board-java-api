@@ -266,3 +266,50 @@ POST /api/v1/admin/ticket/close   form: id
 - **Wrong**: `Content-Type: application/json` + `JSON.stringify({id,message})` → param bind fails.
 - **Correct**: `application/x-www-form-urlencoded` with `id` + `message`.
 - Tests: reply with form succeeds; email substring filters tickets.
+
+---
+
+## Scenario: User ticket open gate from DB `ticket.ticket_status`
+
+### 1. Scope / Trigger
+
+- Trigger: Admin「系统配置 → 工单状态」保存后，用户端开单 / 提现开单立即按 DB 生效（非仅 yml）。
+
+### 2. Signatures
+
+```
+ConfigService.getTicketStatus() → intFromGroup("ticket","ticket_status"), fallback yml v2board.ticket-status / 0
+POST /api/v1/user/ticket/save
+POST /api/v1/user/ticket/withdraw
+GET  /api/v1/user/getSubscribe → includes ticket_status
+```
+
+### 3. Contracts
+
+| `ticket_status` | Meaning |
+|-----------------|---------|
+| 0 | 任意登录用户可开单 |
+| 1 | 仅有订单 status ∈ {3,4}（已完成/折抵）的用户可开单 |
+| 2 | 禁止开单；`save` / `withdraw` 均拒绝「工单系统已关闭」 |
+
+- 已有工单的 `reply` / `close` 不受此开关影响。
+- 用户端 TicketView：`ticket_status === 2` 时隐藏「发起新工单」。
+
+### 4. Wrong vs Correct
+
+#### Wrong
+
+```java
+@Value("${v2board.ticket-status:0}")
+private Integer ticketStatus; // gate only sees bootstrap yml
+```
+
+#### Correct
+
+```java
+switch (configService.getTicketStatus()) { ... }
+```
+
+### 5. Tests
+
+- `ConfigServiceTicketStatusTest`: DB override vs yml fallback.

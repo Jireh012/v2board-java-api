@@ -10,6 +10,7 @@ import com.v2board.api.model.Order;
 import com.v2board.api.model.Ticket;
 import com.v2board.api.model.TicketMessage;
 import com.v2board.api.model.User;
+import com.v2board.api.service.ConfigService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -35,8 +36,8 @@ public class TicketController {
     @Autowired
     private OrderMapper orderMapper;
 
-    @Value("${v2board.ticket-status:0}")
-    private Integer ticketStatus;
+    @Autowired
+    private ConfigService configService;
 
     @Value("${v2board.withdraw-close-enable:0}")
     private Integer withdrawCloseEnable;
@@ -97,8 +98,8 @@ public class TicketController {
             throw new BusinessException(500, "您还有未解决的工单，请等待处理完成再发起新工单");
         }
 
-        // 工单开单策略
-        switch (ticketStatus != null ? ticketStatus : 0) {
+        // 工单开单策略（读 DB ticket.ticket_status）
+        switch (configService.getTicketStatus()) {
             case 0:
                 break;
             case 1:
@@ -112,7 +113,7 @@ public class TicketController {
                 }
                 break;
             case 2:
-                throw new BusinessException(500, "当前套餐不允许发起工单");
+                throw new BusinessException(500, "工单系统已关闭");
             default:
                 throw new BusinessException(500, "未知的工单状态");
         }
@@ -221,6 +222,9 @@ public class TicketController {
     public ApiResponse<Boolean> withdraw(HttpServletRequest request,
             @RequestParam("withdraw_method") String withdrawMethod,
             @RequestParam("withdraw_account") String withdrawAccount) {
+        if (configService.getTicketStatus() == 2) {
+            throw new BusinessException(500, "工单系统已关闭");
+        }
         if (withdrawCloseEnable != null && withdrawCloseEnable == 1) {
             throw new BusinessException(500, "当前系统暂不支持提现工单");
         }

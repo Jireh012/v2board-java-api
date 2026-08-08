@@ -78,6 +78,7 @@ public class StatController {
         data.put("reset_day", userService.getResetDay(user));
         data.put("allow_new_period", configService.getAllowNewPeriod());
         data.put("show_subscribe_expire", configService.getShowSubscribeExpire());
+        data.put("ticket_status", configService.getTicketStatus());
 
         return ApiResponse.success(data);
     }
