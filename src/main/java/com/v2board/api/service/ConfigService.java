@@ -385,6 +385,90 @@ public class ConfigService {
         return v != null ? v : 0;
     }
 
+    /** Max unused invite codes a user may generate. DB invite.invite_gen_limit → yml. */
+    public int getInviteGenLimit() {
+        Integer v = intFromGroup("invite", "invite_gen_limit");
+        if (v != null) {
+            return v;
+        }
+        return inviteGenLimit != null ? inviteGenLimit : 5;
+    }
+
+    /** Default commission rate percent. DB invite.invite_commission → yml. */
+    public int getInviteCommission() {
+        Integer v = intFromGroup("invite", "invite_commission");
+        if (v != null) {
+            return v;
+        }
+        return inviteCommission != null ? inviteCommission : 10;
+    }
+
+    /** 1 = only first paid order yields commission (system default type). */
+    public int getCommissionFirstTimeEnable() {
+        Integer v = intFromGroup("invite", "commission_first_time_enable");
+        return v != null ? v : 1;
+    }
+
+    /** 1 = schedule auto-approves commission_status 0→1 after 3 days. */
+    public int getCommissionAutoCheckEnable() {
+        Integer v = intFromGroup("invite", "commission_auto_check_enable");
+        return v != null ? v : 1;
+    }
+
+    /** Minimum withdrawable commission balance in cents. */
+    public int getCommissionWithdrawLimit() {
+        Integer v = intFromGroup("invite", "commission_withdraw_limit");
+        if (v != null) {
+            return v;
+        }
+        return commissionWithdrawLimit != null ? commissionWithdrawLimit : 100;
+    }
+
+    /** Comma-separated withdraw methods (e.g. alipay,wechat). */
+    public String getCommissionWithdrawMethod() {
+        String v = getStringFromGroup("invite", "commission_withdraw_method");
+        return StringUtils.hasText(v) ? v : "alipay,wechat";
+    }
+
+    /** 1 = withdraw tickets disabled; commission credited to balance on payout. */
+    public int getWithdrawCloseEnable() {
+        Integer v = intFromGroup("invite", "withdraw_close_enable");
+        if (v != null) {
+            return v;
+        }
+        return withdrawCloseEnable != null ? withdrawCloseEnable : 0;
+    }
+
+    /** 1 = three-level distribution enabled. */
+    public int getCommissionDistributionEnable() {
+        Integer v = intFromGroup("invite", "commission_distribution_enable");
+        if (v != null) {
+            return v;
+        }
+        return commissionDistributionEnable != null ? commissionDistributionEnable : 0;
+    }
+
+    /** L1 share percent when distribution enabled. */
+    public int getCommissionDistributionL1() {
+        Integer v = intFromGroup("invite", "commission_distribution_l1");
+        if (v != null) {
+            return v;
+        }
+        return commissionDistributionL1 != null ? commissionDistributionL1.intValue() : 100;
+    }
+
+    /** L2 share percent when distribution enabled. */
+    public int getCommissionDistributionL2() {
+        Integer v = intFromGroup("invite", "commission_distribution_l2");
+        return v != null ? v : 0;
+    }
+
+    /** L3 share percent when distribution enabled. */
+    public int getCommissionDistributionL3() {
+        Integer v = intFromGroup("invite", "commission_distribution_l3");
+        return v != null ? v : 0;
+    }
+
     /** 1 = email verification required on register. */
     public int getEmailVerify() {
         Integer v = intFromGroup("safe", "email_verify");
@@ -631,6 +715,7 @@ public class ConfigService {
     public void save(Map<String, Object> body) throws Exception {
         validateSecurePathInSaveBody(body);
         validateSubscribePathInSaveBody(body);
+        validateServerInSaveBody(body);
         Map<String, Object> current = getFullConfig();
         deepMerge(current, body);
         String json = objectMapper.writeValueAsString(current);
@@ -719,6 +804,73 @@ public class ConfigService {
             }
         }
         return getSecurePath();
+    }
+
+    /**
+     * Validate {@code server.*} fields when present in save body.
+     * Token must be ≥16 after trim (normalized in-place); pull/push intervals ≥1;
+     * min-traffic ≥0; device_limit_mode ∈ {0,1}.
+     */
+    @SuppressWarnings("unchecked")
+    private static void validateServerInSaveBody(Map<String, Object> body) {
+        if (body == null || !(body.get("server") instanceof Map<?, ?> serverRaw)) {
+            return;
+        }
+        Map<String, Object> server;
+        if (serverRaw instanceof HashMap || serverRaw instanceof LinkedHashMap) {
+            server = (Map<String, Object>) serverRaw;
+        } else {
+            server = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> e : serverRaw.entrySet()) {
+                server.put(String.valueOf(e.getKey()), e.getValue());
+            }
+            body.put("server", server);
+        }
+
+        if (server.containsKey("server_token")) {
+            Object raw = server.get("server_token");
+            String token = raw == null ? "" : String.valueOf(raw).trim();
+            if (token.length() < 16) {
+                throw new BusinessException(500, "通讯密钥至少 16 位");
+            }
+            server.put("server_token", token);
+        }
+
+        requireIntAtLeast(server, "server_pull_interval", 1, "节点拉取间隔至少为 1");
+        requireIntAtLeast(server, "server_push_interval", 1, "节点推送间隔至少为 1");
+        requireIntAtLeast(server, "server_node_report_min_traffic", 0, "最低上报流量不能为负");
+        requireIntAtLeast(server, "server_device_online_min_traffic", 0, "在线判定最低流量不能为负");
+
+        if (server.containsKey("device_limit_mode")) {
+            Integer mode = parseIntOrNull(server.get("device_limit_mode"));
+            if (mode == null || (mode != 0 && mode != 1)) {
+                throw new BusinessException(500, "设备限制模式只能为 0 或 1");
+            }
+        }
+    }
+
+    private static void requireIntAtLeast(Map<?, ?> server, String key, int minInclusive, String message) {
+        if (!server.containsKey(key)) {
+            return;
+        }
+        Integer value = parseIntOrNull(server.get(key));
+        if (value == null || value < minInclusive) {
+            throw new BusinessException(500, message);
+        }
+    }
+
+    private static Integer parseIntOrNull(Object raw) {
+        if (raw instanceof Number num) {
+            return num.intValue();
+        }
+        if (raw instanceof String str && !str.isBlank()) {
+            try {
+                return Integer.parseInt(str.trim());
+            } catch (NumberFormatException ignore) {
+                return null;
+            }
+        }
+        return null;
     }
 
     @SuppressWarnings("unchecked")

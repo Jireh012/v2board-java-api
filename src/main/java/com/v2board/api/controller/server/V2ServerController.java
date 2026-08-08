@@ -48,8 +48,10 @@ public class V2ServerController {
         Map<String, Object> full = configService.getFullConfig();
         @SuppressWarnings("unchecked")
         Map<String, Object> serverConfig = (Map<String, Object>) full.getOrDefault("server", Collections.emptyMap());
-        String configuredToken = (String) serverConfig.getOrDefault("server_token", "");
-        if (!token.equals(configuredToken)) {
+        Object tokenRaw = serverConfig.get("server_token");
+        String configuredToken = tokenRaw == null ? "" : String.valueOf(tokenRaw);
+        // Blank/short configured token must not authenticate (incl. empty==empty).
+        if (!isValidConfiguredNodeToken(configuredToken) || !token.equals(configuredToken)) {
             return fail("token is error");
         }
 
@@ -118,18 +120,23 @@ public class V2ServerController {
         int down = node.getDownMbps() != null ? node.getDownMbps() : 0;
         resp.put("ignore_client_bandwidth", up == 0 && down == 0);
 
-        resp.put("base_config", Map.of(
-                "push_interval", getInt(serverConfig.get("server_push_interval"), 60),
-                "pull_interval", getInt(serverConfig.get("server_pull_interval"), 60),
-                "node_report_min_traffic", getInt(serverConfig.get("server_node_report_min_traffic"), 0),
-                "device_online_min_traffic", getInt(serverConfig.get("server_device_online_min_traffic"), 0)
-        ));
+        Map<String, Object> baseConfig = new LinkedHashMap<>();
+        baseConfig.put("push_interval", getInt(serverConfig.get("server_push_interval"), 60));
+        baseConfig.put("pull_interval", getInt(serverConfig.get("server_pull_interval"), 60));
+        baseConfig.put("node_report_min_traffic", getInt(serverConfig.get("server_node_report_min_traffic"), 0));
+        baseConfig.put("device_online_min_traffic", getInt(serverConfig.get("server_device_online_min_traffic"), 0));
+        resp.put("base_config", baseConfig);
 
         List<Integer> routeIds = node.getRouteId();
         if (routeIds != null && !routeIds.isEmpty()) {
             resp.put("routes", serverService.getRoutes(routeIds));
         }
         return resp;
+    }
+
+    /** Package-visible for tests. */
+    static boolean isValidConfiguredNodeToken(String configuredToken) {
+        return StringUtils.hasText(configuredToken) && configuredToken.length() >= 16;
     }
 
     private ResponseEntity<Map<String, Object>> fail(String message) {

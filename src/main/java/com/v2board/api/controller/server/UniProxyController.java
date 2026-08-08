@@ -400,11 +400,7 @@ public class UniProxyController {
         @SuppressWarnings("unchecked")
         Map<String, Object> serverConfig = (Map<String, Object>) fullConfig.getOrDefault("server",
                 Collections.emptyMap());
-        int pushInterval = getInt(serverConfig.get("server_push_interval"), 60);
-        int pullInterval = getInt(serverConfig.get("server_pull_interval"), 60);
-        resp.put("base_config", Map.of(
-                "push_interval", pushInterval,
-                "pull_interval", pullInterval));
+        resp.put("base_config", buildBaseConfig(serverConfig));
 
         byte[] body = objectMapper.writeValueAsBytes(resp);
         String eTag = sha1Hex(body);
@@ -429,8 +425,9 @@ public class UniProxyController {
         Map<String, Object> full = configService.getFullConfig();
         @SuppressWarnings("unchecked")
         Map<String, Object> serverConfig = (Map<String, Object>) full.getOrDefault("server", Collections.emptyMap());
-        String configuredToken = (String) serverConfig.getOrDefault("server_token", "");
-        if (!token.equals(configuredToken)) {
+        String configuredToken = configuredServerToken(serverConfig);
+        // Blank/short configured token must not authenticate (incl. empty==empty).
+        if (!isValidConfiguredNodeToken(configuredToken) || !token.equals(configuredToken)) {
             throw new BusinessException(500, "token is error");
         }
 
@@ -544,6 +541,26 @@ public class UniProxyController {
         } catch (Exception e) {
             return Collections.emptyMap();
         }
+    }
+
+    /** Package-visible for tests — UniProxy/v2node base_config contract. */
+    Map<String, Object> buildBaseConfig(Map<String, Object> serverConfig) {
+        Map<String, Object> base = new LinkedHashMap<>();
+        Map<String, Object> cfg = serverConfig != null ? serverConfig : Collections.emptyMap();
+        base.put("push_interval", getInt(cfg.get("server_push_interval"), 60));
+        base.put("pull_interval", getInt(cfg.get("server_pull_interval"), 60));
+        base.put("node_report_min_traffic", getInt(cfg.get("server_node_report_min_traffic"), 0));
+        base.put("device_online_min_traffic", getInt(cfg.get("server_device_online_min_traffic"), 0));
+        return base;
+    }
+
+    static boolean isValidConfiguredNodeToken(String configuredToken) {
+        return StringUtils.hasText(configuredToken) && configuredToken.length() >= 16;
+    }
+
+    private static String configuredServerToken(Map<String, Object> serverConfig) {
+        Object raw = serverConfig != null ? serverConfig.get("server_token") : null;
+        return raw == null ? "" : String.valueOf(raw);
     }
 
     private int getInt(Object value, int defaultValue) {

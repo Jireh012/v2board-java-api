@@ -157,3 +157,44 @@ public class MailConfig {
 **Why**: Operators change these in admin「系统配置」; dual env+DB sources caused drift (subscribe path, SMTP, app name).
 
 **Related**: Keep `APP_KEY`, `DB_*`, `REDIS_*`, external-subscribe probe envs.
+
+---
+
+## Scenario: Server node group validation
+
+### 1. Scope / Trigger
+
+- Trigger: Admin `ConfigService.save` body contains `server` map (「系统配置 → 节点」).
+- Symptom if broken: empty/short `server_token` saved → nodes authenticate with empty match; invalid intervals crash node loops.
+
+### 2. Signatures
+
+```java
+void save(Map<String, Object> body); // calls validateServerInSaveBody when server present
+```
+
+### 3. Contracts
+
+When a key is present in the save body:
+
+| Field | Rule |
+|-------|------|
+| `server_token` | After trim, length ≥ 16 (empty rejected); trimmed value written back into save body |
+| `server_pull_interval` / `server_push_interval` | Integer ≥ 1 |
+| `server_node_report_min_traffic` / `server_device_online_min_traffic` | Integer ≥ 0 |
+| `device_limit_mode` | 0 or 1 |
+
+Node runtime auth and `base_config` delivery: [server-node.md](./server-node.md).
+
+### 4. Validation & Error Matrix
+
+| Condition | Result |
+|-----------|--------|
+| `server_token` present and length &lt; 16 after trim | `BusinessException` 「通讯密钥至少 16 位」 |
+| Interval &lt; 1 | `BusinessException` with interval message |
+| Min traffic &lt; 0 | `BusinessException` with traffic message |
+| `device_limit_mode` not 0/1 | `BusinessException` 「设备限制模式只能为 0 或 1」 |
+
+### 5. Tests Required
+
+- `ConfigServiceServerValidationTest` — token / interval / traffic / mode accept & reject.

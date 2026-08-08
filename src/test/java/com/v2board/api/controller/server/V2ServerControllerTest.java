@@ -2,14 +2,8 @@ package com.v2board.api.controller.server;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.v2board.api.model.ServerV2node;
-import com.v2board.api.service.ConfigService;
-import com.v2board.api.service.ServerService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
@@ -17,20 +11,13 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@ExtendWith(MockitoExtension.class)
 class V2ServerControllerTest {
 
-    @Mock
-    private ServerService serverService;
-
-    @Mock
-    private ConfigService configService;
-
-    @InjectMocks
     private V2ServerController controller;
 
     @BeforeEach
     void setUp() {
+        controller = new V2ServerController();
         ReflectionTestUtils.setField(controller, "objectMapper", new ObjectMapper());
     }
 
@@ -66,5 +53,13 @@ class V2ServerControllerTest {
         assertEquals(45, base.get("pull_interval"));
         assertEquals(10, base.get("node_report_min_traffic"));
         assertEquals(5, base.get("device_online_min_traffic"));
+    }
+
+    @Test
+    void isValidConfiguredNodeToken_rejectsBlankOrShort() {
+        assertFalse(V2ServerController.isValidConfiguredNodeToken(null));
+        assertFalse(V2ServerController.isValidConfiguredNodeToken(""));
+        assertFalse(V2ServerController.isValidConfiguredNodeToken("short-token"));
+        assertTrue(V2ServerController.isValidConfiguredNodeToken("abcdefghijklmnop"));
     }
 }

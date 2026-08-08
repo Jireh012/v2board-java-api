@@ -17,6 +17,7 @@ Code-specs for the Spring Boot / MyBatis-Plus API that shares MySQL + Redis with
 | [Directory Structure](./directory-structure.md) | Module organization and file layout | To fill |
 | [Database Guidelines](./database-guidelines.md) | ORM, `v2_*` schema, PHP JSON field types | Active |
 | [Admin Commerce](./admin-commerce.md) | Orders / coupons / giftcards / plan units & filters | Active |
+| [Invite Commission](./invite-commission.md) | Nested `invite.*` readers; withdraw limit in cents | Active |
 | [Admin User](./admin-user.md) | User remarks/staff, traffic bytes, ticket reply form | Active |
 | [Admin Content](./admin-content.md) | Notice / knowledge admin CRUD, sort wire `knowledge_ids` | Active |
 | [External Subscribe](./external-subscribe.md) | Third-party subscribe sync status lifecycle | Active |
@@ -25,6 +26,7 @@ Code-specs for the Spring Boot / MyBatis-Plus API that shares MySQL + Redis with
 | [Telegram Bot](./telegram.md) | Guest webhook, bind/traffic commands, admin notify | Active |
 | [Passport Email](./passport-email.md) | sendEmailVerify / register code / forget; nested SMTP | Active |
 | [System Config](./system-config.md) | Admin save/fetch deepMerge; nested readers; no MAIL_* env | Active |
+| [Server Node](./server-node.md) | UniProxy/v2node `base_config`, token ≥16, alive device modes | Active |
 | [Error Handling](./error-handling.md) | `BusinessException`, silent-catch bans | Active |
 | [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | To fill |
 | [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels | To fill |
@@ -37,6 +39,7 @@ When changing admin servers, JSON columns, or external subscribe:
 
 - [ ] Read [database-guidelines.md](./database-guidelines.md) if touching PHP-written JSON (`group_id`, etc.)
 - [ ] Read [admin-commerce.md](./admin-commerce.md) if touching orders, coupons, giftcards, plan prices/traffic
+- [ ] Read [invite-commission.md](./invite-commission.md) if changing invite/commission/withdraw runtime readers
 - [ ] Read [admin-user.md](./admin-user.md) if touching admin user fields (`remarks`, traffic bytes) or ticket reply
 - [ ] Read [admin-content.md](./admin-content.md) if touching admin notice/knowledge APIs or sort payload
 - [ ] Read [external-subscribe.md](./external-subscribe.md) if changing sync status, locks, or admin sync APIs
@@ -46,6 +49,7 @@ When changing admin servers, JSON columns, or external subscribe:
 - [ ] Public config: never plaintext fallback when `SM4_KEY` missing; keep secrets off this endpoint
 - [ ] Read [passport-email.md](./passport-email.md) if changing send-code, register verify, forget, or SMTP apply
 - [ ] Read [system-config.md](./system-config.md) if changing `ConfigService` defaults, save/merge, nested readers, or admin config groups
+- [ ] Read [server-node.md](./server-node.md) if changing UniProxy/V2Server config, `server_token`, or node intervals/thresholds
 - [ ] Nested config: read via `getStringFromGroup` / section getters — never top-level flat keys
 - [ ] Read [error-handling.md](./error-handling.md) — do not swallow conversion errors in list aggregators
 - [ ] Nested config defaults: **no** `Map.of` for merge targets
