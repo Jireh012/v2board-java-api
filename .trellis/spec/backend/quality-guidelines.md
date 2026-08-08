@@ -30,9 +30,15 @@ Questions to answer:
 
 ## Required Patterns
 
-<!-- Patterns that must always be used -->
+### Commit messages
 
-(To be filled by the team)
+Must follow [commit-message.md](../guides/commit-message.md):
+
+```text
+feat(scope): 中文摘要
+
+中文正文
+```
 
 ---
 

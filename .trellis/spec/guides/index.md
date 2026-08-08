@@ -21,12 +21,18 @@ These guides help you **ask the right questions before coding**.
 
 | Guide | Purpose | When to Use |
 |-------|---------|-------------|
+| [Commit Message](./commit-message.md) | `type(scope):` + 中文摘要/正文 | Phase 3.4 起草 / 执行 commit |
 | [Code Reuse Thinking Guide](./code-reuse-thinking-guide.md) | Identify patterns and reduce duplication | When you notice repeated patterns |
 | [Cross-Layer Thinking Guide](./cross-layer-thinking-guide.md) | Think through data flow across layers | Features spanning multiple layers |
 
 ---
 
 ## Quick Reference: Thinking Triggers
+
+### When Committing
+
+- [ ] Message = `type(scope): 中文摘要` + 空行 + 中文正文 → [commit-message.md](./commit-message.md)
+- [ ] 勿用纯中文无前缀，或英文摘要覆盖本仓库约定
 
 ### When to Think About Cross-Layer Issues
 

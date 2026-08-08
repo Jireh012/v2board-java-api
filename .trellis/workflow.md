@@ -600,11 +600,14 @@ The AI drives a batched commit of this task's code changes so `/finish-work` can
    ```
    Snapshot every dirty path. If the working tree is clean, skip to 3.5.
 
-2. **Learn commit style** from recent history (so drafted messages blend in):
-   ```bash
-   git log --oneline -5
+2. **Draft messages in the project commit format** (required):
+   ```text
+   <type>(<scope>): <中文摘要>
+
+   <中文正文>
    ```
-   Note the prefix convention (`feat:` / `fix:` / `chore:` / `docs:` ...), language (中文/English), and length style.
+   Spec: [`.trellis/spec/guides/commit-message.md`](./spec/guides/commit-message.md).  
+   Optional: `git log --oneline -5` only to align **scope** naming — do **not** copy English-only historical style when it conflicts with the Chinese convention.
 
 3. **Classify dirty files into two groups**:
    - **AI-edited this session** — files you wrote/edited via Edit/Write/Bash tool calls in this session. You know what changed and why.
