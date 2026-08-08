@@ -1,69 +1,85 @@
 # Public Site Config
 
-> Unauthenticated public config for brand + register gates (`app_name`, `stop_register`, `invite_force`).
+> Unauthenticated public config for brand + register/safe-mode gates. Response `data` is SM4-CBC encrypted.
 
 ---
 
-## Scenario: Public passport comm config
+## Scenario: Public passport comm config (SM4 envelope)
 
 ### 1. Scope / Trigger
 
 - Trigger: Login/register/chrome need `app_name` and register gates without JWT.
 - Do **not** expose `/api/v1/admin/config/fetch` publicly — it returns full nested config including secrets.
+- Wire format: plaintext JSON fields encrypted with SM4-CBC before leaving the API.
 
 ### 2. Signatures
 
 - `GET /api/v1/passport/comm/config` — `CommController#config`
-- `ConfigService.getAppName()` / `getStopRegister()` / `getInviteForce()`
+- `ConfigService.getAppName()` / `getStopRegister()` / `getInviteForce()` / `getEmailVerify()` / `getSafeModeEnable()` / `getSecurePath()` / `getRecaptchaEnable()` / `getRecaptchaSiteKey()`
+- `Sm4Util.encryptToEnvelope(plaintext, key)` / `parseKey(SM4_KEY)`
+- Env: `SM4_KEY` → `v2board.sm4-key` (required for this endpoint)
 
 ### 3. Contracts
 
-**Request**: none (no auth header required). Path is outside `ClientAuthInterceptor` (`/api/v1/user/**`, `/api/v1/admin/**` only).
+**Request**: none (no auth). Path outside `ClientAuthInterceptor`.
 
-**Response** (`ApiResponse`, snake_case `data`):
+**Plaintext JSON** (before encrypt, snake_case):
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `app_name` | string | Non-empty; never null in practice |
+| `app_name` | string | Non-empty |
 | `stop_register` | int 0/1 | `1` = registration closed |
 | `invite_force` | int 0/1 | `1` = invite code required |
+| `email_verify` | int 0/1 | `1` = register requires email code |
+| `safe_mode_enable` | int 0/1 | `1` = user UI requires login except auth pages |
+| `secure_path` | string | Admin UI path segment; empty/invalid stored → expose `"admin"`; custom must be ≥8 alphanumeric and not reserved |
+| `recaptcha_enable` | int 0/1 | `1` = user login/register require reCAPTCHA v2 |
+| `recaptcha_site_key` | string | Public site key only — **never** `recaptcha_key` (secret) |
 
-Adding more public keys later must stay non-sensitive (no SMTP password, `server_token`, bot token, etc.).
+**Response** `data` (encrypted envelope only):
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `iv` | string | base64, 16-byte IV |
+| `payload` | string | base64, SM4-CBC/PKCS7 ciphertext of UTF-8 JSON |
+
+Algorithm: `SM4/CBC/PKCS7Padding` (BouncyCastle). Key: 16 UTF-8 bytes **or** 32 hex chars. No plaintext business fields alongside envelope.
+
+Frontend: `VITE_SM4_KEY` must match; decrypt then parse JSON (`site.ts`).
 
 ### 4. Validation & Error Matrix
 
 | Condition | Behavior |
 |-----------|----------|
-| Config load failure inside `getAppName` | Falls back to yml / `"V2Board"`; endpoint still `code=0` |
-| Auth missing | Still success (public) |
+| `SM4_KEY` empty | `BusinessException` 500 `"SM4 key not configured"` — **no plaintext fallback** |
+| Invalid key length | 500 `"SM4 key invalid: …"` |
+| Encrypt failure | 500 `"加密公开配置失败"` |
+| Auth missing | Still allowed (public) |
 
 ### 5. Good/Base/Bad Cases
 
-- Good: DB `site.app_name = "AcmeVPN"` → `data.app_name = "AcmeVPN"`
-- Base: empty DB → `"V2Board"`
-- Bad: returning full `getFullConfig()` or nesting `site` secrets
+- Good: Valid key → `data` has only `iv`/`payload`; decrypt yields public fields including `secure_path`.
+- Base: Dev key in `application-dev.yml` / `.env.example` sample.
+- Bad: Returning plaintext map; dual plaintext+ciphertext; reusing `APP_KEY` as SM4 key without documenting.
 
 ### 6. Tests Required
 
-- Unit: `CommControllerConfigTest` — `app_name` / `stop_register` / `invite_force` present; no other keys
-- Optional: assert `getAppName` prefers stored/PHP value over yml (`ConfigServiceAppNameTest`)
+- Unit: `Sm4UtilTest` — round-trip UTF-8/hex keys; random IV per encrypt
+- Unit: `CommControllerConfigTest` — envelope size 2; decrypt asserts public fields; no `app_name` at envelope top level
 
 ### 7. Wrong vs Correct
 
 #### Wrong
 
 ```java
-return ApiResponse.success(configService.getFullConfig()); // leaks email/server/telegram secrets
+return ApiResponse.success(plainMap); // plaintext leak
 ```
 
 #### Correct
 
 ```java
-Map<String, Object> data = new LinkedHashMap<>();
-data.put("app_name", configService.getAppName());
-data.put("stop_register", configService.getStopRegister());
-data.put("invite_force", configService.getInviteForce());
-return ApiResponse.success(data);
+String json = objectMapper.writeValueAsString(plainMap);
+return ApiResponse.success(Sm4Util.encryptToEnvelope(json, Sm4Util.parseKey(sm4Key)));
 ```
 
 ---
@@ -72,8 +88,24 @@ return ApiResponse.success(data);
 
 **Context**: Login pages cannot call admin config APIs.
 
-**Options**: `guest/comm/config` vs extend `passport/comm`.
+**Decision**: `GET /api/v1/passport/comm/config` on existing `CommController` — already unauthenticated.
 
-**Decision**: `GET /api/v1/passport/comm/config` on existing `CommController` — already unauthenticated and used by passport flows.
+**Related**: Frontend `v2board-ui` decrypt in `src/api/site.ts`; brand flags in `siteBrand.ts`.
 
-**Related**: Frontend `v2board-ui` `src/api/site.ts` + `src/siteBrand.ts` (`auth: false`, localStorage `v2board_app_name`, `registerEnabled` / `inviteForce`). See frontend `site-brand.md` for `/register` gating.
+---
+
+## Design Decision: Fail closed when SM4_KEY missing
+
+**Context**: Tempting to return plaintext if key unset for “easier local dev”.
+
+**Decision**: Missing/invalid key → HTTP business 500; never plaintext fallback. Dev samples live in `application-dev.yml` / `.env.example` (`0123456789abcdef`).
+
+---
+
+## Common Mistake: Treating SM4 as confidentiality
+
+**Symptom**: Expecting network observers without the frontend bundle to be unable to read config.
+
+**Cause**: `VITE_SM4_KEY` is shipped in the UI build; anyone with the JS can decrypt.
+
+**Fix / Prevention**: Document as **transport obfuscation** only. Do not put secrets in this public config. Keep SMTP tokens etc. off this endpoint.

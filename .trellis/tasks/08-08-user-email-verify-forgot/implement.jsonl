@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/backend/public-site-config.md", "reason": "Add email_verify to public config contract"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "BusinessException / ApiResponse for passport"}
+{"file": ".trellis/tasks/08-08-user-email-verify-forgot/design.md", "reason": "API and UI contracts"}
+{"file": ".trellis/tasks/08-08-user-email-verify-forgot/prd.md", "reason": "AC1–AC5"}
+{"file": "src/main/java/com/v2board/api/service/PassportService.java", "reason": "Existing register/forget/sendEmailVerify behavior"}

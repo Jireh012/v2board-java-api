@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/public-site-config.md", "reason": "Will change response envelope to SM4"}
+{"file": ".trellis/tasks/08-08-public-config-sm4/design.md", "reason": "Crypto wire format"}
+{"file": ".trellis/tasks/08-08-public-config-sm4/prd.md", "reason": "AC1–AC5"}
+{"file": "src/main/java/com/v2board/api/controller/passport/CommController.java", "reason": "Encrypt config response"}

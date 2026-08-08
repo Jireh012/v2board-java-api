@@ -39,6 +39,8 @@ These guides help you **ask the right questions before coding**.
 - [ ] Reading PHP-written JSON columns into typed Java lists (`group_id`, etc.) → [database-guidelines.md](../backend/database-guidelines.md)
 - [ ] Persisting job status in DB while locking in memory → [external-subscribe.md](../backend/external-subscribe.md)
 - [ ] Building user `subscribe_url` or marking panel/external node names → [subscribe-delivery.md](../backend/subscribe-delivery.md)
+- [ ] Public passport flags (`email_verify` / `safe_mode_enable`) or SMTP from admin config → [public-site-config.md](../backend/public-site-config.md) + [passport-email.md](../backend/passport-email.md) (UI: sibling `v2board-ui` `site-brand.md`)
+- [ ] Changing public config wire format / SM4 → keep `SM4_KEY` ↔ `VITE_SM4_KEY` in sync; UI must decrypt envelope (obfuscation only, not secrecy)
 
 → Read [Cross-Layer Thinking Guide](./cross-layer-thinking-guide.md)
 

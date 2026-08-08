@@ -44,6 +44,8 @@ public class PassportService {
     private AuthService authService;
     @Autowired
     private MailService mailService;
+    @Autowired
+    private RecaptchaService recaptchaService;
 
     public Map<String, Object> register(Map<String, Object> body, HttpServletRequest request) throws Exception {
         String email = str(body.get("email"));
@@ -58,6 +60,7 @@ public class PassportService {
         Map<String, Object> inviteCfg = mapSection(full, "invite");
 
         String ip = request != null ? request.getRemoteAddr() : "";
+        recaptchaService.verifyIfEnabled(str(body.get("recaptcha_data")), ip);
         if (intVal(safe.get("register_limit_by_ip_enable")) == 1) {
             String key = CacheKeyUtil.get("REGISTER_IP_RATE_LIMIT", ip);
             int count = toInt(nodeCacheService.get(key));

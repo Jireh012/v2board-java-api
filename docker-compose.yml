@@ -43,6 +43,7 @@ services:
       REDIS_SSL: ${REDIS_SSL:-false}
       REDIS_CACHE_DB: ${REDIS_CACHE_DB:-1}
       APP_KEY: ${APP_KEY:-base64:your-secret-key-here}
+      SM4_KEY: ${SM4_KEY:-0123456789abcdef}
       EXTERNAL_PROBE_URL: ${EXTERNAL_PROBE_URL:-https://www.gstatic.com/generate_204}
       EXTERNAL_PROBE_TIMEOUT_MS: ${EXTERNAL_PROBE_TIMEOUT_MS:-8000}
       EXTERNAL_PROBE_CONCURRENCY: ${EXTERNAL_PROBE_CONCURRENCY:-4}

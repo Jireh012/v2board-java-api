@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/backend/public-site-config.md", "reason": "Public config stays non-sensitive; email_verify only"}
+{"file": ".trellis/tasks/08-08-user-email-verify-forgot/prd.md", "reason": "AC1–AC5 register + forget"}
+{"file": ".trellis/tasks/08-08-user-email-verify-forgot/design.md", "reason": "isforget 0/1 and route /forget"}

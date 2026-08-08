@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/backend/public-site-config.md", "reason": "secure_path in envelope plaintext only"}
+{"file": ".trellis/tasks/08-08-admin-secure-path/prd.md", "reason": "AC1–AC6"}
+{"file": ".trellis/tasks/08-08-admin-secure-path/design.md", "reason": "API stays /api/v1/admin"}

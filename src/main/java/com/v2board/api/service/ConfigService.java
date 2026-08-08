@@ -3,6 +3,7 @@ package com.v2board.api.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.v2board.api.common.BusinessException;
 import com.v2board.api.config.SubscribeRouteRegistrar;
 import com.v2board.api.mapper.SystemConfigMapper;
 import com.v2board.api.model.SystemConfig;
@@ -18,7 +19,9 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 系统配置服务，对齐 PHP 版 ConfigController fetch/save。
@@ -73,6 +76,12 @@ public class ConfigService {
     private Double commissionDistributionL1;
 
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
+
+    /** UI route segments that must not be used as custom admin path. */
+    private static final Set<String> SECURE_PATH_RESERVED = Set.of(
+            "login", "register", "forget", "dashboard", "plan", "order", "server",
+            "invite", "ticket", "traffic", "knowledge", "profile", "api"
+    );
 
     /**
      * 获取完整配置或按 key 返回某一分组。与 PHP GET /config/fetch 一致。
@@ -293,6 +302,52 @@ public class ConfigService {
         return v != null ? v : 0;
     }
 
+    /** 1 = email verification required on register. */
+    public int getEmailVerify() {
+        Integer v = intFromGroup("safe", "email_verify");
+        return v != null ? v : 0;
+    }
+
+    /** 1 = user UI requires login except login/register/forget. */
+    public int getSafeModeEnable() {
+        Integer v = intFromGroup("safe", "safe_mode_enable");
+        return v != null ? v : 0;
+    }
+
+    /**
+     * Admin UI path segment (no slashes). Empty/invalid stored value → {@code admin}.
+     */
+    public String getSecurePath() {
+        String raw = getStringFromGroup("safe", "secure_path");
+        if (!StringUtils.hasText(raw)) {
+            return "admin";
+        }
+        return isValidSecurePath(raw) ? raw : "admin";
+    }
+
+    /** 1 = reCAPTCHA required on user login/register. */
+    public int getRecaptchaEnable() {
+        Integer v = intFromGroup("safe", "recaptcha_enable");
+        return v != null ? v : 0;
+    }
+
+    /** Public site key for reCAPTCHA v2 widget (never secret). */
+    public String getRecaptchaSiteKey() {
+        return getStringFromGroup("safe", "recaptcha_site_key");
+    }
+
+    /** Server-only Google reCAPTCHA secret. */
+    public String getRecaptchaSecret() {
+        return getStringFromGroup("safe", "recaptcha_key");
+    }
+
+    static boolean isValidSecurePath(String path) {
+        if (path == null || !path.matches("^[A-Za-z0-9]{8,}$")) {
+            return false;
+        }
+        return !SECURE_PATH_RESERVED.contains(path.toLowerCase(Locale.ROOT));
+    }
+
     /**
      * Read a string from a nested config group (e.g. email.email_host).
      * Empty / missing → empty string (never null).
@@ -379,6 +434,7 @@ public class ConfigService {
      * 保存配置。请求体为与 fetch 相同的嵌套结构，会与现有配置合并后写入。
      */
     public void save(Map<String, Object> body) throws Exception {
+        validateSecurePathInSaveBody(body);
         Map<String, Object> current = getFullConfig();
         deepMerge(current, body);
         String json = objectMapper.writeValueAsString(current);
@@ -400,6 +456,24 @@ public class ConfigService {
         // Hot-reload subscribe HTTP route when site.subscribe_path changes (no restart).
         if (subscribeRouteRegistrar != null && body != null && body.containsKey("site")) {
             subscribeRouteRegistrar.refresh();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void validateSecurePathInSaveBody(Map<String, Object> body) {
+        if (body == null || !(body.get("safe") instanceof Map<?, ?> safe)) {
+            return;
+        }
+        if (!safe.containsKey("secure_path")) {
+            return;
+        }
+        Object raw = safe.get("secure_path");
+        String path = raw == null ? "" : String.valueOf(raw).trim();
+        if (!StringUtils.hasText(path)) {
+            return;
+        }
+        if (!isValidSecurePath(path)) {
+            throw new BusinessException(500, "后台路径不合法：至少8位字母或数字，且不能为保留路径");
         }
     }
 

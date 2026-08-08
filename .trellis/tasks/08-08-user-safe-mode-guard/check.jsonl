@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/backend/public-site-config.md", "reason": "No sensitive leakage; additive fields only"}
+{"file": ".trellis/tasks/08-08-user-safe-mode-guard/prd.md", "reason": "AC1–AC5 safe mode gate"}
+{"file": ".trellis/tasks/08-08-user-safe-mode-guard/design.md", "reason": "PUBLIC routes and redirect"}

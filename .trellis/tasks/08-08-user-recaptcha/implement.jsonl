@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/public-site-config.md", "reason": "Public SM4 fields; never leak recaptcha secret"}
+{"file": ".trellis/spec/backend/passport-email.md", "reason": "Register/login auth contracts adjacent to captcha"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "BusinessException fail-closed patterns"}
+{"file": ".trellis/spec/guides/index.md", "reason": "Cross-layer pre-dev checklist"}

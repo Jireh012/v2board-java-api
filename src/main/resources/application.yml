@@ -49,6 +49,8 @@ v2board:
   show-subscribe-expire: 5  # TOTP过期时间（分钟）
   allow-new-period: 0  # 是否允许新周期：0-否，1-是
   app-name: V2Board
+  # 公开配置 SM4-CBC 密钥：16 字节 UTF-8 或 32 位 hex；与前端 VITE_SM4_KEY 一致
+  sm4-key: ${SM4_KEY:}
   php-config-path: ${V2BOARD_PHP_CONFIG_PATH:}
   app-url:
   invite-gen-limit: 5

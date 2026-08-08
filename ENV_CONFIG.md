@@ -87,8 +87,9 @@ export APP_KEY=base64:your-secret-key-here
 | 变量名 | 说明 | 默认值 | 示例 |
 |--------|------|--------|------|
 | `APP_KEY` | JWT密钥（需要与PHP项目的APP_KEY保持一致） | `base64:your-secret-key-here` | `base64:xxxxx` |
+| `SM4_KEY` | 公开配置 `GET /passport/comm/config` 的 SM4-CBC 密钥（16 字节 UTF-8 或 32 hex） | 空（未配置则接口 500） | `0123456789abcdef` |
 
-站点名、站点 URL、订阅路径、SMTP 等由管理端「系统配置」维护，不再通过环境变量配置。
+站点名、站点 URL、订阅路径、SMTP 等由管理端「系统配置」维护，不再通过环境变量配置。前端须配置相同的 `VITE_SM4_KEY` 以便解密。
 
 ### 第三方订阅源（external-subscribe）
 

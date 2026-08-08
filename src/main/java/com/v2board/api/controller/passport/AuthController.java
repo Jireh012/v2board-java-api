@@ -5,6 +5,7 @@ import com.v2board.api.common.BusinessException;
 import com.v2board.api.model.User;
 import com.v2board.api.service.AuthService;
 import com.v2board.api.service.PassportService;
+import com.v2board.api.service.RecaptchaService;
 import com.v2board.api.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,13 +30,18 @@ public class AuthController {
     @Autowired
     private PassportService passportService;
 
+    @Autowired
+    private RecaptchaService recaptchaService;
+
     @PostMapping("/login")
     public ApiResponse<Map<String, Object>> login(HttpServletRequest request,
                                                   @RequestParam("email") String email,
-                                                  @RequestParam("password") String password) {
+                                                  @RequestParam("password") String password,
+                                                  @RequestParam(value = "recaptcha_data", required = false) String recaptchaData) {
         if (!StringUtils.hasText(email) || !StringUtils.hasText(password)) {
             throw new BusinessException(422, "邮箱和密码不能为空");
         }
+        recaptchaService.verifyIfEnabled(recaptchaData, request.getRemoteAddr());
         User user = userService.findByEmail(email);
         if (user == null) {
             throw new BusinessException(500, "Incorrect email or password");
