@@ -97,12 +97,15 @@ String getStringFromGroup(String group, String key);
 int getEmailVerify(); // safe.email_verify
 int getSafeModeEnable(); // safe.safe_mode_enable
 String getSecurePath(); // safe.secure_path → "admin" if empty/invalid; save validates ≥8 alnum + not reserved
+String getAppName(); // site.app_name → yml → "V2Board"
 void MailService.applyDynamicMailConfig(); // package-visible for tests
+// PaymentService.ensureDefaultProductName — empty payment.product_name → getAppName() + " - 订阅"
 ```
 
 ### 3. Contracts
 
 - Full config shape is **nested**: `full.get("email")` → map with `email_host`, …
+- Payment gateway default subject/body must not hardcode `V2Board - 订阅`; use `getAppName()` (see `PaymentServiceProductNameTest`).
 - Prefer dedicated getters / `getStringFromGroup` / `intFromGroup`; never `full.get("email_host")`.
 - SMTP is **DB/admin only** — do not wire `MAIL_HOST` / `spring.mail.*` in yml or `.env.example`.
 - `MailConfig` provides empty `JavaMailSenderImpl`; credentials applied at send time.

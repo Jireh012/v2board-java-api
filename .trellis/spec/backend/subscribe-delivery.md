@@ -226,6 +226,11 @@ Token gate: `ClientTokenInterceptor` registered on `/**`, early-returns unless U
 | Empty path | Normalize to default |
 | Interceptor on non-subscribe URI | `preHandle` returns true (pass-through) |
 | Subscribe without `token` | 403 `token is null` |
+| Save `site.subscribe_path` empty/blank | Allowed; runtime `getSubscribePath()` → default |
+| Save non-empty path | `ConfigService.validateSubscribePathInSaveBody`：trim、补前导 `/`、去尾 `/`；须匹配 `^/[A-Za-z0-9._~/-]+$`，无 `..`，长度 ≤128；不得与 `/api/v1/user|admin|passport|guest|server` 前缀或当前 `secure_path` 段冲突 |
+| Illegal / conflicting path on save | `BusinessException(500, "订阅路径不合法：…")`，拒绝写入 |
+
+运维藏源站 / 域名切换基线见仓库 [`docs/ops-panel-anti-block.md`](../../../docs/ops-panel-anti-block.md)。
 
 ### 5. Good/Base/Bad Cases
 
@@ -235,8 +240,9 @@ Token gate: `ClientTokenInterceptor` registered on `/**`, early-returns unless U
 
 ### 6. Tests Required
 
-- Unit: `SubscribeRouteRegistrarTest.normalizePath_*`
-- Manual/integration: save custom path in admin → curl new path 403 without token, 200 with valid token.
+- Unit: `SubscribeRouteRegistrarTest.normalizePath_*` + refresh unregisters previous mapping
+- Unit: `ConfigServiceSubscribePathValidationTest` — empty OK; illegal/`..`/reserved prefix/`secure_path` collision rejected; valid custom normalized
+- Manual/integration: save custom path in admin → curl new path 403 without token, 200 with valid token; default path 404
 
 ### 7. Wrong vs Correct
 

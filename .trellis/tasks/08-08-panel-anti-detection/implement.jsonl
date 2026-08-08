@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/subscribe-delivery.md", "reason": "Hot-reload subscribe path; extend save validation rules"}
+{"file": ".trellis/spec/backend/system-config.md", "reason": "site.subscribe_path storage and ConfigService getters/save"}
+{"file": ".trellis/tasks/08-08-panel-anti-detection/design.md", "reason": "Validation contract, payment fallback, shell fingerprint"}
+{"file": ".trellis/tasks/08-08-panel-anti-detection/prd.md", "reason": "R1–R4 and AC1–AC6"}

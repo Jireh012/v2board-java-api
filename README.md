@@ -87,6 +87,8 @@ docker compose up -d --build
 
 更多变量说明见 [ENV_CONFIG.md](./ENV_CONFIG.md)。
 
+运维抗探测与域名切换基线见 [docs/ops-panel-anti-block.md](./docs/ops-panel-anti-block.md)。
+
 ## API 接口
 
 ### 订阅接口

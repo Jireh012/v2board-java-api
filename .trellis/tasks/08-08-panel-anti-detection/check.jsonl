@@ -1,0 +1,4 @@
+{"file": ".trellis/tasks/08-08-panel-anti-detection/prd.md", "reason": "AC1–AC6 observable outcomes"}
+{"file": ".trellis/tasks/08-08-panel-anti-detection/design.md", "reason": "No /api/v1 rewrite; validate-only subscribe_path"}
+{"file": ".trellis/spec/backend/subscribe-delivery.md", "reason": "Old path unregistered after refresh"}
+{"file": ".trellis/spec/guides/commit-message.md", "reason": "Commit message style if finishing in-repo"}
