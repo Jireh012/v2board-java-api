@@ -57,6 +57,11 @@ public class CommController {
         plain.put("secure_path", configService.getSecurePath());
         plain.put("recaptcha_enable", configService.getRecaptchaEnable());
         plain.put("recaptcha_site_key", configService.getRecaptchaSiteKey());
+        plain.put("frontend_theme_sidebar", configService.getFrontendThemeSidebar());
+        plain.put("frontend_theme_header", configService.getFrontendThemeHeader());
+        plain.put("frontend_theme_color", configService.getFrontendThemeColor());
+        plain.put("frontend_background_url", configService.getFrontendBackgroundUrl());
+        plain.put("telegram_discuss_link", configService.getTelegramDiscussLink());
         try {
             String json = objectMapper.writeValueAsString(plain);
             byte[] key = Sm4Util.parseKey(sm4Key);

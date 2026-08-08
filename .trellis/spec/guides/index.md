@@ -45,7 +45,9 @@ These guides help you **ask the right questions before coding**.
 - [ ] Reading PHP-written JSON columns into typed Java lists (`group_id`, etc.) → [database-guidelines.md](../backend/database-guidelines.md)
 - [ ] Persisting job status in DB while locking in memory → [external-subscribe.md](../backend/external-subscribe.md)
 - [ ] Building user `subscribe_url` or marking panel/external node names → [subscribe-delivery.md](../backend/subscribe-delivery.md)
+- [ ] Panel anti-probe / domain switch ops → repo [`docs/ops-panel-anti-block.md`](../../../docs/ops-panel-anti-block.md) + save-time `subscribe_path` rules in subscribe-delivery
 - [ ] Public passport flags (`email_verify` / `safe_mode_enable`) or SMTP from admin config → [public-site-config.md](../backend/public-site-config.md) + [passport-email.md](../backend/passport-email.md) (UI: sibling `v2board-ui` `site-brand.md`)
+- [ ] Telegram webhook / bind / ticket notify → [telegram.md](../backend/telegram.md); public `telegram_discuss_link` stays on SM4 public config (never bot token)
 - [ ] Changing public config wire format / SM4 → keep `SM4_KEY` ↔ `VITE_SM4_KEY` in sync; UI must decrypt envelope (obfuscation only, not secrecy)
 
 → Read [Cross-Layer Thinking Guide](./cross-layer-thinking-guide.md)

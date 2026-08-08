@@ -29,6 +29,11 @@ class CommControllerConfigTest {
         when(configService.getSecurePath()).thenReturn("admin888");
         when(configService.getRecaptchaEnable()).thenReturn(1);
         when(configService.getRecaptchaSiteKey()).thenReturn("site-key-public");
+        when(configService.getFrontendThemeSidebar()).thenReturn("light");
+        when(configService.getFrontendThemeHeader()).thenReturn("dark");
+        when(configService.getFrontendThemeColor()).thenReturn("green");
+        when(configService.getFrontendBackgroundUrl()).thenReturn("https://cdn.example/bg.jpg");
+        when(configService.getTelegramDiscussLink()).thenReturn("https://t.me/example");
 
         CommController controller = new CommController();
         ReflectionTestUtils.setField(controller, "configService", configService);
@@ -54,7 +59,12 @@ class CommControllerConfigTest {
         assertEquals("admin888", plain.get("secure_path"));
         assertEquals(1, ((Number) plain.get("recaptcha_enable")).intValue());
         assertEquals("site-key-public", plain.get("recaptcha_site_key"));
+        assertEquals("light", plain.get("frontend_theme_sidebar"));
+        assertEquals("dark", plain.get("frontend_theme_header"));
+        assertEquals("green", plain.get("frontend_theme_color"));
+        assertEquals("https://cdn.example/bg.jpg", plain.get("frontend_background_url"));
+        assertEquals("https://t.me/example", plain.get("telegram_discuss_link"));
         assertFalse(plain.containsKey("recaptcha_key"));
-        assertEquals(8, plain.size());
+        assertEquals(13, plain.size());
     }
 }

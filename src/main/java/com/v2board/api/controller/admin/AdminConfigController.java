@@ -101,46 +101,33 @@ public class AdminConfigController {
             String botToken = null;
             if (telegramObj instanceof Map<?, ?> tgMap) {
                 Object tokenObj = tgMap.get("telegram_bot_token");
-                if (tokenObj != null) botToken = String.valueOf(tokenObj);
+                if (tokenObj != null) botToken = String.valueOf(tokenObj).trim();
             }
             // 允许从请求参数覆盖
             String paramToken = request.getParameter("telegram_bot_token");
             if (paramToken != null && !paramToken.isEmpty()) {
-                botToken = paramToken;
+                botToken = paramToken.trim();
             }
             if (botToken == null || botToken.isEmpty()) {
                 throw new BusinessException(500, "Telegram Bot Token 未配置");
             }
 
-            Object siteObj = config.get("site");
-            String appUrl = "";
-            if (siteObj instanceof Map<?, ?> siteMap) {
-                Object urlObj = siteMap.get("app_url");
-                if (urlObj != null) appUrl = String.valueOf(urlObj);
+            String appUrl = configService.getAppUrl();
+            if (appUrl == null || appUrl.isBlank()) {
+                throw new BusinessException(500, "请先在站点配置中设置站点 URL (app_url)，Webhook 依赖该地址");
+            }
+            while (appUrl.endsWith("/")) {
+                appUrl = appUrl.substring(0, appUrl.length() - 1);
             }
 
             String hookUrl = appUrl + "/api/v1/guest/telegram/webhook?access_token="
-                    + md5(botToken);
+                    + TelegramService.md5Hex(botToken);
             telegramService.setWebhook(botToken, hookUrl);
             return ApiResponse.success(true);
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
             throw new BusinessException(500, "设置 Webhook 失败: " + e.getMessage());
-        }
-    }
-
-    private String md5(String input) {
-        try {
-            java.security.MessageDigest md = java.security.MessageDigest.getInstance("MD5");
-            byte[] hash = md.digest(input.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder();
-            for (byte b : hash) {
-                sb.append(String.format("%02x", b));
-            }
-            return sb.toString();
-        } catch (Exception e) {
-            return "";
         }
     }
 }

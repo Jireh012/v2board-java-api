@@ -22,6 +22,7 @@ Code-specs for the Spring Boot / MyBatis-Plus API that shares MySQL + Redis with
 | [External Subscribe](./external-subscribe.md) | Third-party subscribe sync status lifecycle | Active |
 | [Subscribe Delivery](./subscribe-delivery.md) | `subscribe_url` resolution + panel/external name markers | Active |
 | [Public Site Config](./public-site-config.md) | Unauth `passport/comm/config` SM4 envelope + public flags | Active |
+| [Telegram Bot](./telegram.md) | Guest webhook, bind/traffic commands, admin notify | Active |
 | [Passport Email](./passport-email.md) | sendEmailVerify / register code / forget; nested SMTP | Active |
 | [System Config](./system-config.md) | Admin save/fetch deepMerge; nested readers; no MAIL_* env | Active |
 | [Error Handling](./error-handling.md) | `BusinessException`, silent-catch bans | Active |
@@ -41,6 +42,7 @@ When changing admin servers, JSON columns, or external subscribe:
 - [ ] Read [external-subscribe.md](./external-subscribe.md) if changing sync status, locks, or admin sync APIs
 - [ ] Read [subscribe-delivery.md](./subscribe-delivery.md) if changing `getSubscribe`, subscribe path/URL, or client node naming
 - [ ] Read [public-site-config.md](./public-site-config.md) if changing public brand/register/safe-mode config APIs or SM4 envelope
+- [ ] Read [telegram.md](./telegram.md) if changing webhook, bot commands, or Telegram admin notify
 - [ ] Public config: never plaintext fallback when `SM4_KEY` missing; keep secrets off this endpoint
 - [ ] Read [passport-email.md](./passport-email.md) if changing send-code, register verify, forget, or SMTP apply
 - [ ] Read [system-config.md](./system-config.md) if changing `ConfigService` defaults, save/merge, nested readers, or admin config groups

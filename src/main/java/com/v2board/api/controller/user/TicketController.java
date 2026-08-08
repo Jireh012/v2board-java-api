@@ -11,6 +11,7 @@ import com.v2board.api.model.Ticket;
 import com.v2board.api.model.TicketMessage;
 import com.v2board.api.model.User;
 import com.v2board.api.service.ConfigService;
+import com.v2board.api.service.TelegramService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -38,6 +39,9 @@ public class TicketController {
 
     @Autowired
     private ConfigService configService;
+
+    @Autowired
+    private TelegramService telegramService;
 
     @Value("${v2board.withdraw-close-enable:0}")
     private Integer withdrawCloseEnable;
@@ -81,7 +85,7 @@ public class TicketController {
     }
 
     /**
-     * 创建工单，对齐 PHP User\\TicketController::save（不含 Telegram 通知）。
+     * 创建工单，对齐 PHP User\\TicketController::save（含 Telegram 通知）。
      */
     @PostMapping("/save")
     public ApiResponse<Boolean> save(HttpServletRequest request,
@@ -140,6 +144,7 @@ public class TicketController {
         if (ticketMessageMapper.insert(tm) <= 0) {
             throw new BusinessException(500, "工单开启失败");
         }
+        sendNotify(ticket, message);
         return ApiResponse.success(true);
     }
 
@@ -188,6 +193,7 @@ public class TicketController {
         ticket.setReplyStatus(0);
         ticket.setUpdatedAt(now);
         ticketMapper.updateById(ticket);
+        sendNotify(ticket, message);
         return ApiResponse.success(true);
     }
 
@@ -216,7 +222,7 @@ public class TicketController {
     }
 
     /**
-     * 佣金提现工单，对齐 PHP User\\TicketController::withdraw（不含 Telegram 通知）。
+     * 佣金提现工单，对齐 PHP User\\TicketController::withdraw（含 Telegram 通知）。
      */
     @PostMapping("/withdraw")
     public ApiResponse<Boolean> withdraw(HttpServletRequest request,
@@ -269,7 +275,21 @@ public class TicketController {
         if (ticketMessageMapper.insert(tm) <= 0) {
             throw new BusinessException(500, "提现工单开启失败");
         }
+        sendNotify(ticket, message);
         return ApiResponse.success(true);
+    }
+
+    /** 对齐 PHP User\\TicketController::sendNotify */
+    private void sendNotify(Ticket ticket, String message) {
+        try {
+            String text = "📮工单提醒 #" + ticket.getId()
+                    + "\n———————————————\n主题：\n`"
+                    + (ticket.getSubject() != null ? ticket.getSubject() : "")
+                    + "`\n内容：\n`" + message + "`";
+            telegramService.sendMessageWithAdmin(text, true);
+        } catch (Exception ignored) {
+            // 通知失败不影响主流程
+        }
     }
 
     private User requireUser(HttpServletRequest request) {

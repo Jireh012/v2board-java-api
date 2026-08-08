@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/telegram.md", "reason": "Telegram webhook/commands/notify contracts"}
+{"file": ".trellis/spec/backend/public-site-config.md", "reason": "Public telegram_discuss_link field"}
+{"file": ".trellis/spec/backend/system-config.md", "reason": "Nested telegram config group"}
+{"file": ".trellis/spec/guides/index.md", "reason": "Telegram cross-layer trigger"}

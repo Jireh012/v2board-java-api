@@ -169,8 +169,10 @@ public class UserProfileController {
     @PostMapping("/unbindTelegram")
     public ApiResponse<Boolean> unbindTelegram(HttpServletRequest request) {
         User current = requireUser(request);
-        current.setTelegramId(null);
-        userMapper.updateById(current);
+        com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<User> uw =
+                new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<>();
+        uw.eq(User::getId, current.getId()).set(User::getTelegramId, null);
+        userMapper.update(null, uw);
         return ApiResponse.success(true);
     }
 

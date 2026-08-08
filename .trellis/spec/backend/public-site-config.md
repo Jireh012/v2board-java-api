@@ -16,6 +16,8 @@
 
 - `GET /api/v1/passport/comm/config` — `CommController#config`
 - `ConfigService.getAppName()` / `getStopRegister()` / `getInviteForce()` / `getEmailVerify()` / `getSafeModeEnable()` / `getSecurePath()` / `getRecaptchaEnable()` / `getRecaptchaSiteKey()`
+- `ConfigService.getFrontendThemeSidebar()` / `getFrontendThemeHeader()` / `getFrontendThemeColor()` / `getFrontendBackgroundUrl()` — nested `frontend.*` via `getStringFromGroup`
+- `ConfigService.getTelegramDiscussLink()` — nested `telegram.telegram_discuss_link` (public; may be empty)
 - `Sm4Util.encryptToEnvelope(plaintext, key)` / `parseKey(SM4_KEY)`
 - Env: `SM4_KEY` → `v2board.sm4-key` (required for this endpoint)
 
@@ -35,6 +37,13 @@
 | `secure_path` | string | Admin UI path segment; empty/invalid stored → expose `"admin"`; custom must be ≥8 alphanumeric and not reserved |
 | `recaptcha_enable` | int 0/1 | `1` = user login/register require reCAPTCHA v2 |
 | `recaptcha_site_key` | string | Public site key only — **never** `recaptcha_key` (secret) |
+| `frontend_theme_sidebar` | string | `light` / `dark`; default `light` |
+| `frontend_theme_header` | string | `light` / `dark`; default `dark` |
+| `frontend_theme_color` | string | `default` / `darkblue` / `black` / `green`; default `default` |
+| `frontend_background_url` | string | Optional background image URL; empty allowed |
+| `telegram_discuss_link` | string | Telegram group/discuss invite URL; empty allowed |
+
+Note: `frontend_theme` (legacy PHP theme package name) is **not** exposed on this public endpoint; admin save still persists it for PHP compat. Never expose `telegram_bot_token` here.
 
 **Response** `data` (encrypted envelope only):
 
@@ -65,7 +74,8 @@ Frontend: `VITE_SM4_KEY` must match; decrypt then parse JSON (`site.ts`).
 ### 6. Tests Required
 
 - Unit: `Sm4UtilTest` — round-trip UTF-8/hex keys; random IV per encrypt
-- Unit: `CommControllerConfigTest` — envelope size 2; decrypt asserts public fields; no `app_name` at envelope top level
+- Unit: `CommControllerConfigTest` — envelope size 2; decrypt asserts public fields (incl. frontend theme keys); no `app_name` at envelope top level
+- Unit: `ConfigServiceFrontendThemeTest` — defaults light/dark/default/"" when unset
 
 ### 7. Wrong vs Correct
 

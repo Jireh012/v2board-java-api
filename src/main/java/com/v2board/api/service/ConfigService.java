@@ -19,6 +19,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -82,6 +83,17 @@ public class ConfigService {
             "login", "register", "forget", "dashboard", "plan", "order", "server",
             "invite", "ticket", "traffic", "knowledge", "profile", "api"
     );
+
+    /** HTTP prefixes that must not collide with a custom subscribe path. */
+    private static final List<String> SUBSCRIBE_PATH_RESERVED_PREFIXES = List.of(
+            "/api/v1/user",
+            "/api/v1/admin",
+            "/api/v1/passport",
+            "/api/v1/guest",
+            "/api/v1/server"
+    );
+
+    private static final int SUBSCRIBE_PATH_MAX_LEN = 128;
 
     /**
      * 获取完整配置或按 key 返回某一分组。与 PHP GET /config/fetch 一致。
@@ -407,6 +419,42 @@ public class ConfigService {
         return getStringFromGroup("safe", "recaptcha_site_key");
     }
 
+    /** User UI sidebar style: {@code light} or {@code dark}. */
+    public String getFrontendThemeSidebar() {
+        String v = getStringFromGroup("frontend", "frontend_theme_sidebar");
+        return StringUtils.hasText(v) ? v : "light";
+    }
+
+    /** User UI header style: {@code light} or {@code dark}. */
+    public String getFrontendThemeHeader() {
+        String v = getStringFromGroup("frontend", "frontend_theme_header");
+        return StringUtils.hasText(v) ? v : "dark";
+    }
+
+    /** User UI theme color key: default / darkblue / black / green. */
+    public String getFrontendThemeColor() {
+        String v = getStringFromGroup("frontend", "frontend_theme_color");
+        return StringUtils.hasText(v) ? v : "default";
+    }
+
+    /** Optional user UI background image URL (empty allowed). */
+    public String getFrontendBackgroundUrl() {
+        return getStringFromGroup("frontend", "frontend_background_url");
+    }
+
+    /** Telegram 群组讨论链接（公开配置可下发；空字符串允许）。 */
+    public String getTelegramDiscussLink() {
+        return getStringFromGroup("telegram", "telegram_discuss_link");
+    }
+
+    /**
+     * Telegram Bot 开关：0/1。兼容 Number / Boolean / String（与 {@link #intFromGroup} 一致）。
+     */
+    public int getTelegramBotEnable() {
+        Integer v = intFromGroup("telegram", "telegram_bot_enable");
+        return v != null ? v : 0;
+    }
+
     /** Server-only Google reCAPTCHA secret. */
     public String getRecaptchaSecret() {
         return getStringFromGroup("safe", "recaptcha_key");
@@ -433,6 +481,65 @@ public class ConfigService {
             return false;
         }
         return !SECURE_PATH_RESERVED.contains(path.toLowerCase(Locale.ROOT));
+    }
+
+    /**
+     * Normalize subscribe path for save: trim, ensure leading {@code /}, strip trailing {@code /}
+     * (except root). Empty/blank → empty string (runtime falls back to default).
+     */
+    static String normalizeSubscribePathInput(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        String t = raw.trim();
+        if (t.isEmpty()) {
+            return "";
+        }
+        if (!t.startsWith("/")) {
+            t = "/" + t;
+        }
+        while (t.length() > 1 && t.endsWith("/")) {
+            t = t.substring(0, t.length() - 1);
+        }
+        return t;
+    }
+
+    /**
+     * Validate a normalized non-empty subscribe path (charset, length, {@code ..}, reserved prefixes).
+     * {@code securePathSegment} is the current admin UI path (no leading slash); may be null/blank.
+     */
+    static boolean isValidSubscribePath(String normalized, String securePathSegment) {
+        if (normalized == null || normalized.isEmpty()) {
+            return true;
+        }
+        if ("/".equals(normalized)) {
+            return false;
+        }
+        if (normalized.length() > SUBSCRIBE_PATH_MAX_LEN) {
+            return false;
+        }
+        if (normalized.contains("..")) {
+            return false;
+        }
+        if (!normalized.matches("^/[A-Za-z0-9._~/-]+$")) {
+            return false;
+        }
+        String lower = normalized.toLowerCase(Locale.ROOT);
+        for (String prefix : SUBSCRIBE_PATH_RESERVED_PREFIXES) {
+            if (lower.equals(prefix) || lower.startsWith(prefix + "/")) {
+                return false;
+            }
+        }
+        if (StringUtils.hasText(securePathSegment)) {
+            String seg = securePathSegment.trim().toLowerCase(Locale.ROOT);
+            if (!seg.isEmpty()) {
+                String securePrefix = "/" + seg;
+                if (lower.equals(securePrefix) || lower.startsWith(securePrefix + "/")) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     /**
@@ -523,6 +630,7 @@ public class ConfigService {
      */
     public void save(Map<String, Object> body) throws Exception {
         validateSecurePathInSaveBody(body);
+        validateSubscribePathInSaveBody(body);
         Map<String, Object> current = getFullConfig();
         deepMerge(current, body);
         String json = objectMapper.writeValueAsString(current);
@@ -563,6 +671,54 @@ public class ConfigService {
         if (!isValidSecurePath(path)) {
             throw new BusinessException(500, "后台路径不合法：至少8位字母或数字，且不能为保留路径");
         }
+    }
+
+    /**
+     * Validate and normalize {@code site.subscribe_path} in save body when the key is present.
+     * Empty/blank is allowed (runtime default). Illegal values → {@link BusinessException}.
+     */
+    @SuppressWarnings("unchecked")
+    private void validateSubscribePathInSaveBody(Map<String, Object> body) {
+        if (body == null || !(body.get("site") instanceof Map<?, ?> siteRaw)) {
+            return;
+        }
+        if (!siteRaw.containsKey("subscribe_path")) {
+            return;
+        }
+        Map<String, Object> site;
+        if (siteRaw instanceof HashMap || siteRaw instanceof LinkedHashMap) {
+            site = (Map<String, Object>) siteRaw;
+        } else {
+            site = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> e : siteRaw.entrySet()) {
+                site.put(String.valueOf(e.getKey()), e.getValue());
+            }
+            body.put("site", site);
+        }
+        Object raw = site.get("subscribe_path");
+        String normalized = normalizeSubscribePathInput(raw == null ? "" : String.valueOf(raw));
+        if (!StringUtils.hasText(normalized)) {
+            site.put("subscribe_path", "");
+            return;
+        }
+        String secureSegment = resolveSecurePathSegmentForSubscribeValidation(body);
+        if (!isValidSubscribePath(normalized, secureSegment)) {
+            throw new BusinessException(500,
+                    "订阅路径不合法：须以 / 开头，仅含字母数字与 ._~/ -，长度≤128，且不能与保留 API 前缀或后台路径冲突");
+        }
+        site.put("subscribe_path", normalized);
+    }
+
+    /** Prefer secure_path from the same save body when present and valid; else current config. */
+    private String resolveSecurePathSegmentForSubscribeValidation(Map<String, Object> body) {
+        if (body.get("safe") instanceof Map<?, ?> safe && safe.containsKey("secure_path")) {
+            Object raw = safe.get("secure_path");
+            String candidate = raw == null ? "" : String.valueOf(raw).trim();
+            if (StringUtils.hasText(candidate) && isValidSecurePath(candidate)) {
+                return candidate;
+            }
+        }
+        return getSecurePath();
     }
 
     @SuppressWarnings("unchecked")

@@ -10,6 +10,7 @@ import com.v2board.api.mapper.UserMapper;
 import com.v2board.api.model.Ticket;
 import com.v2board.api.model.TicketMessage;
 import com.v2board.api.model.User;
+import com.v2board.api.service.TelegramService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.StringUtils;
@@ -35,6 +36,9 @@ public class AdminTicketController {
 
     @Autowired
     private UserMapper userMapper;
+
+    @Autowired
+    private TelegramService telegramService;
 
     /**
      * 管理端工单列表/详情，对齐 PHP Admin\\TicketController::fetch。
@@ -122,6 +126,22 @@ public class AdminTicketController {
         ticket.setReplyStatus(1);
         ticket.setUpdatedAt(now);
         ticketMapper.updateById(ticket);
+
+        try {
+            telegramService.sendMessageWithAdmin(
+                    "#`" + ticket.getId() + "` 的工单已由 " + admin.getEmail() + " 进行回复", true);
+            if (ticket.getUserId() != null) {
+                User owner = userMapper.selectById(ticket.getUserId());
+                if (owner != null && owner.getTelegramId() != null) {
+                    String text = "您的工单 #" + ticket.getId() + " 有新回复\n主题：`"
+                            + (ticket.getSubject() != null ? ticket.getSubject() : "")
+                            + "`\n内容：`" + message + "`";
+                    telegramService.sendMessage(owner.getTelegramId(), text);
+                }
+            }
+        } catch (Exception ignored) {
+            // 通知失败不影响主流程
+        }
         return ApiResponse.success(true);
     }
 
