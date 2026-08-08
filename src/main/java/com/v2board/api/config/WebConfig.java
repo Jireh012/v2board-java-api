@@ -29,7 +29,8 @@ public class WebConfig implements WebMvcConfigurer {
                 .addPathPatterns("/**");
 
         registry.addInterceptor(clientAuthInterceptor)
-                .addPathPatterns("/api/v1/user/**", "/api/v1/admin/**");
+                .addPathPatterns("/api/v1/user/**", "/api/v1/admin/**")
+                .excludePathPatterns("/api/v1/admin/login");
 
         logger.debug("Registered ClientTokenInterceptor for dynamic subscribe path matching");
     }
