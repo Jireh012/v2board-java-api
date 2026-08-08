@@ -17,9 +17,13 @@ services:
   api:
     image: ${API_IMAGE:-registry.ouhaihr.com/v2board/api:latest}
     pull_policy: ${PULL_POLICY:-always}
+    # 部署机多为 amd64；在 Apple Silicon 上构建时需显式指定，避免推成 arm64
+    platform: ${DOCKER_PLATFORM:-linux/amd64}
     build:
       context: .
       dockerfile: Dockerfile
+      platforms:
+        - ${DOCKER_PLATFORM:-linux/amd64}
     container_name: v2board-api
     restart: unless-stopped
     ports:
@@ -57,9 +61,12 @@ services:
   web:
     image: ${WEB_IMAGE:-registry.ouhaihr.com/v2board/web:latest}
     pull_policy: ${PULL_POLICY:-always}
+    platform: ${DOCKER_PLATFORM:-linux/amd64}
     build:
       context: ${UI_CONTEXT:-../v2board-ui}
       dockerfile: Dockerfile
+      platforms:
+        - ${DOCKER_PLATFORM:-linux/amd64}
     container_name: v2board-web
     restart: unless-stopped
     ports:
