@@ -45,7 +45,11 @@ public class WechatPayNativeDriver implements PaymentDriver {
         params.put("appid", appId);
         params.put("mch_id", mchId);
         params.put("nonce_str", nonceStr);
-        params.put("body", "V2Board - 订阅");
+        String productName = (String) config.get("product_name");
+        if (productName == null || productName.isBlank()) {
+            productName = "Panel - 订阅";
+        }
+        params.put("body", productName);
         params.put("out_trade_no", tradeNo);
         params.put("total_fee", String.valueOf(totalFen));
         params.put("spbill_create_ip", "127.0.0.1");

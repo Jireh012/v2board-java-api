@@ -53,6 +53,9 @@ public class PaymentService {
     @Autowired
     private PaymentDriverFactory driverFactory;
 
+    @Autowired
+    private ConfigService configService;
+
     @Value("${v2board.app-url:}")
     private String appUrl;
 
@@ -85,6 +88,7 @@ public class PaymentService {
         payload.put("stripe_token", order.get("stripe_token"));
 
         Map<String, Object> config = parseConfig(payment.getConfig());
+        ensureDefaultProductName(config);
 
         // 支付宝当面付：保留原有实现（含 RSA2 签名）
         if ("AlipayF2F".equalsIgnoreCase(method)) {
@@ -99,6 +103,22 @@ public class PaymentService {
         // 其它所有驱动通过 PaymentDriverFactory 分发
         PaymentDriver driver = driverFactory.getDriver(method);
         return driver.pay(config, payload);
+    }
+
+    /** When payment config has no product_name, use site app_name + " - 订阅". */
+    private void ensureDefaultProductName(Map<String, Object> config) {
+        Object productName = config.get("product_name");
+        if (productName == null || String.valueOf(productName).isBlank()) {
+            config.put("product_name", defaultSubscribeProductName());
+        }
+    }
+
+    String defaultSubscribeProductName() {
+        String appName = configService != null ? configService.getAppName() : null;
+        if (appName == null || appName.isBlank()) {
+            appName = "Panel";
+        }
+        return appName + " - 订阅";
     }
 
     /**
@@ -436,7 +456,7 @@ public class PaymentService {
 
         String subject = productName;
         if (subject == null || subject.isEmpty()) {
-            subject = "V2Board - 订阅";
+            subject = defaultSubscribeProductName();
         }
 
         Map<String, String> params = new TreeMap<>();
