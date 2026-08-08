@@ -18,6 +18,7 @@ Code-specs for the Spring Boot / MyBatis-Plus API that shares MySQL + Redis with
 | [Database Guidelines](./database-guidelines.md) | ORM, `v2_*` schema, PHP JSON field types | Active |
 | [Admin Commerce](./admin-commerce.md) | Orders / coupons / giftcards / plan units & filters | Active |
 | [Admin User](./admin-user.md) | User remarks/staff, traffic bytes, ticket reply form | Active |
+| [Admin Content](./admin-content.md) | Notice / knowledge admin CRUD, sort wire `knowledge_ids` | Active |
 | [External Subscribe](./external-subscribe.md) | Third-party subscribe sync status lifecycle | Active |
 | [Subscribe Delivery](./subscribe-delivery.md) | `subscribe_url` resolution + panel/external name markers | Active |
 | [Error Handling](./error-handling.md) | `BusinessException`, silent-catch bans | Active |
@@ -33,6 +34,7 @@ When changing admin servers, JSON columns, or external subscribe:
 - [ ] Read [database-guidelines.md](./database-guidelines.md) if touching PHP-written JSON (`group_id`, etc.)
 - [ ] Read [admin-commerce.md](./admin-commerce.md) if touching orders, coupons, giftcards, plan prices/traffic
 - [ ] Read [admin-user.md](./admin-user.md) if touching admin user fields (`remarks`, traffic bytes) or ticket reply
+- [ ] Read [admin-content.md](./admin-content.md) if touching admin notice/knowledge APIs or sort payload
 - [ ] Read [external-subscribe.md](./external-subscribe.md) if changing sync status, locks, or admin sync APIs
 - [ ] Read [subscribe-delivery.md](./subscribe-delivery.md) if changing `getSubscribe`, subscribe path/URL, or client node naming
 - [ ] Read [error-handling.md](./error-handling.md) — do not swallow conversion errors in list aggregators

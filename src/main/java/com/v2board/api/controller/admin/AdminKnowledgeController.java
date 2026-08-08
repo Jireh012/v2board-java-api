@@ -1,6 +1,8 @@
 package com.v2board.api.controller.admin;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.v2board.api.common.ApiResponse;
 import com.v2board.api.common.BusinessException;
 import com.v2board.api.mapper.KnowledgeMapper;
@@ -40,7 +42,7 @@ public class AdminKnowledgeController {
         }
         LambdaQueryWrapper<Knowledge> wrapper = new LambdaQueryWrapper<>();
         wrapper.select(Knowledge::getTitle, Knowledge::getId, Knowledge::getUpdatedAt,
-                Knowledge::getCategory, Knowledge::getShow)
+                Knowledge::getCategory, Knowledge::getShow, Knowledge::getLanguage, Knowledge::getSort)
                 .orderByAsc(Knowledge::getSort);
         List<Knowledge> list = knowledgeMapper.selectList(wrapper);
         return ApiResponse.success(list);
@@ -69,6 +71,16 @@ public class AdminKnowledgeController {
             long now = System.currentTimeMillis() / 1000;
             body.setCreatedAt(now);
             body.setUpdatedAt(now);
+            if (body.getSort() == null) {
+                // Append after current max so new rows don't float to NULLS-first in ASC lists
+                Knowledge last = knowledgeMapper.selectOne(
+                        new LambdaQueryWrapper<Knowledge>()
+                                .select(Knowledge::getSort)
+                                .orderByDesc(Knowledge::getSort)
+                                .last("LIMIT 1"));
+                int next = last != null && last.getSort() != null ? last.getSort() + 1 : 1;
+                body.setSort(next);
+            }
             int inserted = knowledgeMapper.insert(body);
             if (inserted <= 0) {
                 throw new BusinessException(500, "创建失败");
@@ -79,6 +91,7 @@ public class AdminKnowledgeController {
                 throw new BusinessException(500, "知识不存在");
             }
             body.setCreatedAt(exists.getCreatedAt());
+            body.setUpdatedAt(System.currentTimeMillis() / 1000);
             if (knowledgeMapper.updateById(body) <= 0) {
                 throw new BusinessException(500, "保存失败");
             }
@@ -107,6 +120,12 @@ public class AdminKnowledgeController {
     }
 
     public static class SortRequest {
+        /**
+         * Wire: {@code knowledge_ids} (project SNAKE_CASE). Also accept camelCase
+         * {@code knowledgeIds} for callers that mirrored the Java property name.
+         */
+        @JsonProperty("knowledge_ids")
+        @JsonAlias({ "knowledgeIds" })
         private List<Long> knowledgeIds;
 
         public List<Long> getKnowledgeIds() {
