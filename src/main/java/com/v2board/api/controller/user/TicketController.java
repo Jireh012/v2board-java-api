@@ -14,7 +14,6 @@ import com.v2board.api.service.ConfigService;
 import com.v2board.api.service.TelegramService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -42,15 +41,6 @@ public class TicketController {
 
     @Autowired
     private TelegramService telegramService;
-
-    @Value("${v2board.withdraw-close-enable:0}")
-    private Integer withdrawCloseEnable;
-
-    @Value("${v2board.commission-withdraw-method:alipay,wechat}")
-    private String withdrawMethods;
-
-    @Value("${v2board.commission-withdraw-limit:100}")
-    private Integer withdrawLimit;
 
     /**
      * 获取工单列表或单个工单详情，对齐 PHP User\\TicketController::fetch
@@ -231,10 +221,10 @@ public class TicketController {
         if (configService.getTicketStatus() == 2) {
             throw new BusinessException(500, "工单系统已关闭");
         }
-        if (withdrawCloseEnable != null && withdrawCloseEnable == 1) {
+        if (configService.getWithdrawCloseEnable() == 1) {
             throw new BusinessException(500, "当前系统暂不支持提现工单");
         }
-        String[] methods = (withdrawMethods != null ? withdrawMethods : "").split(",");
+        String[] methods = configService.getCommissionWithdrawMethod().split(",");
         boolean allowed = false;
         for (String m : methods) {
             if (withdrawMethod.equalsIgnoreCase(m.trim())) {
@@ -246,10 +236,10 @@ public class TicketController {
             throw new BusinessException(500, "不支持的提现方式");
         }
         User user = requireUser(request);
-        long balanceYuan = (user.getCommissionBalance() != null ? user.getCommissionBalance() : 0L) / 100;
-        int limit = withdrawLimit != null ? withdrawLimit : 100;
-        if (limit > balanceYuan) {
-            throw new BusinessException(500, "当前提现佣金最低限额为 " + limit + " 元");
+        long balanceCents = user.getCommissionBalance() != null ? user.getCommissionBalance() : 0L;
+        int limitCents = configService.getCommissionWithdrawLimit();
+        if (balanceCents < limitCents) {
+            throw new BusinessException(500, "当前提现佣金最低限额为 " + (limitCents / 100.0) + " 元");
         }
 
         long now = System.currentTimeMillis() / 1000;

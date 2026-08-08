@@ -11,10 +11,10 @@ import com.v2board.api.mapper.UserMapper;
 import com.v2board.api.model.CommissionLog;
 import com.v2board.api.model.InviteCode;
 import com.v2board.api.model.User;
+import com.v2board.api.service.ConfigService;
 import com.v2board.api.util.Helper;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -41,17 +41,8 @@ public class InviteController {
     @Autowired
     private UserMapper userMapper;
 
-    @Value("${v2board.invite-gen-limit:5}")
-    private Integer inviteGenLimit;
-
-    @Value("${v2board.invite-commission:10}")
-    private Integer defaultInviteCommission;
-
-    @Value("${v2board.commission-distribution-enable:0}")
-    private Integer commissionDistributionEnable;
-
-    @Value("${v2board.commission-distribution-l1:100}")
-    private Integer commissionDistributionL1;
+    @Autowired
+    private ConfigService configService;
 
     /**
      * 生成邀请码，对齐 PHP V1\\User\\InviteController::save
@@ -64,7 +55,7 @@ public class InviteController {
                 new LambdaQueryWrapper<InviteCode>()
                         .eq(InviteCode::getUserId, userId)
                         .eq(InviteCode::getStatus, 0));
-        if (count >= inviteGenLimit) {
+        if (count >= configService.getInviteGenLimit()) {
             throw new BusinessException(500, "已达到邀请码生成数量上限");
         }
         InviteCode code = new InviteCode();
@@ -112,13 +103,13 @@ public class InviteController {
                 new LambdaQueryWrapper<InviteCode>()
                         .eq(InviteCode::getUserId, userId)
                         .eq(InviteCode::getStatus, 0));
-        int commissionRate = defaultInviteCommission;
+        int commissionRate = configService.getInviteCommission();
         if (user.getCommissionRate() != null) {
             commissionRate = user.getCommissionRate();
         }
         long uncheckCommission = orderMapper.selectSumCommissionBalance(userId, 3, 0);
-        if (commissionDistributionEnable != null && commissionDistributionEnable == 1) {
-            uncheckCommission = uncheckCommission * commissionDistributionL1 / 100;
+        if (configService.getCommissionDistributionEnable() != 0) {
+            uncheckCommission = uncheckCommission * configService.getCommissionDistributionL1() / 100;
         }
         long registeredCountLong = userMapper.selectCount(
                 new LambdaQueryWrapper<User>().eq(User::getInviteUserId, userId));

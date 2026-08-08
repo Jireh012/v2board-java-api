@@ -16,7 +16,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * 佣金结算定时任务 — 对齐 PHP check:commission
@@ -52,10 +51,8 @@ public class CommissionSchedule {
     /**
      * 自动审核：已完成 3 天以上的订单 commission_status 从 0 → 1
      */
-    private void autoCheck() throws Exception {
-        Map<String, Object> config = configService.getFullConfig();
-        Object autoCheckEnable = config.get("commission_auto_check_enable");
-        if (autoCheckEnable != null && "0".equals(String.valueOf(autoCheckEnable))) {
+    void autoCheck() throws Exception {
+        if (configService.getCommissionAutoCheckEnable() == 0) {
             return;
         }
 
@@ -103,21 +100,18 @@ public class CommissionSchedule {
      */
     @Transactional
     public void payHandle(Order order) throws Exception {
-        Map<String, Object> config = configService.getFullConfig();
-
         int[] commissionShareLevels;
-        Object distEnable = config.get("commission_distribution_enable");
-        if (distEnable != null && !"0".equals(String.valueOf(distEnable))) {
+        if (configService.getCommissionDistributionEnable() != 0) {
             commissionShareLevels = new int[]{
-                    toInt(config.get("commission_distribution_l1"), 100),
-                    toInt(config.get("commission_distribution_l2"), 0),
-                    toInt(config.get("commission_distribution_l3"), 0)
+                    configService.getCommissionDistributionL1(),
+                    configService.getCommissionDistributionL2(),
+                    configService.getCommissionDistributionL3()
             };
         } else {
             commissionShareLevels = new int[]{100};
         }
 
-        boolean withdrawClose = "1".equals(String.valueOf(config.get("withdraw_close_enable")));
+        boolean withdrawClose = configService.getWithdrawCloseEnable() == 1;
         Long inviteUserId = order.getInviteUserId();
         long actualCommission = order.getActualCommissionBalance() != null ? order.getActualCommissionBalance() : 0L;
 
@@ -158,14 +152,5 @@ public class CommissionSchedule {
         order.setActualCommissionBalance(actualCommission);
         order.setUpdatedAt(System.currentTimeMillis() / 1000);
         orderMapper.updateById(order);
-    }
-
-    private int toInt(Object obj, int defaultVal) {
-        if (obj == null) return defaultVal;
-        try {
-            return Integer.parseInt(String.valueOf(obj));
-        } catch (NumberFormatException e) {
-            return defaultVal;
-        }
     }
 }

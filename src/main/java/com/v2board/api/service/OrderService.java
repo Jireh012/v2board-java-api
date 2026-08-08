@@ -615,29 +615,49 @@ public class OrderService {
     }
 
     /**
-     * 从配置中读取整型值（先从 invite 分组中取，再从全局取）
+     * 从配置中读取整型值（先从 invite 分组中取，再从全局取）。
+     * 兼容 Number / Boolean / numeric String（与 ConfigService.intFromGroup 一致）。
      */
     @SuppressWarnings("unchecked")
     private int getConfigInt(String key, int defaultValue) {
         try {
             Map<String, Object> config = configService.getFullConfig();
-            // 先从 invite 分组中查找
             Object inviteSection = config.get("invite");
             if (inviteSection instanceof Map) {
-                Object val = ((Map<String, Object>) inviteSection).get(key);
-                if (val instanceof Number) {
-                    return ((Number) val).intValue();
+                Integer fromInvite = parseConfigInt(((Map<String, Object>) inviteSection).get(key));
+                if (fromInvite != null) {
+                    return fromInvite;
                 }
             }
-            // 再从全局查找
-            Object val = config.get(key);
-            if (val instanceof Number) {
-                return ((Number) val).intValue();
+            Integer fromTop = parseConfigInt(config.get(key));
+            if (fromTop != null) {
+                return fromTop;
             }
         } catch (Exception e) {
             logger.error("getConfigInt: failed to load config for key={}", key, e);
         }
         return defaultValue;
+    }
+
+    private static Integer parseConfigInt(Object val) {
+        if (val == null) {
+            return null;
+        }
+        if (val instanceof Number n) {
+            return n.intValue();
+        }
+        if (val instanceof Boolean b) {
+            return b ? 1 : 0;
+        }
+        String s = String.valueOf(val).trim();
+        if (s.isEmpty()) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(s);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     /**

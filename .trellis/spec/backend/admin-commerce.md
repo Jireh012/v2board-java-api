@@ -50,6 +50,7 @@ orderService.applyBalance(order, user);
 | Field / concept | Storage | UI display / input |
 |-----------------|---------|-------------------|
 | Order / coupon / giftcard **money** | Integer **cents** (`分`) | Yuan with `/100` or `*100` |
+| Invite `commission_withdraw_limit` / `commission_balance` | Integer **cents** (`分`) | Admin label: 分; compare balance vs limit in cents (see [invite-commission.md](./invite-commission.md)) |
 | Coupon `type=1` value | Cents | Yuan |
 | Coupon `type=2` value | Percent integer `1–100` | `%` (no `/100`) |
 | Plan `transfer_enable` | **GB** (not bytes) | GB; on user assign multiply by `1073741824` |
