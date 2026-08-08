@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Verify public endpoint response envelope and no sensitive leak"}
+{"file": ".trellis/tasks/08-08-site-name-dynamic/prd.md", "reason": "AC1–AC6 brand rendering and fallback checks"}
+{"file": ".trellis/tasks/08-08-site-name-dynamic/design.md", "reason": "Contract: GET passport/comm/config returns only app_name"}

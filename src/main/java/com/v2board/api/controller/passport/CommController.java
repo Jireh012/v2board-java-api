@@ -4,11 +4,13 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.v2board.api.common.ApiResponse;
 import com.v2board.api.mapper.InviteCodeMapper;
 import com.v2board.api.model.InviteCode;
+import com.v2board.api.service.ConfigService;
 import com.v2board.api.service.PassportService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -23,6 +25,19 @@ public class CommController {
 
     @Autowired
     private InviteCodeMapper inviteCodeMapper;
+
+    @Autowired
+    private ConfigService configService;
+
+    /**
+     * 公开站点配置（仅非敏感品牌字段），供登录页与全站品牌渲染。
+     */
+    @GetMapping("/config")
+    public ApiResponse<Map<String, Object>> config() {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("app_name", configService.getAppName());
+        return ApiResponse.success(data);
+    }
 
     @PostMapping("/sendEmailVerify")
     public ApiResponse<Boolean> sendEmailVerify(@RequestBody Map<String, Object> body,

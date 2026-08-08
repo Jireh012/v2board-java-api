@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend pre-dev checklist and API conventions"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "BusinessException / ApiResponse patterns for new public endpoint"}
+{"file": ".trellis/tasks/08-08-site-name-dynamic/design.md", "reason": "API contract and frontend brand store shape"}
+{"file": ".trellis/tasks/08-08-site-name-dynamic/prd.md", "reason": "Acceptance criteria for brand surfaces"}
