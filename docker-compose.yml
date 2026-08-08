@@ -1,21 +1,25 @@
 # V2Board Java API + UI
 # MySQL / Redis 使用外部第三方数据源（不在本 compose 中启动）
 #
-# 目录约定（同级）：
-#   repos/
-#     v2board-java-api/   ← 在此目录执行 docker compose
-#     v2board-ui/
+# 镜像默认从私有仓库拉取：
+#   registry.ouhaihr.com/v2board/api:latest
+#   registry.ouhaihr.com/v2board/web:latest
 #
 # 使用：
 #   cp .env.example .env   # 填写外部 DB/Redis 与 APP_KEY
+#   docker login registry.ouhaihr.com
+#   docker compose pull && docker compose up -d
+#
+# 本地源码构建（可选）：
 #   docker compose up -d --build
 
 services:
   api:
+    image: ${API_IMAGE:-registry.ouhaihr.com/v2board/api:latest}
+    pull_policy: ${PULL_POLICY:-always}
     build:
       context: .
       dockerfile: Dockerfile
-    image: v2board-java-api:latest
     container_name: v2board-api
     restart: unless-stopped
     ports:
@@ -53,10 +57,11 @@ services:
       - v2board
 
   web:
+    image: ${WEB_IMAGE:-registry.ouhaihr.com/v2board/web:latest}
+    pull_policy: ${PULL_POLICY:-always}
     build:
       context: ${UI_CONTEXT:-../v2board-ui}
       dockerfile: Dockerfile
-    image: v2board-ui:latest
     container_name: v2board-web
     restart: unless-stopped
     ports:
