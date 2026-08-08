@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/admin-commerce.md", "reason": "Deposit bonus nested config deposit.deposit_bounus, open() type=9 rules"}
+{"file": ".trellis/tasks/08-08-deposit-bonus-ui/prd.md", "reason": "AC1–AC4 acceptance criteria for bonus and UI deposit flow"}
+{"file": ".trellis/tasks/08-08-deposit-bonus-ui/design.md", "reason": "getBonus nested path and ProfileView createOrder deposit_amount"}
+{"file": ".trellis/tasks/08-08-deposit-bonus-ui/implement.md", "reason": "Execution checklist for backend fix + UI modal"}

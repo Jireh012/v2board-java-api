@@ -398,11 +398,11 @@ public class OrderService {
             return;
         }
 
-        // type=9: 充值
+        // type=9: 充值（total_amount>0 才加赠；佣金划转 amount=0 不加赠）
         if (order.getType() != null && order.getType() == 9) {
-            long bonus = getBonus(order.getTotalAmount());
-            user.setBalance((user.getBalance() != null ? user.getBalance() : 0L)
-                    + (order.getTotalAmount() != null ? order.getTotalAmount() : 0L) + bonus);
+            long total = order.getTotalAmount() != null ? order.getTotalAmount() : 0L;
+            long bonus = total > 0 ? getBonus(total) : 0L;
+            user.setBalance((user.getBalance() != null ? user.getBalance() : 0L) + total + bonus);
             user.setUpdatedAt(System.currentTimeMillis() / 1000);
             userMapper.updateById(user);
             order.setStatus(3);
@@ -641,10 +641,14 @@ public class OrderService {
     }
 
     /**
-     * 充值奖励 — 对齐 PHP getbounus()
+     * 充值奖励 — 对齐 PHP getbounus()。
+     * 从嵌套配置 deposit.deposit_bounus 读取 "元:元" 阶梯，换算为分后取满足门槛的最大赠送额。
+     * 键名保持 PHP 拼写 deposit_bounus。
      */
-    private long getBonus(Long totalAmount) {
-        if (totalAmount == null) return 0;
+    long getBonus(Long totalAmountCents) {
+        if (totalAmountCents == null || totalAmountCents <= 0) {
+            return 0;
+        }
         Map<String, Object> config;
         try {
             config = configService.getFullConfig();
@@ -652,24 +656,72 @@ public class OrderService {
             logger.error("getBonus: failed to load config", e);
             return 0;
         }
-        Object bonusObj = config.get("deposit_bounus");
-        if (bonusObj == null) return 0;
-        // deposit_bounus 为逗号分隔的 "amount:bonus" 字符串列表
-        // 例如 ["100:10", "500:100"]
+        Object bonusObj = resolveDepositBonusConfig(config);
+        if (bonusObj == null) {
+            return 0;
+        }
         long add = 0;
-        if (bonusObj instanceof java.util.List) {
-            @SuppressWarnings("unchecked")
-            java.util.List<String> tiers = (java.util.List<String>) bonusObj;
-            for (String tier : tiers) {
-                if (tier == null || !tier.contains(":")) continue;
-                String[] parts = tier.split(":");
-                long amount = (long) (Double.parseDouble(parts[0]) * 100);
-                long bonus = (long) (Double.parseDouble(parts[1]) * 100);
-                if (totalAmount >= amount) {
+        for (String tier : iterateBonusTiers(bonusObj)) {
+            if (tier == null) {
+                continue;
+            }
+            String line = tier.trim();
+            if (line.isEmpty() || !line.contains(":")) {
+                continue;
+            }
+            String[] parts = line.split(":", 2);
+            if (parts.length < 2) {
+                continue;
+            }
+            try {
+                long threshold = Math.round(Double.parseDouble(parts[0].trim()) * 100);
+                long bonus = Math.round(Double.parseDouble(parts[1].trim()) * 100);
+                if (totalAmountCents >= threshold) {
                     add = Math.max(add, bonus);
                 }
+            } catch (NumberFormatException ignored) {
+                // skip invalid tier lines
             }
         }
         return add;
+    }
+
+    /** 读取 deposit.deposit_bounus（兼容误放在顶层的旧数据）。 */
+    private static Object resolveDepositBonusConfig(Map<String, Object> config) {
+        if (config == null) {
+            return null;
+        }
+        Object deposit = config.get("deposit");
+        if (deposit instanceof Map<?, ?> depositMap) {
+            Object nested = depositMap.get("deposit_bounus");
+            if (nested != null) {
+                return nested;
+            }
+        }
+        return config.get("deposit_bounus");
+    }
+
+    private static Iterable<String> iterateBonusTiers(Object bonusObj) {
+        java.util.List<String> tiers = new java.util.ArrayList<>();
+        if (bonusObj instanceof java.util.List<?> list) {
+            for (Object item : list) {
+                if (item != null) {
+                    tiers.add(String.valueOf(item));
+                }
+            }
+        } else if (bonusObj instanceof Object[] arr) {
+            for (Object item : arr) {
+                if (item != null) {
+                    tiers.add(String.valueOf(item));
+                }
+            }
+        } else if (bonusObj instanceof Iterable<?> iterable) {
+            for (Object item : iterable) {
+                if (item != null) {
+                    tiers.add(String.valueOf(item));
+                }
+            }
+        }
+        return tiers;
     }
 }

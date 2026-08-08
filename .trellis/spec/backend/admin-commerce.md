@@ -401,6 +401,47 @@ userMapper.updateById(user);
 
 ---
 
+## Scenario: Deposit bonus on order open
+
+### 1. Scope / Trigger
+
+- Admin system config group `deposit.deposit_bounus` (PHP typo key, do **not** rename).
+- Applied in `OrderService.open` when `order.type == 9` and `total_amount > 0`.
+- Commission transfer orders (`type=9`, `total_amount=0`) must not grant bonus.
+
+### 2. Contracts
+
+| Item | Rule |
+|------|------|
+| Config path | `getFullConfig().deposit.deposit_bounus` (nested; not top-level) |
+| Tier format | List / array of `"yuan:yuan"` strings, e.g. `"100:10"` |
+| Units | Threshold & bonus stored as yuan in config → convert `* 100` to cents |
+| Selection | Among tiers where `totalAmountCents >= thresholdCents`, take **max** bonus |
+| Missing / empty / invalid lines | Bonus `0`; skip bad lines |
+
+### 3. Wrong vs Correct
+
+#### Wrong
+
+```java
+Object bonusObj = config.get("deposit_bounus"); // top-level — admin saves under deposit.*
+```
+
+#### Correct
+
+```java
+Map deposit = (Map) config.get("deposit");
+Object bonusObj = deposit != null ? deposit.get("deposit_bounus") : null;
+```
+
+### 4. Tests Required
+
+- Nested `100:10` + deposit 10000¢ → bonus 1000¢.
+- Below threshold / missing section → 0.
+- Multi-tier → max matching bonus.
+
+---
+
 ## Design Decision: Update wrappers over `updateById`
 
 **Context**: Clearing optional limits/prices must write NULL.
