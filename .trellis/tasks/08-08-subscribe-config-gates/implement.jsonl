@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/admin-commerce.md", "reason": "Order money units and commerce patterns"}
+{"file": ".trellis/spec/backend/system-config.md", "reason": "Nested subscribe.* config readers"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "BusinessException on gates"}
+{"file": ".trellis/spec/guides/index.md", "reason": "Cross-layer checklist"}

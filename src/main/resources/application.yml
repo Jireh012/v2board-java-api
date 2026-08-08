@@ -42,11 +42,11 @@ server:
 v2board:
   show-info-to-server-enable: true  # 是否在订阅中显示信息节点（剩余流量、到期时间等）
   reset-traffic-method: 0  # 默认流量重置方式：0-每月第一天，1-到期日，2-不重置，3-每年第一天，4-每年到期日
-  show-subscribe-method: 0  # 订阅方法：0-直接token，1-OTP，2-TOTP
+  show-subscribe-method: 0  # 订阅信息节点展示：0-全部（流量+重置天+到期），1-仅到期，2-仅流量（不影响 subscribe URL）
   # 以下仅作 DB 为空时的默认值；运行时优先管理端系统配置（site / invite / ticket / email 等）
   subscribe-path: /api/v1/client/subscribe
   subscribe-url:
-  show-subscribe-expire: 5  # TOTP过期时间（分钟）
+  show-subscribe-expire: 5  # 用户端「即将到期」徽章提前天数（不影响 TOTP / subscribe URL）
   allow-new-period: 0  # 是否允许新周期：0-否，1-是
   app-name: V2Board
   # 公开配置 SM4-CBC 密钥：16 字节 UTF-8 或 32 位 hex；与前端 VITE_SM4_KEY 一致

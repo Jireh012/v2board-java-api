@@ -1,6 +1,7 @@
 package com.v2board.api.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.v2board.api.common.BusinessException;
 import com.v2board.api.mapper.OrderMapper;
 import com.v2board.api.mapper.PlanMapper;
 import com.v2board.api.mapper.UserMapper;
@@ -13,11 +14,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 订单服务 — 对齐 PHP OrderService
@@ -48,6 +52,236 @@ public class OrderService {
 
     @Autowired
     private ConfigService configService;
+
+    @Autowired
+    private UserService userService;
+
+    /**
+     * VIP 折扣 — 对齐 PHP setVipDiscount（在优惠券之后一次性从 total 扣减 discount_amount）。
+     */
+    public void setVipDiscount(Order order, User user) {
+        long total = order.getTotalAmount() != null ? order.getTotalAmount() : 0L;
+        long discount = order.getDiscountAmount() != null ? order.getDiscountAmount() : 0L;
+        if (user != null && user.getDiscount() != null && user.getDiscount() > 0) {
+            discount = discount + total * user.getDiscount() / 100;
+        }
+        order.setDiscountAmount(discount);
+        order.setTotalAmount(Math.max(0L, total - discount));
+    }
+
+    /**
+     * 订单类型 + 换购门禁 + 差价 — 对齐 PHP setOrderType。
+     */
+    public void setOrderType(Order order, User user) {
+        if (order == null || user == null) {
+            return;
+        }
+        if ("reset_price".equals(order.getPeriod())) {
+            order.setType(4);
+            return;
+        }
+        long now = System.currentTimeMillis() / 1000;
+        Long userPlanId = user.getPlanId();
+        Long expiredAt = user.getExpiredAt();
+        boolean notExpired = expiredAt != null && expiredAt > now;
+        boolean lifetime = expiredAt == null && userPlanId != null;
+
+        if (userPlanId != null && order.getPlanId() != null && !order.getPlanId().equals(userPlanId)
+                && (notExpired || lifetime)) {
+            if (configService.getPlanChangeEnable() != 1) {
+                throw new BusinessException(500, "目前不允许更改订阅，请联系客服或提交工单操作");
+            }
+            order.setType(3);
+            if (configService.getSurplusEnable() == 1) {
+                getSurplusValue(user, order);
+                long surplus = order.getSurplusAmount() != null ? order.getSurplusAmount() : 0L;
+                long total = order.getTotalAmount() != null ? order.getTotalAmount() : 0L;
+                if (surplus >= total) {
+                    order.setRefundAmount(surplus - total);
+                    order.setTotalAmount(0L);
+                } else {
+                    order.setTotalAmount(total - surplus);
+                }
+            }
+            return;
+        }
+        if (notExpired && order.getPlanId() != null && order.getPlanId().equals(userPlanId)) {
+            order.setType(2);
+            return;
+        }
+        order.setType(1);
+    }
+
+    /**
+     * 续费且不允许新周期时，校验 period 与最近有效订单一致。
+     */
+    public void assertRenewPeriodAllowed(User user, Long planId, String period) {
+        if (user == null || planId == null || !StringUtils.hasText(period)) {
+            return;
+        }
+        if (configService.getAllowNewPeriod() == 1) {
+            return;
+        }
+        long now = System.currentTimeMillis() / 1000;
+        if (user.getPlanId() == null || !planId.equals(user.getPlanId())) {
+            return;
+        }
+        if (user.getExpiredAt() == null || user.getExpiredAt() <= now) {
+            return;
+        }
+        if ("reset_price".equals(period)) {
+            return;
+        }
+        String last = findLastValidPeriod(user.getId(), planId);
+        if (last != null && !last.equals(period)) {
+            throw new BusinessException(500, "当前不允许选择新的订阅周期");
+        }
+    }
+
+    public String findLastValidPeriod(Long userId, Long planId) {
+        if (userId == null || planId == null) {
+            return null;
+        }
+        Order last = orderMapper.selectOne(new LambdaQueryWrapper<Order>()
+                .eq(Order::getUserId, userId)
+                .eq(Order::getPlanId, planId)
+                .eq(Order::getStatus, 3)
+                .ne(Order::getPeriod, "reset_price")
+                .orderByDesc(Order::getId)
+                .last("LIMIT 1"));
+        return last != null ? last.getPeriod() : null;
+    }
+
+    /**
+     * 余额抵扣 — 对齐 PHP OrderController::save 余额段。
+     */
+    public void applyBalance(Order order, User user) {
+        if (order == null || user == null) {
+            return;
+        }
+        long total = order.getTotalAmount() != null ? order.getTotalAmount() : 0L;
+        long balance = user.getBalance() != null ? user.getBalance() : 0L;
+        if (balance <= 0 || total <= 0) {
+            return;
+        }
+        if (balance >= total) {
+            if (!userService.addBalance(user.getId(), -total)) {
+                throw new BusinessException(500, "Insufficient balance");
+            }
+            order.setBalanceAmount(total);
+            order.setTotalAmount(0L);
+        } else {
+            if (!userService.addBalance(user.getId(), -balance)) {
+                throw new BusinessException(500, "Insufficient balance");
+            }
+            order.setBalanceAmount(balance);
+            order.setTotalAmount(total - balance);
+        }
+        user.setBalance(userMapper.selectById(user.getId()).getBalance());
+    }
+
+    private void getSurplusValue(User user, Order order) {
+        if (user.getExpiredAt() == null) {
+            getSurplusValueByOneTime(user, order);
+        } else {
+            getSurplusValueByPeriod(user, order);
+        }
+    }
+
+    private void getSurplusValueByOneTime(User user, Order order) {
+        Order lastOneTime = orderMapper.selectOne(new LambdaQueryWrapper<Order>()
+                .eq(Order::getUserId, user.getId())
+                .eq(Order::getPeriod, "onetime_price")
+                .eq(Order::getStatus, 3)
+                .orderByDesc(Order::getId)
+                .last("LIMIT 1"));
+        if (lastOneTime == null) {
+            return;
+        }
+        double nowUserTraffic = (user.getTransferEnable() != null ? user.getTransferEnable() : 0L) / 1073741824.0;
+        if (nowUserTraffic <= 0) {
+            return;
+        }
+        long paidTotal = nz(lastOneTime.getTotalAmount()) + nz(lastOneTime.getBalanceAmount());
+        if (paidTotal <= 0) {
+            return;
+        }
+        double trafficUnitPrice = paidTotal / nowUserTraffic;
+        double used = ((user.getU() != null ? user.getU() : 0L) + (user.getD() != null ? user.getD() : 0L)) / 1073741824.0;
+        double notUsed = nowUserTraffic - used;
+        long result = Math.round(trafficUnitPrice * notUsed);
+        order.setSurplusAmount(Math.max(result, 0L));
+        List<Order> all = orderMapper.selectList(new LambdaQueryWrapper<Order>()
+                .eq(Order::getUserId, user.getId())
+                .ne(Order::getPeriod, "reset_price")
+                .eq(Order::getStatus, 3));
+        order.setSurplusOrderIds(toIdJson(all));
+    }
+
+    private void getSurplusValueByPeriod(User user, Order order) {
+        List<Order> orders = orderMapper.selectList(new LambdaQueryWrapper<Order>()
+                .eq(Order::getUserId, user.getId())
+                .ne(Order::getPeriod, "reset_price")
+                .ne(Order::getPeriod, "onetime_price")
+                .eq(Order::getStatus, 3));
+        if (orders.isEmpty()) {
+            return;
+        }
+        long now = System.currentTimeMillis() / 1000;
+        long orderAmountSum = 0;
+        int orderMonthSum = 0;
+        long lastValidateAt = 0;
+        for (Order item : orders) {
+            Integer months = PERIOD_MONTHS.get(item.getPeriod());
+            if (months == null || item.getCreatedAt() == null) {
+                continue;
+            }
+            long end = ZonedDateTime.ofInstant(Instant.ofEpochSecond(item.getCreatedAt()), ZoneId.systemDefault())
+                    .plusMonths(months)
+                    .toEpochSecond();
+            if (end < now) {
+                continue;
+            }
+            lastValidateAt = item.getCreatedAt();
+            orderMonthSum += months;
+            orderAmountSum += nz(item.getTotalAmount()) + nz(item.getBalanceAmount())
+                    + nz(item.getSurplusAmount()) - nz(item.getRefundAmount());
+        }
+        if (lastValidateAt == 0 || orderMonthSum <= 0) {
+            return;
+        }
+        long expiredAtByOrder = ZonedDateTime.ofInstant(Instant.ofEpochSecond(lastValidateAt), ZoneId.systemDefault())
+                .plusMonths(orderMonthSum)
+                .toEpochSecond();
+        if (expiredAtByOrder < now) {
+            return;
+        }
+        long orderSurplusSecond = expiredAtByOrder - now;
+        long orderRangeSecond = expiredAtByOrder - lastValidateAt;
+        if (orderSurplusSecond <= 0 || orderRangeSecond <= 0 || orderAmountSum <= 0) {
+            return;
+        }
+        double avgPrice = (double) orderAmountSum / orderRangeSecond;
+        long surplus = Math.round(avgPrice * orderSurplusSecond);
+        order.setSurplusAmount(Math.max(surplus, 0L));
+        // PHP stores all fetched period orders' ids
+        order.setSurplusOrderIds(toIdJson(orders));
+    }
+
+    private static long nz(Long v) {
+        return v != null ? v : 0L;
+    }
+
+    private static String toIdJson(List<Order> orders) {
+        if (orders == null || orders.isEmpty()) {
+            return "[]";
+        }
+        return orders.stream()
+                .map(Order::getId)
+                .filter(id -> id != null)
+                .map(String::valueOf)
+                .collect(Collectors.joining(",", "[", "]"));
+    }
 
     /**
      * 订单支付 — 对齐 PHP OrderService::paid()
@@ -216,6 +450,9 @@ public class OrderService {
             buyByPeriod(order, plan, user);
         }
 
+        // 对齐 PHP openEvent：type 1/2/3 且对应配置为 1 时清零已用流量
+        openEvent(order, user);
+
         // 设置速度限制
         user.setSpeedLimit(plan.getSpeedLimit());
 
@@ -324,6 +561,28 @@ public class OrderService {
     private void buyByResetTraffic(User user) {
         user.setU(0L);
         user.setD(0L);
+    }
+
+    /**
+     * 开通事件 — 对齐 PHP openEvent()。
+     * type 1/2/3 读取对应 *_order_event_id；仅值为 1 时清零 u/d。
+     */
+    private void openEvent(Order order, User user) {
+        if (order == null || user == null || order.getType() == null) {
+            return;
+        }
+        int eventId;
+        switch (order.getType()) {
+            case 1 -> eventId = configService.getNewOrderEventId();
+            case 2 -> eventId = configService.getRenewOrderEventId();
+            case 3 -> eventId = configService.getChangeOrderEventId();
+            default -> {
+                return;
+            }
+        }
+        if (eventId == 1) {
+            buyByResetTraffic(user);
+        }
     }
 
     /**

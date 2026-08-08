@@ -21,7 +21,10 @@ String getConfiguredSubscribeUrlBase(); // DB/yml only, no request
 String getSubscribeUrlBase();           // configured, else request origin
 String getSubscribePath();              // DB site.subscribe_path → yml → default
 String resolveCurrentRequestOrigin();   // scheme://host[:port] from current request
-String buildSubscribeUrl(String token, Long userId);
+String buildSubscribeUrl(String token, Long userId); // always subMethod=0 (direct token)
+boolean getShowInfoToServerEnable();                  // DB subscribe.show_info_to_server_enable
+int getShowSubscribeMethod();                         // 0=all / 1=expire-only / 2=traffic-only (info nodes)
+int getShowSubscribeExpire();                         // days for UI「即将到期」; not used in URL/TOTP
 ```
 
 **User API**
@@ -29,6 +32,7 @@ String buildSubscribeUrl(String token, Long userId);
 | Method | Path | Field |
 |--------|------|-------|
 | GET | `/api/v1/user/getSubscribe` | `data.subscribe_url` |
+| GET | `/api/v1/user/getSubscribe` | `data.show_subscribe_expire` |
 
 **Default path**: `/api/v1/client/subscribe`. HTTP route + token interceptor follow DB `site.subscribe_path` via `SubscribeRouteRegistrar` / `ClientTokenInterceptor` (admin save hot-reloads; no restart).
 
@@ -130,6 +134,16 @@ Prefixes also rewrite:
 | External (`ExternalSubscribeNodeService.listReachableAsServerMaps`) | `⚠️ ` | `type=external`, `external=true` |
 
 Info nodes injected by `setSubscribeInfoToServers` are added **after** marking and stay unmarked.
+
+**Display config (decoupled from URL)**:
+
+| Key | Effect |
+|-----|--------|
+| `subscribe.show_info_to_server_enable` | Gate: when off, no info nodes |
+| `subscribe.show_subscribe_method` | 0=traffic+reset+expire; 1=expire only; 2=traffic only |
+| `subscribe.show_subscribe_expire` | User UI badge days; **not** passed to `Helper.getSubscribeUrl` |
+
+`buildSubscribeUrl` always emits `?token=<plain>` (method 0).
 
 ### 4. Validation & Error Matrix
 

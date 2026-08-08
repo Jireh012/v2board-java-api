@@ -11,11 +11,13 @@ import com.v2board.api.model.Order;
 import com.v2board.api.model.Payment;
 import com.v2board.api.model.Plan;
 import com.v2board.api.model.User;
+import com.v2board.api.service.CouponService;
 import com.v2board.api.service.OrderService;
 import com.v2board.api.service.PaymentService;
 import com.v2board.api.util.Helper;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -49,6 +51,9 @@ public class OrderController {
 
     @Autowired
     private UserMapper userMapper;
+
+    @Autowired
+    private CouponService couponService;
 
     /**
      * 对齐 PHP User\\OrderController::fetch
@@ -124,13 +129,15 @@ public class OrderController {
     }
 
     /**
-     * 对齐 PHP User\\OrderController::save 的核心逻辑，暂不实现优惠券和余额抵扣。
+     * 对齐 PHP User\\OrderController::save（优惠券 / VIP / 换购差价 / 余额）。
      */
     @PostMapping("/save")
+    @Transactional
     public ApiResponse<String> save(HttpServletRequest request,
             @RequestParam("plan_id") Long planId,
             @RequestParam(value = "period", required = false) String period,
-            @RequestParam(value = "deposit_amount", required = false) Long depositAmount) {
+            @RequestParam(value = "deposit_amount", required = false) Long depositAmount,
+            @RequestParam(value = "coupon_code", required = false) String couponCode) {
         User user = requireUser(request);
         if (orderService.userHasUnfinishedOrder(user.getId())) {
             throw new BusinessException(500,
@@ -149,11 +156,10 @@ public class OrderController {
             order.setUserId(user.getId());
             order.setPlanId(0L);
             order.setPeriod("deposit");
-            // 订单号对齐原版：Helper::generateOrderNo()，形如 2026030411030655845024696
             order.setTradeNo(Helper.generateOrderNo());
             order.setTotalAmount(depositAmount);
             order.setStatus(0);
-            order.setType(9); // 充值
+            order.setType(9);
             order.setCreatedAt(now);
             order.setUpdatedAt(now);
             orderMapper.insert(order);
@@ -167,81 +173,52 @@ public class OrderController {
         if (plan == null) {
             throw new BusinessException(500, "Subscription plan does not exist");
         }
-        // 简化，对应 PHP 各种 show/renew/period 校验逻辑
-        Integer price = null;
-        switch (period) {
-            case "month_price":
-                price = plan.getMonthPrice();
-                break;
-            case "quarter_price":
-                price = plan.getQuarterPrice();
-                break;
-            case "half_year_price":
-                price = plan.getHalfYearPrice();
-                break;
-            case "year_price":
-                price = plan.getYearPrice();
-                break;
-            case "two_year_price":
-                price = plan.getTwoYearPrice();
-                break;
-            case "three_year_price":
-                price = plan.getThreeYearPrice();
-                break;
-            case "onetime_price":
-                price = plan.getOnetimePrice();
-                break;
-            case "reset_price":
-                price = plan.getResetPrice();
-                break;
-            default:
-                throw new BusinessException(500,
-                        "This payment period cannot be purchased, please choose another period");
-        }
+        Integer price = priceOf(plan, period);
         if (price == null) {
             throw new BusinessException(500, "This payment period cannot be purchased, please choose another period");
         }
 
         User dbUser = userMapper.selectById(user.getId());
-        int orderType = resolveOrderType(dbUser, plan.getId(), period);
-        long now = System.currentTimeMillis() / 1000;
+        orderService.assertRenewPeriodAllowed(dbUser, plan.getId(), period);
 
+        long now = System.currentTimeMillis() / 1000;
         Order order = new Order();
         order.setUserId(user.getId());
         order.setPlanId(plan.getId());
         order.setPeriod(period);
-        // 订单号对齐原版：Helper::generateOrderNo()，形如 2026030411030655845024696
         order.setTradeNo(Helper.generateOrderNo());
         order.setTotalAmount(price.longValue());
+        order.setDiscountAmount(0L);
         order.setStatus(0);
-        order.setType(orderType);
         order.setCreatedAt(now);
         order.setUpdatedAt(now);
-        orderMapper.insert(order);
 
+        if (StringUtils.hasText(couponCode)) {
+            couponService.use(couponCode, order);
+        }
+        orderService.setVipDiscount(order, dbUser);
+        orderService.setOrderType(order, dbUser);
+        orderService.setInvite(order, dbUser);
+        orderService.applyBalance(order, dbUser);
+
+        if (orderMapper.insert(order) <= 0) {
+            throw new BusinessException(500, "Failed to create order");
+        }
         return ApiResponse.success(order.getTradeNo());
     }
 
-    /**
-     * 与 PHP OrderService::setOrderType 对齐：1-新购 2-续费 3-升级 4-流量重置 9-充值
-     */
-    private int resolveOrderType(User user, Long planId, String period) {
-        if ("reset_price".equals(period)) {
-            return 4;
-        }
-        if (user == null) {
-            return 1;
-        }
-        Long userPlanId = user.getPlanId();
-        Long expiredAt = user.getExpiredAt();
-        boolean notExpired = expiredAt != null && expiredAt > System.currentTimeMillis() / 1000;
-        if (userPlanId != null && !planId.equals(userPlanId) && (notExpired || expiredAt == null)) {
-            return 3; // 升级
-        }
-        if (notExpired && planId.equals(userPlanId)) {
-            return 2; // 续费
-        }
-        return 1; // 新购
+    private static Integer priceOf(Plan plan, String period) {
+        return switch (period) {
+            case "month_price" -> plan.getMonthPrice();
+            case "quarter_price" -> plan.getQuarterPrice();
+            case "half_year_price" -> plan.getHalfYearPrice();
+            case "year_price" -> plan.getYearPrice();
+            case "two_year_price" -> plan.getTwoYearPrice();
+            case "three_year_price" -> plan.getThreeYearPrice();
+            case "onetime_price" -> plan.getOnetimePrice();
+            case "reset_price" -> plan.getResetPrice();
+            default -> null;
+        };
     }
 
     /**

@@ -3,6 +3,7 @@ package com.v2board.api.controller;
 import com.v2board.api.model.User;
 import com.v2board.api.protocol.ProtocolHandler;
 import com.v2board.api.protocol.GeneralHandler;
+import com.v2board.api.service.ConfigService;
 import com.v2board.api.service.ServerService;
 import com.v2board.api.service.UserService;
 import com.v2board.api.service.external.ExternalSubscribeNodeService;
@@ -47,9 +48,9 @@ public class ClientController {
     
     @Autowired
     private List<ProtocolHandler> protocolHandlers;
-    
-    @Value("${v2board.show-info-to-server-enable:false}")
-    private Boolean showInfoToServerEnable;
+
+    @Autowired
+    private ConfigService configService;
     
     @Value("${v2board.subscribe-path:}")
     private String subscribePath;
@@ -313,25 +314,19 @@ public class ClientController {
         if (servers == null || servers.isEmpty()) {
             return;
         }
-        
-        // 检查是否启用订阅信息显示（从配置读取）
-        if (showInfoToServerEnable == null || !showInfoToServerEnable) {
+
+        if (!configService.getShowInfoToServerEnable()) {
             return;
         }
-        
-        // 获取第一个服务器作为模板
+
         Map<String, Object> templateServer = servers.get(0);
-        
-        // 计算已用流量
-        long useTraffic = (user.getU() != null ? user.getU() : 0) + 
+
+        long useTraffic = (user.getU() != null ? user.getU() : 0) +
                           (user.getD() != null ? user.getD() : 0);
         long totalTraffic = user.getTransferEnable() != null ? user.getTransferEnable() : 0;
         long remainingTraffic = totalTraffic - useTraffic;
-        
-        // 格式化剩余流量
         String remainingTrafficStr = Helper.trafficConvert(remainingTraffic);
-        
-        // 格式化到期日期（格式：Y-m-d）
+
         String expiredDate;
         if (user.getExpiredAt() != null && user.getExpiredAt() > 0) {
             java.time.LocalDate date = java.time.Instant.ofEpochSecond(user.getExpiredAt())
@@ -341,32 +336,52 @@ public class ClientController {
         } else {
             expiredDate = "长期有效";
         }
-        
-        // 获取重置天数
+
         Integer resetDay = userService.getResetDay(user);
-        
-        // 在服务器列表前添加信息节点（使用 array_unshift 的逻辑，即添加到列表开头）
-        // 注意：PHP中array_unshift是倒序添加的，所以最后添加的会在最前面
-        // 1. 套餐到期时间（最后添加，会在最前面）
-        Map<String, Object> expireInfo = new HashMap<>(templateServer);
-        expireInfo.put("name", "套餐到期：" + expiredDate);
-        servers.add(0, expireInfo);
-        
-        // 2. 重置天数（如果有，倒数第二个添加）
-        if (resetDay != null && resetDay > 0) {
-            Map<String, Object> resetInfo = new HashMap<>(templateServer);
-            resetInfo.put("name", "距离下次重置剩余：" + resetDay + " 天");
-            servers.add(0, resetInfo);
+        boolean hasResetDay = resetDay != null && resetDay > 0;
+        int method = configService.getShowSubscribeMethod();
+        List<SubscribeInfoKind> kinds = resolveSubscribeInfoKinds(method, hasResetDay);
+
+        // PHP array_unshift 顺序：method=0 时先 expire，再 reset，最后 traffic（最后 unshift 的在最前）
+        for (SubscribeInfoKind kind : kinds) {
+            Map<String, Object> info = new HashMap<>(templateServer);
+            switch (kind) {
+                case EXPIRE -> info.put("name", "套餐到期：" + expiredDate);
+                case RESET -> info.put("name", "距离下次重置剩余：" + resetDay + " 天");
+                case TRAFFIC -> info.put("name", "剩余流量：" + remainingTrafficStr);
+            }
+            servers.add(0, info);
         }
-        
-        // 3. 剩余流量（第一个添加，会在最后面）
-        Map<String, Object> trafficInfo = new HashMap<>(templateServer);
-        trafficInfo.put("name", "剩余流量：" + remainingTrafficStr);
-        servers.add(0, trafficInfo);
-        
-        logger.debug("Added subscribe info nodes: remaining traffic={}, reset day={}, expired date={}", 
-            remainingTrafficStr, resetDay, expiredDate);
+
+        logger.debug("Added subscribe info nodes method={}: kinds={}, remaining={}, resetDay={}, expired={}",
+            method, kinds, remainingTrafficStr, resetDay, expiredDate);
     }
-    
+
+    /**
+     * 按 show_subscribe_method 决定注入哪些信息节点，以及 add(0) 应用顺序。
+     * 0/未知：expire → reset(可选) → traffic；1：仅 expire；2：仅 traffic。
+     */
+    static List<SubscribeInfoKind> resolveSubscribeInfoKinds(int method, boolean hasResetDay) {
+        return switch (method) {
+            case 1 -> List.of(SubscribeInfoKind.EXPIRE);
+            case 2 -> List.of(SubscribeInfoKind.TRAFFIC);
+            default -> {
+                List<SubscribeInfoKind> kinds = new ArrayList<>();
+                kinds.add(SubscribeInfoKind.EXPIRE);
+                if (hasResetDay) {
+                    kinds.add(SubscribeInfoKind.RESET);
+                }
+                kinds.add(SubscribeInfoKind.TRAFFIC);
+                yield kinds;
+            }
+        };
+    }
+
+    enum SubscribeInfoKind {
+        EXPIRE,
+        RESET,
+        TRAFFIC
+    }
+
 }
 

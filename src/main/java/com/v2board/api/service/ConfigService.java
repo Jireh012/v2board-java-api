@@ -266,6 +266,20 @@ public class ConfigService {
         return "/api/v1/client/subscribe";
     }
 
+    /**
+     * 是否在订阅输出中注入信息节点。DB {@code subscribe.show_info_to_server_enable} 优先，1/true 为开。
+     */
+    public boolean getShowInfoToServerEnable() {
+        Integer v = intFromGroup("subscribe", "show_info_to_server_enable");
+        if (v != null) {
+            return v == 1;
+        }
+        return Boolean.TRUE.equals(showInfoToServerEnable);
+    }
+
+    /**
+     * 订阅信息节点展示方式：0=流量+重置天+到期，1=仅到期，2=仅流量。不参与 subscribe URL 生成。
+     */
     public int getShowSubscribeMethod() {
         Integer v = intFromGroup("subscribe", "show_subscribe_method");
         if (v != null) {
@@ -274,6 +288,9 @@ public class ConfigService {
         return showSubscribeMethod != null ? showSubscribeMethod : 0;
     }
 
+    /**
+     * 用户端「即将到期」徽章提前天数。不参与 TOTP / subscribe URL。
+     */
     public int getShowSubscribeExpire() {
         Integer v = intFromGroup("subscribe", "show_subscribe_expire");
         if (v != null) {
@@ -288,6 +305,48 @@ public class ConfigService {
             return v;
         }
         return allowNewPeriod != null ? allowNewPeriod : 0;
+    }
+
+    /** 1 = users may change to a different plan while current sub is active. */
+    public int getPlanChangeEnable() {
+        Integer v = intFromGroup("subscribe", "plan_change_enable");
+        return v != null ? v : 1;
+    }
+
+    /** 1 = apply surplus credit when changing plan. */
+    public int getSurplusEnable() {
+        Integer v = intFromGroup("subscribe", "surplus_enable");
+        return v != null ? v : 1;
+    }
+
+    /** PHP openEvent for type=1 new purchase; only 1 clears used traffic (u/d). */
+    public int getNewOrderEventId() {
+        Integer v = intFromGroup("subscribe", "new_order_event_id");
+        return v != null ? v : 0;
+    }
+
+    /** PHP openEvent for type=2 renew; only 1 clears used traffic (u/d). */
+    public int getRenewOrderEventId() {
+        Integer v = intFromGroup("subscribe", "renew_order_event_id");
+        return v != null ? v : 0;
+    }
+
+    /** PHP openEvent for type=3 plan change; only 1 clears used traffic (u/d). */
+    public int getChangeOrderEventId() {
+        Integer v = intFromGroup("subscribe", "change_order_event_id");
+        return v != null ? v : 0;
+    }
+
+    /**
+     * Global default traffic reset method when plan.reset_traffic_method is null.
+     * 0 month-1, 1 expire-day, 2 none, 3 year-1, 4 year-expire-day.
+     */
+    public int getResetTrafficMethod() {
+        Integer v = intFromGroup("subscribe", "reset_traffic_method");
+        if (v != null) {
+            return v;
+        }
+        return resetTrafficMethod != null ? resetTrafficMethod : 0;
     }
 
     /** 1 = registration closed (admin site.stop_register). */
@@ -341,6 +400,22 @@ public class ConfigService {
         return getStringFromGroup("safe", "recaptcha_key");
     }
 
+    /** 1 = lock user login after too many wrong passwords (by email). */
+    public int getPasswordLimitEnable() {
+        Integer v = intFromGroup("safe", "password_limit_enable");
+        return v != null ? v : 1;
+    }
+
+    public int getPasswordLimitCount() {
+        Integer v = intFromGroup("safe", "password_limit_count");
+        return v != null && v > 0 ? v : 5;
+    }
+
+    public int getPasswordLimitExpireMinutes() {
+        Integer v = intFromGroup("safe", "password_limit_expire");
+        return v != null && v > 0 ? v : 60;
+    }
+
     static boolean isValidSecurePath(String path) {
         if (path == null || !path.matches("^[A-Za-z0-9]{8,}$")) {
             return false;
@@ -365,15 +440,16 @@ public class ConfigService {
 
     /**
      * 按当前系统配置生成用户订阅完整链接（DB 动态配置优先于 yml）。
+     * 始终使用直连 token（subMethod=0）；展示方式 / 提前天数不参与 URL 形态。
      */
     public String buildSubscribeUrl(String token, Long userId) {
         return com.v2board.api.util.Helper.getSubscribeUrl(
                 token,
                 userId,
-                getShowSubscribeMethod(),
+                0,
                 getSubscribePath(),
                 getSubscribeUrlBase(),
-                getShowSubscribeExpire()
+                null
         );
     }
 

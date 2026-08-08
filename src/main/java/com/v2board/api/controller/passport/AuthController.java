@@ -4,6 +4,7 @@ import com.v2board.api.common.ApiResponse;
 import com.v2board.api.common.BusinessException;
 import com.v2board.api.model.User;
 import com.v2board.api.service.AuthService;
+import com.v2board.api.service.LoginPasswordLimitService;
 import com.v2board.api.service.PassportService;
 import com.v2board.api.service.RecaptchaService;
 import com.v2board.api.service.UserService;
@@ -33,6 +34,9 @@ public class AuthController {
     @Autowired
     private RecaptchaService recaptchaService;
 
+    @Autowired
+    private LoginPasswordLimitService loginPasswordLimitService;
+
     @PostMapping("/login")
     public ApiResponse<Map<String, Object>> login(HttpServletRequest request,
                                                   @RequestParam("email") String email,
@@ -42,11 +46,13 @@ public class AuthController {
             throw new BusinessException(422, "邮箱和密码不能为空");
         }
         recaptchaService.verifyIfEnabled(recaptchaData, request.getRemoteAddr());
+        loginPasswordLimitService.assertNotLocked(email);
         User user = userService.findByEmail(email);
         if (user == null) {
             throw new BusinessException(500, "Incorrect email or password");
         }
         if (!userService.verifyPassword(user, password)) {
+            loginPasswordLimitService.recordFailure(email);
             throw new BusinessException(500, "Incorrect email or password");
         }
         if (user.getBanned() != null && user.getBanned() == 1) {

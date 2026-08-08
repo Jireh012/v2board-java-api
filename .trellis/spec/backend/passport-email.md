@@ -124,3 +124,27 @@ String host = configService.getStringFromGroup("email", "email_host");
 | Google siteverify success | Continue auth |
 
 Secret key is `safe.recaptcha_key` (server-only).
+
+---
+
+## Scenario: Password error limit on user login
+
+### 1. Scope / Trigger
+
+- Admin `safe.password_limit_enable` / `password_limit_count` / `password_limit_expire` (minutes).
+- Applies to `POST /api/v1/passport/auth/login` only (not admin login).
+
+### 2. Signatures
+
+- `LoginPasswordLimitService.assertNotLocked(email)` / `recordFailure(email)`
+- Redis key via `CacheKeyUtil.get("PASSWORD_ERROR_LIMIT", email)` on `NodeCacheService`
+
+### 3. Contracts
+
+| Condition | Behavior |
+|-----------|----------|
+| enable=0 | No-op |
+| enable=1 and count ≥ limit | 500 with minutes in message (before password check) |
+| Wrong password | Increment count; TTL = expire minutes |
+| Unknown email | No increment |
+| Successful login | Do not clear counter (TTL expiry only) |

@@ -10,6 +10,41 @@ Admin controllers under `/api/v1/admin/{order,coupon,giftcard,plan}` return `Api
 
 ---
 
+## Scenario: User order save pricing pipeline
+
+### 1. Scope / Trigger
+
+- `POST /api/v1/user/order/save` must mirror PHP: coupon → VIP discount → order type/surplus → invite → balance.
+
+### 2. Contracts
+
+| Step | Behavior |
+|------|----------|
+| `coupon_code` | Optional; `CouponService.use` sets `discount_amount` + `coupon_id` (does not reduce total yet) |
+| VIP `user.discount` | Adds % of current total into `discount_amount`, then `total -= discount_amount` |
+| type=3 change | Requires `subscribe.plan_change_enable`; optional `surplus_enable` surplus math |
+| renew period | If `allow_new_period=0`, period must match last completed same-plan order |
+| balance | Auto-deduct; `balance_amount`; cancel refunds |
+
+### 3. Wrong vs Correct
+
+#### Wrong
+
+```java
+order.setType(3); // without plan_change_enable / surplus
+```
+
+#### Correct
+
+```java
+couponService.use(code, order);
+orderService.setVipDiscount(order, user);
+orderService.setOrderType(order, user);
+orderService.applyBalance(order, user);
+```
+
+---
+
 ## Units (cross-layer)
 
 | Field / concept | Storage | UI display / input |
@@ -326,6 +361,43 @@ JSON Plan (snake_case)
 - Use `LambdaUpdateWrapper.set(...)` so null prices persist as SQL NULL.
 - Never treat plan traffic as bytes in admin forms.
 - Tests: save with `month_price=null` clears column; force_update multiplies GB→bytes on users.
+
+---
+
+## Scenario: Order open — clear used traffic toggles
+
+### 1. Scope / Trigger
+
+- Admin subscribe config keys `new_order_event_id` / `renew_order_event_id` / `change_order_event_id` (PHP-compatible 0/1).
+- Applied in `OrderService.open` **after** `buyBy*` period logic and **before** final `userMapper.updateById`.
+
+### 2. Contracts
+
+| `order.type` | Config key | When value `== 1` |
+|--------------|------------|-------------------|
+| 1 新购 | `subscribe.new_order_event_id` | `user.u = 0`, `user.d = 0` |
+| 2 续费 | `subscribe.renew_order_event_id` | same |
+| 3 变更 | `subscribe.change_order_event_id` | same |
+| other (reset/deposit/…) | — | skip these keys |
+
+Only literal `1` enables clear (not other non-zero). Admin UI exposes Toggles that write 0/1; keys keep `*_event_id` names for PHP DB compatibility.
+
+### 3. Wrong vs Correct
+
+#### Wrong
+
+```java
+// after buyByPeriod but never read event ids — renew with event=1 keeps old u/d
+userMapper.updateById(user);
+```
+
+#### Correct
+
+```java
+buyByPeriod(order, plan, user);
+openEvent(order, user); // type→key; if eventId==1 then u=d=0
+userMapper.updateById(user);
+```
 
 ---
 

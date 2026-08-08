@@ -5,11 +5,11 @@ import com.v2board.api.mapper.PlanMapper;
 import com.v2board.api.mapper.UserMapper;
 import com.v2board.api.model.Plan;
 import com.v2board.api.model.User;
+import com.v2board.api.service.ConfigService;
 import com.v2board.api.service.TelegramService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -45,8 +45,8 @@ public class ResetSchedule {
     @Autowired
     private TelegramService telegramService;
 
-    @Value("${v2board.reset-traffic-method:0}")
-    private Integer defaultResetTrafficMethod;
+    @Autowired
+    private ConfigService configService;
 
     @Scheduled(cron = "0 0 0 * * ?")
     public void resetTraffic() {
@@ -56,12 +56,13 @@ public class ResetSchedule {
         redisTemplate.opsForValue().set("traffic_reset_lock", "1", 300, TimeUnit.SECONDS);
 
         try {
-            // 获取所有 plan，按 resetTrafficMethod 分组
+            int defaultMethod = configService.getResetTrafficMethod();
+            // 获取所有 plan，按 resetTrafficMethod 分组（null → 系统配置默认）
             List<Plan> plans = planMapper.selectList(null);
             Map<Integer, List<Long>> methodPlans = new HashMap<>();
             for (Plan plan : plans) {
                 int method = plan.getResetTrafficMethod() != null
-                        ? plan.getResetTrafficMethod() : defaultResetTrafficMethod;
+                        ? plan.getResetTrafficMethod() : defaultMethod;
                 methodPlans.computeIfAbsent(method, k -> new ArrayList<>()).add(plan.getId());
             }
 

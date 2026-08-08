@@ -292,18 +292,23 @@ public class UserService {
     }
 
     /**
-     * 增加用户余额
+     * 调整用户余额（可正可负，对齐 PHP UserService::addBalance）。
+     * 结果余额不得为负。
      */
     @Transactional
     public boolean addBalance(Long userId, Long amount) {
-        if (userId == null || amount == null || amount <= 0) {
+        if (userId == null || amount == null || amount == 0) {
             return false;
         }
         User user = userMapper.selectById(userId);
         if (user == null) {
             return false;
         }
-        user.setBalance((user.getBalance() != null ? user.getBalance() : 0L) + amount);
+        long next = (user.getBalance() != null ? user.getBalance() : 0L) + amount;
+        if (next < 0) {
+            return false;
+        }
+        user.setBalance(next);
         user.setUpdatedAt(System.currentTimeMillis() / 1000);
         return userMapper.updateById(user) > 0;
     }
