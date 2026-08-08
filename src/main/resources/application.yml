@@ -7,17 +7,6 @@ spring:
     url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:v2board}?useUnicode=true&characterEncoding=utf8&useSSL=${DB_SSL:false}&serverTimezone=Asia/Shanghai
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:}
-  mail:
-    host: ${MAIL_HOST:}
-    port: ${MAIL_PORT:465}
-    username: ${MAIL_USERNAME:}
-    password: ${MAIL_PASSWORD:}
-    properties:
-      mail:
-        smtp:
-          ssl:
-            enable: ${MAIL_SSL:true}
-          auth: true
   thymeleaf:
     prefix: classpath:/templates/
     suffix: .html
@@ -54,22 +43,22 @@ v2board:
   show-info-to-server-enable: true  # 是否在订阅中显示信息节点（剩余流量、到期时间等）
   reset-traffic-method: 0  # 默认流量重置方式：0-每月第一天，1-到期日，2-不重置，3-每年第一天，4-每年到期日
   show-subscribe-method: 0  # 订阅方法：0-直接token，1-OTP，2-TOTP
-  # 以下为默认值；运行时优先读 DB 系统配置 site.subscribe_path / site.subscribe_url（后台可改）
-  subscribe-path: ${SUBSCRIBE_PATH:}  # 订阅路径默认；路由注册仍读此项，改 DB 路径需同步 env 并重启
-  subscribe-url:  # 订阅 URL 基址默认；优先 DB，空则 app_url，再空则用当前请求 origin
+  # 以下仅作 DB 为空时的默认值；运行时优先管理端系统配置（site / invite / ticket / email 等）
+  subscribe-path: /api/v1/client/subscribe
+  subscribe-url:
   show-subscribe-expire: 5  # TOTP过期时间（分钟）
   allow-new-period: 0  # 是否允许新周期：0-否，1-是
-  app-name: ${APP_NAME:V2Board}
+  app-name: V2Board
   php-config-path: ${V2BOARD_PHP_CONFIG_PATH:}
-  app-url: ${APP_URL:}
-  invite-gen-limit: ${INVITE_GEN_LIMIT:5}
-  invite-commission: ${INVITE_COMMISSION:10}
-  commission-distribution-enable: ${COMMISSION_DISTRIBUTION_ENABLE:0}
-  commission-distribution-l1: ${COMMISSION_DISTRIBUTION_L1:100}
-  ticket-status: ${TICKET_STATUS:0} # 0: 全开放, 1: 仅有付费订单用户可开, 2: 完全关闭
-  withdraw-close-enable: ${WITHDRAW_CLOSE_ENABLE:0}
-  commission-withdraw-method: ${COMMISSION_WITHDRAW_METHOD:alipay,wechat}
-  commission-withdraw-limit: ${COMMISSION_WITHDRAW_LIMIT:100}
+  app-url:
+  invite-gen-limit: 5
+  invite-commission: 10
+  commission-distribution-enable: 0
+  commission-distribution-l1: 100
+  ticket-status: 0 # 0: 全开放, 1: 仅有付费订单用户可开, 2: 完全关闭
+  withdraw-close-enable: 0
+  commission-withdraw-method: alipay,wechat
+  commission-withdraw-limit: 100
 
   redis:
     # 与 PHP 项目 REDIS_CACHE_DB 对齐的缓存库索引（默认 1）

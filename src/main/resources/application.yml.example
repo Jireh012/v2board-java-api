@@ -36,12 +36,14 @@ v2board:
   show-info-to-server-enable: true  # 是否在订阅中显示信息节点（剩余流量、到期时间等）
   reset-traffic-method: 0  # 默认流量重置方式：0-每月第一天，1-到期日，2-不重置，3-每年第一天，4-每年到期日
   show-subscribe-method: 0  # 订阅方法：0-直接token，1-OTP，2-TOTP
-  subscribe-path: ${SUBSCRIBE_PATH:}  # 订阅路径，从环境变量 SUBSCRIBE_PATH 读取，留空则使用默认路径 /api/v1/client/subscribe
+  # 默认值；站点名/URL/订阅路径等以管理端系统配置为准
+  subscribe-path: /api/v1/client/subscribe
   subscribe-url:  # 订阅URL列表（逗号分隔，留空则使用当前域名）
   show-subscribe-expire: 5  # TOTP过期时间（分钟）
   allow-new-period: 0  # 是否允许新周期：0-否，1-是
-  app-name: ${APP_NAME:V2Board}
-  php-config-path: ${V2BOARD_PHP_CONFIG_PATH:}  # PHP 项目 config/v2board.php 绝对路径
+  app-name: V2Board
+  php-config-path: ${V2BOARD_PHP_CONFIG_PATH:}  # PHP 项目 config/v2board.php 绝对路径（可选）
+  app-url:
 
 # 应用配置
 app:

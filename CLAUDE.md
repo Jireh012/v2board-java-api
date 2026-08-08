@@ -19,7 +19,7 @@ mvn -Dtest=UserAuthControllerTest test               # Run a single test class
 mvn -Dtest=UserAuthControllerTest#checkLogin_shouldReturnOk test  # Run a single test method
 ```
 
-Configuration is via environment variables (DB_HOST, DB_PORT, DB_NAME, DB_USERNAME, DB_PASSWORD, REDIS_HOST, REDIS_PASSWORD, APP_KEY, SUBSCRIBE_PATH, etc.) or Spring profiles (`application-dev.yml`).
+Configuration is via environment variables (DB_HOST, DB_PORT, DB_NAME, DB_USERNAME, DB_PASSWORD, REDIS_HOST, REDIS_PASSWORD, APP_KEY, etc.) or Spring profiles (`application-dev.yml`). Site/SMTP/subscribe settings are managed in admin system config (DB), not env.
 
 ## Architecture
 

@@ -294,6 +294,21 @@ public class ConfigService {
     }
 
     /**
+     * Read a string from a nested config group (e.g. email.email_host).
+     * Empty / missing → empty string (never null).
+     */
+    public String getStringFromGroup(String group, String key) {
+        try {
+            Map<String, Object> full = getFullConfig();
+            if (full.get(group) instanceof Map<?, ?> map && map.get(key) != null) {
+                return String.valueOf(map.get(key)).trim();
+            }
+        } catch (Exception ignored) {
+        }
+        return "";
+    }
+
+    /**
      * 按当前系统配置生成用户订阅完整链接（DB 动态配置优先于 yml）。
      */
     public String buildSubscribeUrl(String token, Long userId) {

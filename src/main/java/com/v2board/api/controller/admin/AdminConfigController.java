@@ -73,7 +73,7 @@ public class AdminConfigController {
                 Object nameObj = siteMap.get("app_name");
                 if (nameObj != null) appName = String.valueOf(nameObj);
             }
-            mailService.sendEmail(
+            mailService.sendEmailSync(
                     user.getEmail(),
                     "This is v2board test email",
                     "notify",
