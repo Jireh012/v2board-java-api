@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/public-site-config.md", "reason": "Extend public config fields contract"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "ApiResponse / BusinessException for register"}
+{"file": ".trellis/tasks/08-08-user-register-page/design.md", "reason": "API and UI shape"}
+{"file": ".trellis/tasks/08-08-user-register-page/prd.md", "reason": "AC1–AC5"}

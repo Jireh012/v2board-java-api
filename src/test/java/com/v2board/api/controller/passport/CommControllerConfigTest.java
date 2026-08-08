@@ -15,9 +15,11 @@ import static org.mockito.Mockito.when;
 class CommControllerConfigTest {
 
     @Test
-    void config_returnsOnlyAppName() {
+    void config_returnsPublicBrandAndRegisterFlagsOnly() {
         ConfigService configService = mock(ConfigService.class);
         when(configService.getAppName()).thenReturn("DynamicSite");
+        when(configService.getStopRegister()).thenReturn(0);
+        when(configService.getInviteForce()).thenReturn(1);
 
         CommController controller = new CommController();
         ReflectionTestUtils.setField(controller, "configService", configService);
@@ -26,6 +28,8 @@ class CommControllerConfigTest {
         assertEquals(0, resp.getCode());
         assertNotNull(resp.getData());
         assertEquals("DynamicSite", resp.getData().get("app_name"));
-        assertEquals(1, resp.getData().size());
+        assertEquals(0, resp.getData().get("stop_register"));
+        assertEquals(1, resp.getData().get("invite_force"));
+        assertEquals(3, resp.getData().size());
     }
 }

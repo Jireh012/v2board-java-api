@@ -30,7 +30,7 @@ String buildSubscribeUrl(String token, Long userId);
 |--------|------|-------|
 | GET | `/api/v1/user/getSubscribe` | `data.subscribe_url` |
 
-**Default path**: `/api/v1/client/subscribe` (route registration still uses boot-time `v2board.subscribe-path` / `SUBSCRIBE_PATH`).
+**Default path**: `/api/v1/client/subscribe`. HTTP route + token interceptor follow DB `site.subscribe_path` via `SubscribeRouteRegistrar` / `ClientTokenInterceptor` (admin save hot-reloads; no restart).
 
 ### 3. Contracts
 
@@ -63,7 +63,7 @@ When no config and no request context, `Helper.getSubscribeUrl` may still return
 | Empty `subscribe_url` + empty `app_url` + in-request | Use request origin |
 | Empty everything + no request attributes | Relative path only |
 | `force_https=1` | Scheme forced to `https` even if request is `http` |
-| Custom `subscribe_path` in DB only | Link path changes; **HTTP route still needs env/yml + restart** |
+| Custom `subscribe_path` saved in admin | Link path + HTTP route + token gate update immediately (`SubscribeRouteRegistrar.refresh`) |
 
 ### 5. Good / Base / Bad Cases
 

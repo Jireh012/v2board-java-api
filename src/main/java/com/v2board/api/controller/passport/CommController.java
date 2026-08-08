@@ -30,12 +30,14 @@ public class CommController {
     private ConfigService configService;
 
     /**
-     * 公开站点配置（仅非敏感品牌字段），供登录页与全站品牌渲染。
+     * 公开站点配置（仅非敏感字段），供登录/注册页与全站品牌渲染。
      */
     @GetMapping("/config")
     public ApiResponse<Map<String, Object>> config() {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("app_name", configService.getAppName());
+        data.put("stop_register", configService.getStopRegister());
+        data.put("invite_force", configService.getInviteForce());
         return ApiResponse.success(data);
     }
 

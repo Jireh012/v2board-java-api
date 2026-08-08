@@ -3,12 +3,14 @@ package com.v2board.api.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.v2board.api.config.SubscribeRouteRegistrar;
 import com.v2board.api.mapper.SystemConfigMapper;
 import com.v2board.api.model.SystemConfig;
 import com.v2board.api.util.V2boardPhpConfigLoader;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -30,6 +32,10 @@ public class ConfigService {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired(required = false)
+    @Lazy
+    private SubscribeRouteRegistrar subscribeRouteRegistrar;
 
     @Value("${v2board.app-name:V2Board}")
     private String appName;
@@ -275,6 +281,18 @@ public class ConfigService {
         return allowNewPeriod != null ? allowNewPeriod : 0;
     }
 
+    /** 1 = registration closed (admin site.stop_register). */
+    public int getStopRegister() {
+        Integer v = intFromGroup("site", "stop_register");
+        return v != null ? v : 0;
+    }
+
+    /** 1 = invite code required on register. */
+    public int getInviteForce() {
+        Integer v = intFromGroup("invite", "invite_force");
+        return v != null ? v : 0;
+    }
+
     /**
      * 按当前系统配置生成用户订阅完整链接（DB 动态配置优先于 yml）。
      */
@@ -320,7 +338,8 @@ public class ConfigService {
         if (!StringUtils.hasText(bases)) {
             return "";
         }
-        String[] parts = bases.split(",");
+        // Accept comma and/or newline separated bases from admin UI.
+        String[] parts = bases.split("[,\\n\\r]+");
         StringBuilder sb = new StringBuilder();
         for (String part : parts) {
             if (part == null) {
@@ -363,6 +382,10 @@ public class ConfigService {
             row.setUpdatedAt(now);
             systemConfigMapper.updateById(row);
         }
+        // Hot-reload subscribe HTTP route when site.subscribe_path changes (no restart).
+        if (subscribeRouteRegistrar != null && body != null && body.containsKey("site")) {
+            subscribeRouteRegistrar.refresh();
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -370,8 +393,19 @@ public class ConfigService {
         for (Map.Entry<String, Object> e : source.entrySet()) {
             Object srcVal = e.getValue();
             Object tgtVal = target.get(e.getKey());
-            if (srcVal instanceof Map && tgtVal instanceof Map) {
-                deepMerge((Map<String, Object>) tgtVal, (Map<String, Object>) srcVal);
+            if (srcVal instanceof Map<?, ?> srcMap && tgtVal instanceof Map<?, ?> tgtMap) {
+                Map<String, Object> child;
+                // Map.of / Collections.unmodifiableMap break put during merge — copy first.
+                if (tgtMap instanceof HashMap || tgtMap instanceof LinkedHashMap) {
+                    child = (Map<String, Object>) tgtMap;
+                } else {
+                    child = new HashMap<>();
+                    for (Map.Entry<?, ?> te : tgtMap.entrySet()) {
+                        child.put(String.valueOf(te.getKey()), te.getValue());
+                    }
+                    target.put(e.getKey(), child);
+                }
+                deepMerge(child, (Map<String, Object>) srcMap);
             } else {
                 target.put(e.getKey(), srcVal);
             }
@@ -438,8 +472,9 @@ public class ConfigService {
 
     private Map<String, Object> buildDefaults() {
         Map<String, Object> data = new LinkedHashMap<>();
-        data.put("ticket", Map.of("ticket_status", ticketStatus != null ? ticketStatus : 0));
-        data.put("deposit", Map.of("deposit_bounus", new Object[0]));
+        // All nested sections must be mutable: save()/fetch deepMerge into these maps.
+        data.put("ticket", mutableMap("ticket_status", ticketStatus != null ? ticketStatus : 0));
+        data.put("deposit", mutableMap("deposit_bounus", new Object[0]));
         Map<String, Object> invite = new HashMap<>();
         invite.put("invite_force", 0);
         invite.put("invite_commission", inviteCommission != null ? inviteCommission : 10);
@@ -482,14 +517,14 @@ public class ConfigService {
         subscribe.put("show_subscribe_method", showSubscribeMethod != null ? showSubscribeMethod : 0);
         subscribe.put("show_subscribe_expire", showSubscribeExpire != null ? showSubscribeExpire : 5);
         data.put("subscribe", subscribe);
-        data.put("frontend", Map.of(
+        data.put("frontend", mutableMap(
                 "frontend_theme", "v2board",
                 "frontend_theme_sidebar", "light",
                 "frontend_theme_header", "dark",
                 "frontend_theme_color", "default",
                 "frontend_background_url", ""
         ));
-        data.put("server", Map.of(
+        data.put("server", mutableMap(
                 "server_api_url", "",
                 "server_token", "",
                 "server_pull_interval", 60,
@@ -498,7 +533,7 @@ public class ConfigService {
                 "server_device_online_min_traffic", 0,
                 "device_limit_mode", 0
         ));
-        data.put("email", Map.of(
+        data.put("email", mutableMap(
                 "email_template", "default",
                 "email_host", "",
                 "email_port", "",
@@ -507,12 +542,12 @@ public class ConfigService {
                 "email_encryption", "",
                 "email_from_address", ""
         ));
-        data.put("telegram", Map.of(
+        data.put("telegram", mutableMap(
                 "telegram_bot_enable", 0,
                 "telegram_bot_token", "",
                 "telegram_discuss_link", ""
         ));
-        data.put("app", Map.of(
+        data.put("app", mutableMap(
                 "windows_version", "",
                 "windows_download_url", "",
                 "macos_version", "",
@@ -538,5 +573,20 @@ public class ConfigService {
         safe.put("password_limit_expire", 60);
         data.put("safe", safe);
         return data;
+    }
+
+    /** Mutable section map for deepMerge (Map.of is immutable and breaks save/fetch). */
+    private static Map<String, Object> mutableMap(Object... kvs) {
+        Map<String, Object> map = new HashMap<>();
+        if (kvs == null) {
+            return map;
+        }
+        if (kvs.length % 2 != 0) {
+            throw new IllegalArgumentException("mutableMap requires even number of arguments");
+        }
+        for (int i = 0; i < kvs.length; i += 2) {
+            map.put(String.valueOf(kvs[i]), kvs[i + 1]);
+        }
+        return map;
     }
 }

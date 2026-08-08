@@ -26,8 +26,10 @@
 | Field | Type | Notes |
 |-------|------|-------|
 | `app_name` | string | Non-empty; never null in practice |
+| `stop_register` | int 0/1 | `1` = registration closed |
+| `invite_force` | int 0/1 | `1` = invite code required |
 
-MVP allows **only** this field. Adding more public keys later must stay non-sensitive (no SMTP password, `server_token`, bot token, etc.).
+Adding more public keys later must stay non-sensitive (no SMTP password, `server_token`, bot token, etc.).
 
 ### 4. Validation & Error Matrix
 
@@ -44,7 +46,7 @@ MVP allows **only** this field. Adding more public keys later must stay non-sens
 
 ### 6. Tests Required
 
-- Unit: `CommControllerConfigTest` — `app_name` present and `data.size == 1`
+- Unit: `CommControllerConfigTest` — `app_name` / `stop_register` / `invite_force` present; no other keys
 - Optional: assert `getAppName` prefers stored/PHP value over yml (`ConfigServiceAppNameTest`)
 
 ### 7. Wrong vs Correct
@@ -60,6 +62,8 @@ return ApiResponse.success(configService.getFullConfig()); // leaks email/server
 ```java
 Map<String, Object> data = new LinkedHashMap<>();
 data.put("app_name", configService.getAppName());
+data.put("stop_register", configService.getStopRegister());
+data.put("invite_force", configService.getInviteForce());
 return ApiResponse.success(data);
 ```
 
