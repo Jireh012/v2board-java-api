@@ -1,6 +1,6 @@
 # Public Site Config
 
-> Unauthenticated brand config for UI rendering (`app_name`).
+> Unauthenticated public config for brand + register gates (`app_name`, `stop_register`, `invite_force`).
 
 ---
 
@@ -8,14 +8,13 @@
 
 ### 1. Scope / Trigger
 
-- Trigger: Frontend must render `site.app_name` on login pages (no JWT) and shared chrome.
+- Trigger: Login/register/chrome need `app_name` and register gates without JWT.
 - Do **not** expose `/api/v1/admin/config/fetch` publicly — it returns full nested config including secrets.
 
 ### 2. Signatures
 
-- `GET /api/v1/passport/comm/config`
-- Controller: `CommController#config`
-- Source of truth: `ConfigService.getAppName()` → `site.app_name` (DB / PHP flat / yml default `V2Board`)
+- `GET /api/v1/passport/comm/config` — `CommController#config`
+- `ConfigService.getAppName()` / `getStopRegister()` / `getInviteForce()`
 
 ### 3. Contracts
 
@@ -77,4 +76,4 @@ return ApiResponse.success(data);
 
 **Decision**: `GET /api/v1/passport/comm/config` on existing `CommController` — already unauthenticated and used by passport flows.
 
-**Related**: Frontend `v2board-ui` `src/api/site.ts` + `src/siteBrand.ts` (`auth: false`, localStorage `v2board_app_name`, fallback `V2Board`).
+**Related**: Frontend `v2board-ui` `src/api/site.ts` + `src/siteBrand.ts` (`auth: false`, localStorage `v2board_app_name`, `registerEnabled` / `inviteForce`). See frontend `site-brand.md` for `/register` gating.

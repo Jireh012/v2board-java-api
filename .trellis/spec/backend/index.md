@@ -21,7 +21,8 @@ Code-specs for the Spring Boot / MyBatis-Plus API that shares MySQL + Redis with
 | [Admin Content](./admin-content.md) | Notice / knowledge admin CRUD, sort wire `knowledge_ids` | Active |
 | [External Subscribe](./external-subscribe.md) | Third-party subscribe sync status lifecycle | Active |
 | [Subscribe Delivery](./subscribe-delivery.md) | `subscribe_url` resolution + panel/external name markers | Active |
-| [Public Site Config](./public-site-config.md) | Unauth `passport/comm/config` brand fields (`app_name` only) | Active |
+| [Public Site Config](./public-site-config.md) | Unauth `passport/comm/config` brand + register flags | Active |
+| [System Config](./system-config.md) | Admin save/fetch deepMerge; mutable nested maps | Active |
 | [Error Handling](./error-handling.md) | `BusinessException`, silent-catch bans | Active |
 | [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | To fill |
 | [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels | To fill |
@@ -38,8 +39,10 @@ When changing admin servers, JSON columns, or external subscribe:
 - [ ] Read [admin-content.md](./admin-content.md) if touching admin notice/knowledge APIs or sort payload
 - [ ] Read [external-subscribe.md](./external-subscribe.md) if changing sync status, locks, or admin sync APIs
 - [ ] Read [subscribe-delivery.md](./subscribe-delivery.md) if changing `getSubscribe`, subscribe path/URL, or client node naming
-- [ ] Read [public-site-config.md](./public-site-config.md) if changing public brand config or login-page site name APIs
+- [ ] Read [public-site-config.md](./public-site-config.md) if changing public brand/register config APIs
+- [ ] Read [system-config.md](./system-config.md) if changing `ConfigService` defaults, save/merge, or admin config groups
 - [ ] Read [error-handling.md](./error-handling.md) — do not swallow conversion errors in list aggregators
+- [ ] Nested config defaults: **no** `Map.of` for merge targets
 - [ ] Confirm durable job states have startup recovery if paired with in-memory locks
 - [ ] Prefer `ConfigService.buildSubscribeUrl` over raw `@Value` for subscribe links
 - [ ] Money = cents; plan `transfer_enable` = **GB**; nullable clears need `LambdaUpdateWrapper`

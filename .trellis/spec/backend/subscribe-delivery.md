@@ -36,7 +36,7 @@ String buildSubscribeUrl(String token, Long userId);
 
 **Base URL priority** (first non-empty wins):
 
-1. DB `site.subscribe_url` (comma-separated allowed; trim trailing `/`)
+1. DB `site.subscribe_url` (comma and/or newline separated; trim trailing `/`)
 2. DB `site.app_url`
 3. yml `v2board.subscribe-url` / `v2board.app-url`
 4. Current HTTP request origin (`Host` / `X-Forwarded-Host` + `X-Forwarded-Proto`; `site.force_https=1` forces `https`)
@@ -172,6 +172,75 @@ if (server.get("name") != null) {
 ```
 
 Same for Sing-box: always set `outbound.tag` from `server.get("name")` when present.
+
+---
+
+## Scenario: Hot-reload subscribe HTTP path
+
+### 1. Scope / Trigger
+
+- Trigger: Admin changes `site.subscribe_path` and expects the new path to accept GET subscribe **without process restart**.
+- Cross-layer: `ConfigService.save` → `SubscribeRouteRegistrar.refresh` + `ClientTokenInterceptor` path match.
+
+### 2. Signatures
+
+```java
+// SubscribeRouteRegistrar
+void refresh(); // unregister old RequestMappingInfo, register GET path from ConfigService.getSubscribePath()
+static String normalizePath(String path);
+
+// ConfigService.save — when body contains "site"
+subscribeRouteRegistrar.refresh();
+```
+
+Token gate: `ClientTokenInterceptor` registered on `/**`, early-returns unless URI equals current `getSubscribePath()`.
+
+### 3. Contracts
+
+| Piece | Behavior |
+|-------|----------|
+| Default path | `/api/v1/client/subscribe` |
+| Storage | DB `site.subscribe_url` may be comma **or** newline separated; `normalizeSubscribeBases` splits `[,\\n\\r]+`, persists normalized comma list for bases |
+| Path change | Old path → 404; new path → token interceptor + `ClientController.subscribe` |
+| Boot | `ApplicationRunner` registers path from DB/yml once |
+
+### 4. Validation & Error Matrix
+
+| Condition | Result |
+|-----------|--------|
+| Path unchanged on save | `refresh` no-op |
+| Empty path | Normalize to default |
+| Interceptor on non-subscribe URI | `preHandle` returns true (pass-through) |
+| Subscribe without `token` | 403 `token is null` |
+
+### 5. Good/Base/Bad Cases
+
+- Good: Save path `/s` → `GET /s?token=…` works; old `/api/v1/client/subscribe` 404.
+- Base: Default path after boot.
+- Bad: Register route from `@Value` only at startup; interceptor still bound to old path.
+
+### 6. Tests Required
+
+- Unit: `SubscribeRouteRegistrarTest.normalizePath_*`
+- Manual/integration: save custom path in admin → curl new path 403 without token, 200 with valid token.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```java
+@Value("${v2board.subscribe-path:}")
+private String subscribePath;
+// register once in ContextRefreshedEvent — DB edits ignored until restart
+registry.addInterceptor(token).addPathPatterns(subscribePath);
+```
+
+#### Correct
+
+```java
+// Route: ConfigService.getSubscribePath() + registerMapping / unregisterMapping
+// Interceptor: match request URI to getSubscribePath() at runtime
+```
 
 ---
 
