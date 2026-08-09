@@ -21,7 +21,9 @@
   "children": [
     "08-09-node-api-sm4-obfuscate",
     "08-09-user-api-sm4-obfuscate",
-    "08-09-admin-api-sm4-obfuscate"
+    "08-09-admin-api-sm4-obfuscate",
+    "08-09-panel-api-action-alias",
+    "08-09-payment-notify-path-alias"
   ],
   "parent": null,
   "relatedFiles": [],

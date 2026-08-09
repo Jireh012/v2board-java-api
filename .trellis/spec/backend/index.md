@@ -27,7 +27,7 @@ Code-specs for the Spring Boot / MyBatis-Plus API that shares MySQL + Redis with
 | [External Subscribe](./external-subscribe.md) | Third-party subscribe sync status lifecycle | Active |
 | [Subscribe Delivery](./subscribe-delivery.md) | `subscribe_url` resolution + panel/external name markers | Active |
 | [Public Site Config](./public-site-config.md) | Fixed `GET /config` SM4 envelope + public flags / API prefixes | Active |
-| [Panel API SM4](./panel-api-sm4.md) | Passport/user/admin prefix rewrite, body SM4, `X-A`, plaintext allowlist | Active |
+| [Panel API SM4](./panel-api-sm4.md) | Prefixes, action aliases, Panel SM4/`X-A`, payment notify `/g/` plaintext | Active |
 | [Telegram Bot](./telegram.md) | Guest webhook, bind/traffic commands, admin notify | Active |
 | [Passport Email](./passport-email.md) | sendEmailVerify / register code / forget; nested SMTP | Active |
 | [System Config](./system-config.md) | Admin save/fetch deepMerge; nested readers; no MAIL_* env | Active |
@@ -52,7 +52,9 @@ When changing admin servers, JSON columns, or external subscribe:
 - [ ] Read [external-subscribe.md](./external-subscribe.md) if changing sync status, locks, or admin sync APIs
 - [ ] Read [subscribe-delivery.md](./subscribe-delivery.md) if changing `getSubscribe`, subscribe path/URL, or client node naming
 - [ ] Read [public-site-config.md](./public-site-config.md) if changing fixed `/config`, public flags, or bootstrap envelope fields
-- [ ] Read [panel-api-sm4.md](./panel-api-sm4.md) if changing client API prefixes, `PanelSm4Filter`, `X-A`, or classic-path 404
+- [ ] Read [panel-api-sm4.md](./panel-api-sm4.md) if changing client API prefixes, action aliases, payment notify prefix, `PanelSm4Filter`, or `X-A`
+- [ ] New panel endpoint → add classicRel to `PanelApiActionCatalog` (wire is `{prefix}/{alias}` only)
+- [ ] Payment notify: `buildPaymentNotifyPath` only; classic `/api/v1/guest/payment/**` stays 404; never Panel SM4
 - [ ] Read [telegram.md](./telegram.md) if changing webhook, bot commands, or Telegram admin notify
 - [ ] Public/panel SM4: never plaintext fallback when `SM4_KEY` missing; keep secrets off `/config`; do not encrypt payment/telegram/subscribe
 - [ ] Panel `SM4_KEY` ≠ node key from `server_token` — see [panel-api-sm4.md](./panel-api-sm4.md) + [server-node.md](./server-node.md)

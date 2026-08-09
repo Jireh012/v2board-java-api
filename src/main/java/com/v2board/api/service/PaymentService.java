@@ -278,7 +278,12 @@ public class PaymentService {
         if (uuid == null || uuid.isEmpty()) {
             throw new BusinessException(500, "notify uuid is empty");
         }
-        String path = "/api/v1/guest/payment/notify/" + method + "/" + uuid;
+        String path;
+        try {
+            path = configService.buildPaymentNotifyPath(method, uuid);
+        } catch (Exception e) {
+            throw new BusinessException(500, "支付回调路径未就绪");
+        }
         String base = appUrl;
         if (notifyDomain != null && !notifyDomain.isEmpty()) {
             base = notifyDomain;
@@ -290,7 +295,7 @@ public class PaymentService {
             URI uri = new URI(base);
             return uri.resolve(path).toString();
         } catch (URISyntaxException e) {
-            return base + path;
+            return base.endsWith("/") ? base.substring(0, base.length() - 1) + path : base + path;
         }
     }
 

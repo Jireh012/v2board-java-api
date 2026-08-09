@@ -67,7 +67,8 @@ Before implementing server-admin or external-subscribe features, confirm:
 - [ ] Clearing nullable admin fields requires `LambdaUpdateWrapper`, not bare `updateById`
 - [ ] Panel traffic: dynamic prefixes + `SM4_KEY` / `X-A`; bootstrap only `GET /config` (see `../backend/panel-api-sm4.md`)
 - [ ] Node traffic: `{server_api_prefix}/{c|u|p|a|l}` + key from `server_token` — never panel `SM4_KEY` (see `../backend/server-node.md`)
-- [ ] Payment notify / Telegram webhook / subscribe path stay **plaintext** outside panel SM4 zones
+- [ ] Payment notify is `{payment_notify_prefix}/{method}/{uuid}` plaintext (classic guest/payment 404); Telegram/subscribe stay plaintext outside Panel SM4 (see `../backend/panel-api-sm4.md`)
+- [ ] Panel action URLs are `{prefix}/{12hex}` — never classic `getSubscribe`/`fetch` on the wire
 
 ---
 

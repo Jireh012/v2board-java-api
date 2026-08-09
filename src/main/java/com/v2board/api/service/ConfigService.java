@@ -380,6 +380,11 @@ public class ConfigService {
         return normalizeServerApiPrefix(getStringFromGroup("site", "admin_api_prefix"));
     }
 
+    /** {@code site.payment_notify_prefix}; empty when unset. */
+    public String getPaymentNotifyPrefix() {
+        return normalizeServerApiPrefix(getStringFromGroup("site", "payment_notify_prefix"));
+    }
+
     /** Fixed public config bootstrap path {@link #FIXED_PUBLIC_CONFIG_PATH}. */
     public String getPublicConfigPath() {
         return FIXED_PUBLIC_CONFIG_PATH;
@@ -394,12 +399,23 @@ public class ConfigService {
         if (ensureClientApiPathsInPlace(full)) {
             persistFullConfig(full);
         }
-        return Map.of(
-                "passport_api_prefix", getSitePathFromMap(full, "passport_api_prefix"),
-                "user_api_prefix", getSitePathFromMap(full, "user_api_prefix"),
-                "admin_api_prefix", getSitePathFromMap(full, "admin_api_prefix"),
-                "public_config_path", FIXED_PUBLIC_CONFIG_PATH
-        );
+        Map<String, String> paths = new LinkedHashMap<>();
+        paths.put("passport_api_prefix", getSitePathFromMap(full, "passport_api_prefix"));
+        paths.put("user_api_prefix", getSitePathFromMap(full, "user_api_prefix"));
+        paths.put("admin_api_prefix", getSitePathFromMap(full, "admin_api_prefix"));
+        paths.put("payment_notify_prefix", getSitePathFromMap(full, "payment_notify_prefix"));
+        paths.put("public_config_path", FIXED_PUBLIC_CONFIG_PATH);
+        return paths;
+    }
+
+    public String ensurePaymentNotifyPrefix() throws Exception {
+        return ensureClientApiPaths().get("payment_notify_prefix");
+    }
+
+    /** Relative notify path {@code {payment_notify_prefix}/{method}/{uuid}}. */
+    public String buildPaymentNotifyPath(String method, String uuid) throws Exception {
+        String prefix = ensurePaymentNotifyPrefix();
+        return prefix + "/" + method + "/" + uuid;
     }
 
     public String ensurePassportApiPrefix() throws Exception {
@@ -1125,6 +1141,10 @@ public class ConfigService {
         return generatePrefixedPath("/a/", SERVER_API_PREFIX_RANDOM_LEN);
     }
 
+    static String generatePaymentNotifyPrefix() {
+        return generatePrefixedPath("/g/", SERVER_API_PREFIX_RANDOM_LEN);
+    }
+
     private static String generatePrefixedPath(String prefix, int randomLen) {
         StringBuilder sb = new StringBuilder(prefix);
         for (int i = 0; i < randomLen; i++) {
@@ -1148,11 +1168,13 @@ public class ConfigService {
         normalizeClientPathKeyInPlace(site, "passport_api_prefix", "用户 Passport API 前缀");
         normalizeClientPathKeyInPlace(site, "user_api_prefix", "用户 API 前缀");
         normalizeClientPathKeyInPlace(site, "admin_api_prefix", "管理 API 前缀");
+        normalizeClientPathKeyInPlace(site, "payment_notify_prefix", "支付回调前缀");
 
         String passport = normalizeServerApiPrefix(str(site.get("passport_api_prefix")));
         String user = normalizeServerApiPrefix(str(site.get("user_api_prefix")));
         String admin = normalizeServerApiPrefix(str(site.get("admin_api_prefix")));
-        assertClientPathsNoMutualConflict(passport, user, admin);
+        String paymentNotify = normalizeServerApiPrefix(str(site.get("payment_notify_prefix")));
+        assertClientPathsNoMutualConflict(passport, user, admin, paymentNotify);
 
         String subscribe = "";
         if (site.containsKey("subscribe_path")) {
@@ -1169,9 +1191,10 @@ public class ConfigService {
         assertNoConflictWithExisting(passport, "Passport API 前缀", subscribe, serverPrefix);
         assertNoConflictWithExisting(user, "用户 API 前缀", subscribe, serverPrefix);
         assertNoConflictWithExisting(admin, "管理 API 前缀", subscribe, serverPrefix);
+        assertNoConflictWithExisting(paymentNotify, "支付回调前缀", subscribe, serverPrefix);
     }
 
-    private static void assertClientPathsNoMutualConflict(String passport, String user, String admin) {
+    private static void assertClientPathsNoMutualConflict(String passport, String user, String admin, String paymentNotify) {
         if (StringUtils.hasText(passport) && StringUtils.hasText(user) && pathsConflict(passport, user)) {
             throw new BusinessException(500, "Passport API 前缀与用户 API 前缀不能冲突");
         }
@@ -1181,6 +1204,15 @@ public class ConfigService {
         if (StringUtils.hasText(user) && StringUtils.hasText(admin) && pathsConflict(user, admin)) {
             throw new BusinessException(500, "用户 API 前缀与管理 API 前缀不能冲突");
         }
+        if (StringUtils.hasText(passport) && StringUtils.hasText(paymentNotify) && pathsConflict(passport, paymentNotify)) {
+            throw new BusinessException(500, "Passport API 前缀与支付回调前缀不能冲突");
+        }
+        if (StringUtils.hasText(user) && StringUtils.hasText(paymentNotify) && pathsConflict(user, paymentNotify)) {
+            throw new BusinessException(500, "用户 API 前缀与支付回调前缀不能冲突");
+        }
+        if (StringUtils.hasText(admin) && StringUtils.hasText(paymentNotify) && pathsConflict(admin, paymentNotify)) {
+            throw new BusinessException(500, "管理 API 前缀与支付回调前缀不能冲突");
+        }
         if (StringUtils.hasText(passport) && pathsConflict(passport, FIXED_PUBLIC_CONFIG_PATH)) {
             throw new BusinessException(500, "Passport API 前缀不能与固定公开配置路径 /config 冲突");
         }
@@ -1189,6 +1221,9 @@ public class ConfigService {
         }
         if (StringUtils.hasText(admin) && pathsConflict(admin, FIXED_PUBLIC_CONFIG_PATH)) {
             throw new BusinessException(500, "管理 API 前缀不能与固定公开配置路径 /config 冲突");
+        }
+        if (StringUtils.hasText(paymentNotify) && pathsConflict(paymentNotify, FIXED_PUBLIC_CONFIG_PATH)) {
+            throw new BusinessException(500, "支付回调前缀不能与固定公开配置路径 /config 冲突");
         }
     }
 
@@ -1278,27 +1313,34 @@ public class ConfigService {
         changed = ensureSitePathKey(site, "passport_api_prefix", ConfigService::generatePassportApiPrefix) || changed;
         changed = ensureSitePathKey(site, "user_api_prefix", ConfigService::generateUserApiPrefix) || changed;
         changed = ensureSitePathKey(site, "admin_api_prefix", ConfigService::generateAdminApiPrefix) || changed;
+        changed = ensureSitePathKey(site, "payment_notify_prefix", ConfigService::generatePaymentNotifyPrefix) || changed;
 
         String passport = normalizeServerApiPrefix(str(site.get("passport_api_prefix")));
         String user = normalizeServerApiPrefix(str(site.get("user_api_prefix")));
         String admin = normalizeServerApiPrefix(str(site.get("admin_api_prefix")));
+        String paymentNotify = normalizeServerApiPrefix(str(site.get("payment_notify_prefix")));
         // Avoid rare auto-gen collisions (incl. fixed /config).
-        if (clientPathsHaveConflict(passport, user, admin)) {
+        if (clientPathsHaveConflict(passport, user, admin, paymentNotify)) {
             site.put("passport_api_prefix", generatePassportApiPrefix());
             site.put("user_api_prefix", generateUserApiPrefix());
             site.put("admin_api_prefix", generateAdminApiPrefix());
+            site.put("payment_notify_prefix", generatePaymentNotifyPrefix());
             changed = true;
         }
         return changed;
     }
 
-    private static boolean clientPathsHaveConflict(String passport, String user, String admin) {
+    private static boolean clientPathsHaveConflict(String passport, String user, String admin, String paymentNotify) {
         return pathsConflict(passport, user)
                 || pathsConflict(passport, admin)
                 || pathsConflict(user, admin)
+                || pathsConflict(passport, paymentNotify)
+                || pathsConflict(user, paymentNotify)
+                || pathsConflict(admin, paymentNotify)
                 || pathsConflict(passport, FIXED_PUBLIC_CONFIG_PATH)
                 || pathsConflict(user, FIXED_PUBLIC_CONFIG_PATH)
-                || pathsConflict(admin, FIXED_PUBLIC_CONFIG_PATH);
+                || pathsConflict(admin, FIXED_PUBLIC_CONFIG_PATH)
+                || pathsConflict(paymentNotify, FIXED_PUBLIC_CONFIG_PATH);
     }
 
     private static boolean ensureSitePathKey(Map<String, Object> site, String key,
@@ -1417,7 +1459,7 @@ public class ConfigService {
         putPhpSection(defaults, "site", flat,
                 "logo", "force_https", "stop_register", "app_name", "app_description", "app_url",
                 "subscribe_url", "subscribe_path", "passport_api_prefix", "user_api_prefix",
-                "admin_api_prefix", "try_out_plan_id", "try_out_hour", "tos_url",
+                "admin_api_prefix", "payment_notify_prefix", "try_out_plan_id", "try_out_hour", "tos_url",
                 "currency", "currency_symbol");
         putPhpSection(defaults, "subscribe", flat,
                 "plan_change_enable", "reset_traffic_method", "surplus_enable", "allow_new_period",
@@ -1492,6 +1534,7 @@ public class ConfigService {
         site.put("passport_api_prefix", "");
         site.put("user_api_prefix", "");
         site.put("admin_api_prefix", "");
+        site.put("payment_notify_prefix", "");
         site.put("try_out_plan_id", 0);
         site.put("try_out_hour", 1);
         site.put("tos_url", "");

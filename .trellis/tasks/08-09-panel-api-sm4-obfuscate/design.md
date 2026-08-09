@@ -5,8 +5,8 @@
 | Surface | Path strategy | SM4 key | Auth on wire |
 |---------|---------------|---------|--------------|
 | Node | `{server_api_prefix}/{c,u,p,a,l}` | `SHA256(server_token)[:16]` | query `e` |
-| User + Passport | `{user_api_prefix|passport_prefix}/…relative` | `SM4_KEY` | envelope or opaque param (child design) |
-| Admin | `{admin_api_prefix}/…relative` | `SM4_KEY` | same as user |
+| User + Passport | `{user_api_prefix|passport_prefix}/{actionAlias}` | `SM4_KEY` | envelope + `X-A`; aliases: child `08-09-panel-api-action-alias` |
+| Admin | `{admin_api_prefix}/{actionAlias}` | `SM4_KEY` | same as user |
 | Allowlist | classic paths unchanged | none | N/A |
 
 ## Plaintext allowlist (do not wrap)

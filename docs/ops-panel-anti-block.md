@@ -104,7 +104,7 @@ wget -N https://raw.githubusercontent.com/Jireh012/v2node/main/script/install.sh
 3. 前端构建仅需 `VITE_SM4_KEY`（= `SM4_KEY`）；UI 先 GET `/config` 拿到前缀再访问登录与用户/管理 API。
 4. `admin_api_prefix` 与 UI 入口 `secure_path` 无关；勿混用。
 
-**明文例外（勿改到加密前缀下）**：支付 notify `/api/v1/guest/payment/notify/**`、Telegram webhook、订阅拉取路径。
+**明文例外（勿套 Panel SM4）**：支付回调 `{payment_notify_prefix}/{method}/{uuid}`（经典 `/api/v1/guest/payment/**` 已 404）、Telegram webhook、订阅拉取路径。
 
 ---
 
@@ -119,7 +119,7 @@ wget -N https://raw.githubusercontent.com/Jireh012/v2node/main/script/install.sh
 - [ ] `VITE_SM4_KEY` = 面板 `SM4_KEY`；用户/管理端业务 JSON 为信封；鉴权走 `X-A`
 - [ ] `server_api_prefix` 已确认；节点 `ApiPrefix` 一致；旧 UniProxy 路径 404
 - [ ] 通讯密钥 ≥16；节点 `ApiKey` 一致；勿把公开 `SM4_KEY` 当作节点密钥
-- [ ] 支付 notify / Telegram / 订阅仍为明文经典路径
+- [ ] 支付回调使用 `payment_notify_prefix`（管理端可复制 notify_url）；经典 guest/payment 路径应为 404；Telegram / 订阅仍为明文
 - [ ] `subscribe_url` / `app_url` 指向反代域名，而非源站 IP
 - [ ] 安全模式按需开启；公开配置 SM4 密钥仅用于混淆，不是访问控制
 - [ ] 前端壳标题由 `app_name` 覆盖；支付未填 `product_name` 时使用 `app_name + " - 订阅"`
@@ -135,4 +135,4 @@ wget -N https://raw.githubusercontent.com/Jireh012/v2node/main/script/install.sh
 - 不讨论攻击或探测 GFW。
 - 不提供节点 / 用户 API 经典路径双轨兼容（硬切换）。
 
-更多开发约定见 `.trellis/spec/backend/subscribe-delivery.md`（订阅路径热更新与保存校验）、`.trellis/spec/backend/server-node.md`（节点 SM4 契约）、`.trellis/spec/backend/public-site-config.md`（公开配置引导）、`.trellis/spec/backend/panel-api-sm4.md`（面板前缀改写与 Panel SM4）。
+更多开发约定见 `.trellis/spec/backend/subscribe-delivery.md`（订阅路径热更新与保存校验）、`.trellis/spec/backend/server-node.md`（节点 SM4 契约）、`.trellis/spec/backend/public-site-config.md`（公开配置引导）、`.trellis/spec/backend/panel-api-sm4.md`（面板前缀改写、动作名别名与 Panel SM4）。

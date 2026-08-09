@@ -18,14 +18,16 @@ import java.util.Locale;
 
 /**
  * Hard-cutover classic {@code /api/v1/user|passport|admin} → 404; rewrite configured prefixes
- * to internal classic mappings. Marks panel SM4 zone for {@link PanelSm4Filter}.
+ * + action aliases to internal classic mappings. Marks panel SM4 zone for {@link PanelSm4Filter}.
  */
 public class ClientApiPathFilter extends OncePerRequestFilter {
 
     private final ClientApiPathRegistry registry;
+    private final PanelApiActionAliases actionAliases;
 
-    public ClientApiPathFilter(ClientApiPathRegistry registry) {
+    public ClientApiPathFilter(ClientApiPathRegistry registry, PanelApiActionAliases actionAliases) {
         this.registry = registry;
+        this.actionAliases = actionAliases;
     }
 
     @Override
@@ -36,7 +38,7 @@ public class ClientApiPathFilter extends OncePerRequestFilter {
         }
         String path = servletPath(request);
 
-        if (isClassicPanelApi(path)) {
+        if (isClassicPanelApi(path) || isClassicGuestPayment(path)) {
             response.sendError(HttpServletResponse.SC_NOT_FOUND);
             return;
         }
@@ -48,28 +50,66 @@ public class ClientApiPathFilter extends OncePerRequestFilter {
             return;
         }
 
-        String rewritten = tryRewrite(path, registry.getUserPrefix(), "/api/v1/user");
-        if (rewritten != null) {
-            markEncryptedZone(request);
-            filterChain.doFilter(new RewrittenRequest(request, rewritten), response);
+        if (tryHandlePaymentNotify(request, response, filterChain, path)) {
             return;
         }
 
-        rewritten = tryRewrite(path, registry.getPassportPrefix(), "/api/v1/passport");
-        if (rewritten != null) {
-            markEncryptedZone(request);
-            filterChain.doFilter(new RewrittenRequest(request, rewritten), response);
+        if (tryHandleZone(request, response, filterChain, path, registry.getUserPrefix(), "user", "/api/v1/user")) {
             return;
         }
-
-        rewritten = tryRewrite(path, registry.getAdminPrefix(), "/api/v1/admin");
-        if (rewritten != null) {
-            markEncryptedZone(request);
-            filterChain.doFilter(new RewrittenRequest(request, rewritten), response);
+        if (tryHandleZone(request, response, filterChain, path, registry.getPassportPrefix(), "passport", "/api/v1/passport")) {
+            return;
+        }
+        if (tryHandleZone(request, response, filterChain, path, registry.getAdminPrefix(), "admin", "/api/v1/admin")) {
             return;
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    /**
+     * Plaintext payment callback: {@code {payment_notify_prefix}/{method}/{uuid}} →
+     * {@code /api/v1/guest/payment/notify/{method}/{uuid}}. No Panel SM4.
+     */
+    private boolean tryHandlePaymentNotify(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain,
+            String path
+    ) throws IOException, ServletException {
+        String prefix = registry.getPaymentNotifyPrefix();
+        if (!matchesPrefix(path, prefix)) {
+            return false;
+        }
+        String rewritten = rewritePaymentNotify(path, prefix);
+        if (rewritten == null) {
+            response.sendError(HttpServletResponse.SC_NOT_FOUND);
+            return true;
+        }
+        filterChain.doFilter(new RewrittenRequest(request, rewritten), response);
+        return true;
+    }
+
+    private boolean tryHandleZone(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain,
+            String path,
+            String prefix,
+            String zone,
+            String classicBase
+    ) throws IOException, ServletException {
+        if (!matchesPrefix(path, prefix)) {
+            return false;
+        }
+        String rewritten = rewriteAliased(path, prefix, zone, classicBase, actionAliases);
+        if (rewritten == null) {
+            response.sendError(HttpServletResponse.SC_NOT_FOUND);
+            return true;
+        }
+        markEncryptedZone(request);
+        filterChain.doFilter(new RewrittenRequest(request, rewritten), response);
+        return true;
     }
 
     private static void markEncryptedZone(HttpServletRequest request) {
@@ -77,18 +117,39 @@ public class ClientApiPathFilter extends OncePerRequestFilter {
         request.setAttribute(PanelSm4Support.ATTR_REJECT_CLASSIC_AUTH, Boolean.TRUE);
     }
 
-    /** Package-visible for unit tests. */
-    static String tryRewrite(String path, String prefix, String classicBase) {
+    static boolean matchesPrefix(String path, String prefix) {
         if (!StringUtils.hasText(prefix) || !StringUtils.hasText(path)) {
+            return false;
+        }
+        return path.equals(prefix) || path.startsWith(prefix + "/");
+    }
+
+    /**
+     * Rewrite {@code {prefix}/{alias}} → {@code classicBase}/{classicRel}.
+     * Returns null when remainder is missing, multi-segment, or unknown alias.
+     */
+    static String rewriteAliased(
+            String path,
+            String prefix,
+            String zone,
+            String classicBase,
+            PanelApiActionAliases aliases
+    ) {
+        if (!matchesPrefix(path, prefix)) {
             return null;
         }
         if (path.equals(prefix)) {
-            return classicBase;
+            return null;
         }
-        if (path.startsWith(prefix + "/")) {
-            return classicBase + path.substring(prefix.length());
+        String remainder = path.substring(prefix.length() + 1);
+        if (!StringUtils.hasText(remainder) || remainder.contains("/")) {
+            return null;
         }
-        return null;
+        String classicRel = aliases.resolveClassicRel(zone, remainder);
+        if (!StringUtils.hasText(classicRel)) {
+            return null;
+        }
+        return classicBase + "/" + classicRel;
     }
 
     static boolean isClassicPanelApi(String path) {
@@ -102,6 +163,36 @@ public class ClientApiPathFilter extends OncePerRequestFilter {
                 || lower.startsWith("/api/v1/passport/")
                 || lower.equals("/api/v1/admin")
                 || lower.startsWith("/api/v1/admin/");
+    }
+
+    /** Classic V2Board payment notify fingerprint — hard cutover. */
+    static boolean isClassicGuestPayment(String path) {
+        if (path == null) {
+            return false;
+        }
+        String lower = path.toLowerCase(Locale.ROOT);
+        return lower.equals("/api/v1/guest/payment")
+                || lower.startsWith("/api/v1/guest/payment/");
+    }
+
+    /**
+     * {@code {prefix}/{method}/{uuid}} → classic notify path. Null if shape invalid.
+     */
+    static String rewritePaymentNotify(String path, String prefix) {
+        if (!matchesPrefix(path, prefix) || path.equals(prefix)) {
+            return null;
+        }
+        String remainder = path.substring(prefix.length() + 1);
+        if (!StringUtils.hasText(remainder)) {
+            return null;
+        }
+        String[] parts = remainder.split("/");
+        if (parts.length != 2
+                || !StringUtils.hasText(parts[0])
+                || !StringUtils.hasText(parts[1])) {
+            return null;
+        }
+        return "/api/v1/guest/payment/notify/" + parts[0] + "/" + parts[1];
     }
 
     private static boolean pathEquals(String path, String expected) {
@@ -160,8 +251,8 @@ public class ClientApiPathFilter extends OncePerRequestFilter {
     @Configuration
     static class ClientApiPathFilterConfig {
         @Bean
-        ClientApiPathFilter clientApiPathFilter(ClientApiPathRegistry registry) {
-            return new ClientApiPathFilter(registry);
+        ClientApiPathFilter clientApiPathFilter(ClientApiPathRegistry registry, PanelApiActionAliases actionAliases) {
+            return new ClientApiPathFilter(registry, actionAliases);
         }
 
         @Bean

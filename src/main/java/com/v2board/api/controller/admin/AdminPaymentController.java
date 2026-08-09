@@ -7,6 +7,7 @@ import com.v2board.api.common.ApiResponse;
 import com.v2board.api.common.BusinessException;
 import com.v2board.api.mapper.PaymentMapper;
 import com.v2board.api.model.Payment;
+import com.v2board.api.service.ConfigService;
 import com.v2board.api.service.PaymentService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -33,6 +34,9 @@ public class AdminPaymentController {
 
     @Autowired
     private PaymentService paymentService;
+
+    @Autowired
+    private ConfigService configService;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -73,9 +77,13 @@ public class AdminPaymentController {
             if (!StringUtils.hasText(base)) {
                 base = appUrl;
             }
-            String notifyUrl = (base != null && !base.isEmpty()
-                    ? base
-                    : "") + "/api/v1/guest/payment/notify/" + p.getPayment() + "/" + p.getUuid();
+            String path;
+            try {
+                path = configService.buildPaymentNotifyPath(p.getPayment(), p.getUuid());
+            } catch (Exception e) {
+                throw new BusinessException(500, "支付回调路径未就绪");
+            }
+            String notifyUrl = (base != null && !base.isEmpty() ? base : "") + path;
             row.put("notify_url", notifyUrl);
             result.add(row);
         }

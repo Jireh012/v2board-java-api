@@ -10,7 +10,7 @@ import org.springframework.util.StringUtils;
 import java.util.Map;
 
 /**
- * Hot-reloadable passport/user/admin/public-config path prefixes for {@link ClientApiPathFilter}.
+ * Hot-reloadable passport/user/admin/payment-notify/public-config path prefixes for {@link ClientApiPathFilter}.
  */
 @Component
 public class ClientApiPathRegistry {
@@ -22,6 +22,7 @@ public class ClientApiPathRegistry {
     private volatile String passportPrefix = "";
     private volatile String userPrefix = "";
     private volatile String adminPrefix = "";
+    private volatile String paymentNotifyPrefix = "";
     private volatile String publicConfigPath = "";
 
     public ClientApiPathRegistry(@Lazy ConfigService configService) {
@@ -34,9 +35,10 @@ public class ClientApiPathRegistry {
             passportPrefix = paths.getOrDefault("passport_api_prefix", "");
             userPrefix = paths.getOrDefault("user_api_prefix", "");
             adminPrefix = paths.getOrDefault("admin_api_prefix", "");
+            paymentNotifyPrefix = paths.getOrDefault("payment_notify_prefix", "");
             publicConfigPath = ConfigService.FIXED_PUBLIC_CONFIG_PATH;
-            logger.info("Client API paths active: passport={}, user={}, admin={}, public={}",
-                    passportPrefix, userPrefix, adminPrefix, publicConfigPath);
+            logger.info("Client API paths active: passport={}, user={}, admin={}, paymentNotify={}, public={}",
+                    passportPrefix, userPrefix, adminPrefix, paymentNotifyPrefix, publicConfigPath);
         } catch (Exception e) {
             logger.error("Failed to refresh client API paths", e);
         }
@@ -54,6 +56,10 @@ public class ClientApiPathRegistry {
         return adminPrefix;
     }
 
+    public String getPaymentNotifyPrefix() {
+        return paymentNotifyPrefix;
+    }
+
     public String getPublicConfigPath() {
         return publicConfigPath;
     }
@@ -61,6 +67,7 @@ public class ClientApiPathRegistry {
     public boolean hasPrefixes() {
         return StringUtils.hasText(passportPrefix)
                 && StringUtils.hasText(userPrefix)
-                && StringUtils.hasText(adminPrefix);
+                && StringUtils.hasText(adminPrefix)
+                && StringUtils.hasText(paymentNotifyPrefix);
     }
 }

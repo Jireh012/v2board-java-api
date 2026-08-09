@@ -22,6 +22,7 @@ class ConfigServiceClientApiPrefixTest {
         assertTrue(ConfigService.generatePassportApiPrefix().matches("^/p/[a-z0-9]{12}$"));
         assertTrue(ConfigService.generateUserApiPrefix().matches("^/u/[a-z0-9]{12}$"));
         assertTrue(ConfigService.generateAdminApiPrefix().matches("^/a/[a-z0-9]{12}$"));
+        assertTrue(ConfigService.generatePaymentNotifyPrefix().matches("^/g/[a-z0-9]{12}$"));
         assertEquals("/config", ConfigService.FIXED_PUBLIC_CONFIG_PATH);
     }
 
@@ -51,6 +52,7 @@ class ConfigServiceClientApiPrefixTest {
         assertTrue(ConfigService.getSitePathFromMap(full, "passport_api_prefix").matches("^/p/[a-z0-9]{12}$"));
         assertTrue(ConfigService.getSitePathFromMap(full, "user_api_prefix").matches("^/u/[a-z0-9]{12}$"));
         assertTrue(ConfigService.getSitePathFromMap(full, "admin_api_prefix").matches("^/a/[a-z0-9]{12}$"));
+        assertTrue(ConfigService.getSitePathFromMap(full, "payment_notify_prefix").matches("^/g/[a-z0-9]{12}$"));
         assertFalse(((Map<?, ?>) full.get("site")).containsKey("public_config_path"));
         assertFalse(ConfigService.ensureClientApiPathsInPlace(full));
     }
@@ -73,6 +75,7 @@ class ConfigServiceClientApiPrefixTest {
         site.put("passport_api_prefix", "/p/mycustompath");
         site.put("user_api_prefix", "/u/mycustompath");
         site.put("admin_api_prefix", "/a/mycustompath");
+        site.put("payment_notify_prefix", "/g/mycustompath");
         Map<String, Object> body = new HashMap<>();
         body.put("site", site);
         assertDoesNotThrow(() -> configService.save(body));
