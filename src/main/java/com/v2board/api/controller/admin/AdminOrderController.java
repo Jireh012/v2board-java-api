@@ -2,7 +2,6 @@ package com.v2board.api.controller.admin;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.v2board.api.common.ApiResponse;
 import com.v2board.api.common.BusinessException;
 import com.v2board.api.mapper.CommissionLogMapper;
@@ -122,28 +121,28 @@ public class AdminOrderController {
             @RequestParam(value = "is_commission", required = false) Boolean isCommission,
             HttpServletRequest request) {
 
+        if (current < 1) {
+            current = 1;
+        }
         if (pageSize < 10) {
             pageSize = 10;
         }
 
-        QueryWrapper<Order> wrapper = new QueryWrapper<>();
-        wrapper.orderByDesc("created_at");
+        // No MyBatis-Plus PaginationInnerInterceptor in this project — count + LIMIT like AdminUserController.
+        QueryWrapper<Order> countWrapper = new QueryWrapper<>();
+        applyCommissionFilter(countWrapper, isCommission);
+        applyFilters(request, countWrapper);
+        long total = orderMapper.selectCount(countWrapper);
 
-        // 佣金筛选
-        if (Boolean.TRUE.equals(isCommission)) {
-            wrapper.isNotNull("invite_user_id")
-                    .notIn("status", 0, 2)
-                    .gt("commission_balance", 0);
-        }
-
-        // filter 数组过滤，对齐 PHP filter() 方法
-        applyFilters(request, wrapper);
-
-        Page<Order> page = new Page<>(current, pageSize);
-        Page<Order> resultPage = orderMapper.selectPage(page, wrapper);
+        QueryWrapper<Order> listWrapper = new QueryWrapper<>();
+        applyCommissionFilter(listWrapper, isCommission);
+        applyFilters(request, listWrapper);
+        listWrapper.orderByDesc("created_at");
+        long offset = (current - 1) * pageSize;
+        listWrapper.last("LIMIT " + offset + "," + pageSize);
+        List<Order> records = orderMapper.selectList(listWrapper);
 
         // 构建 plan_name 映射
-        List<Order> records = resultPage.getRecords();
         List<Plan> plans = planMapper.selectList(new LambdaQueryWrapper<>());
         Map<Long, String> planNameMap = new HashMap<>();
         for (Plan p : plans) {
@@ -162,8 +161,16 @@ public class AdminOrderController {
 
         Map<String, Object> resp = new HashMap<>();
         resp.put("data", data);
-        resp.put("total", resultPage.getTotal());
+        resp.put("total", total);
         return ApiResponse.success(resp);
+    }
+
+    private static void applyCommissionFilter(QueryWrapper<Order> wrapper, Boolean isCommission) {
+        if (Boolean.TRUE.equals(isCommission)) {
+            wrapper.isNotNull("invite_user_id")
+                    .notIn("status", 0, 2)
+                    .gt("commission_balance", 0);
+        }
     }
 
     /**

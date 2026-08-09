@@ -1,7 +1,6 @@
 package com.v2board.api.controller.admin;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.v2board.api.common.ApiResponse;
 import com.v2board.api.common.BusinessException;
 import com.v2board.api.mapper.TicketMapper;
@@ -66,11 +65,32 @@ public class AdminTicketController {
             ticket.setMessage(messages);
             return ApiResponse.success(ticket);
         }
+        if (current < 1) {
+            current = 1;
+        }
         if (pageSize < 10) {
             pageSize = 10;
         }
-        LambdaQueryWrapper<Ticket> wrapper = new LambdaQueryWrapper<>();
-        wrapper.orderByDesc(Ticket::getUpdatedAt);
+        // No MyBatis-Plus pagination plugin — count + LIMIT (same as admin order/user).
+        LambdaQueryWrapper<Ticket> countWrapper = new LambdaQueryWrapper<>();
+        applyTicketListFilters(countWrapper, status, replyStatus, email);
+        long total = ticketMapper.selectCount(countWrapper);
+
+        LambdaQueryWrapper<Ticket> listWrapper = new LambdaQueryWrapper<>();
+        applyTicketListFilters(listWrapper, status, replyStatus, email);
+        listWrapper.orderByDesc(Ticket::getUpdatedAt);
+        long offset = (current - 1) * pageSize;
+        listWrapper.last("LIMIT " + offset + "," + pageSize);
+        List<Ticket> records = ticketMapper.selectList(listWrapper);
+
+        Map<String, Object> resp = new HashMap<>();
+        resp.put("data", records);
+        resp.put("total", total);
+        return ApiResponse.success(resp);
+    }
+
+    private void applyTicketListFilters(LambdaQueryWrapper<Ticket> wrapper,
+            Integer status, List<Integer> replyStatus, String email) {
         if (status != null) {
             wrapper.eq(Ticket::getStatus, status);
         }
@@ -78,7 +98,6 @@ public class AdminTicketController {
             wrapper.in(Ticket::getReplyStatus, replyStatus);
         }
         if (StringUtils.hasText(email)) {
-            // 邮箱模糊匹配对应用户，再按 user_id IN 过滤
             List<User> users = userMapper.selectList(
                     new LambdaQueryWrapper<User>().like(User::getEmail, email.trim()));
             if (users.isEmpty()) {
@@ -87,12 +106,6 @@ public class AdminTicketController {
                 wrapper.in(Ticket::getUserId, users.stream().map(User::getId).toList());
             }
         }
-        Page<Ticket> page = new Page<>(current, pageSize);
-        Page<Ticket> result = ticketMapper.selectPage(page, wrapper);
-        Map<String, Object> resp = new HashMap<>();
-        resp.put("data", result.getRecords());
-        resp.put("total", result.getTotal());
-        return ApiResponse.success(resp);
     }
 
     /**

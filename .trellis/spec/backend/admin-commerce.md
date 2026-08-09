@@ -10,6 +10,38 @@ Admin controllers under `/api/v1/admin/{order,coupon,giftcard,plan}` return `Api
 
 ---
 
+## Scenario: User order list fetch (lazy page)
+
+### 1. Scope / Trigger
+
+- `GET /api/v1/user/order/fetch` powers「我的订单」infinite scroll and PlanView period lock.
+
+### 2. Signatures
+
+```
+GET /api/v1/user/order/fetch?status&current&pageSize
+```
+
+### 3. Contracts
+
+| Mode | Request | Response `data` |
+|------|---------|-----------------|
+| Legacy (PHP) | no `pageSize` | `OrderRow[]` |
+| Paginated | `pageSize` set (1–50; default coerce ≥1) | `{ data: OrderRow[], total }` |
+
+- `current` defaults to 1 when paginating. Manual `LIMIT` (no MP pagination plugin).
+- `status` optional filter (0 pending / 3 finished, etc.).
+
+### 4. Wrong vs Correct
+
+#### Wrong
+Rely on `selectPage` without LIMIT plugin for user order pages.
+
+#### Correct
+`selectCount` + `last("LIMIT offset,size")` when `pageSize` present; omit `pageSize` for full list callers (`PlanView`).
+
+---
+
 ## Scenario: User order save pricing pipeline
 
 ### 1. Scope / Trigger
@@ -300,6 +332,8 @@ GET /api/v1/admin/order/fetch?current&pageSize&is_commission
 
 Response: `{ data: OrderRow[], total: number }` (+ `plan_name` on rows).
 
+Pagination: this project has **no** MyBatis-Plus `PaginationInnerInterceptor`. `fetch` must `selectCount` + `selectList` with `last("LIMIT offset,pageSize")` (same pattern as admin user/coupon). Do **not** rely on `selectPage` alone — it returns the full set and breaks admin UI paging.
+
 ### 4. Validation & Error Matrix
 
 | Condition | Behavior |
@@ -307,6 +341,7 @@ Response: `{ data: OrderRow[], total: number }` (+ `plan_name` on rows).
 | Unknown key/condition | Filter skipped (whitelist) |
 | `email` + 模糊/= | Resolve user ids then filter `user_id` |
 | `pageSize < 10` | Coerced to 10 |
+| `current < 1` | Coerced to 1 |
 
 ### 5. Good / Base / Bad Cases
 

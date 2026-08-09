@@ -56,24 +56,61 @@ public class OrderController {
     private CouponService couponService;
 
     /**
-     * 对齐 PHP User\\OrderController::fetch
+     * 对齐 PHP User\\OrderController::fetch。
+     * 无 pageSize：返回完整数组（PHP 兼容，套餐页等）。
+     * 有 pageSize：返回 { data, total }，手动 LIMIT（无 MP 分页插件）。
      */
     @GetMapping("/fetch")
-    public ApiResponse<List<Map<String, Object>>> fetch(HttpServletRequest request,
-            @RequestParam(value = "status", required = false) Integer status) {
+    public ApiResponse<?> fetch(HttpServletRequest request,
+            @RequestParam(value = "status", required = false) Integer status,
+            @RequestParam(value = "current", required = false) Integer current,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
         User user = requireUser(request);
+        Map<Long, Plan> planMap = loadPlanMap();
+
+        if (pageSize != null) {
+            int cur = current == null || current < 1 ? 1 : current;
+            int size = pageSize < 1 ? 10 : Math.min(pageSize, 50);
+
+            LambdaQueryWrapper<Order> countWrapper = userOrderWrapper(user.getId(), status);
+            long total = orderMapper.selectCount(countWrapper);
+
+            LambdaQueryWrapper<Order> listWrapper = userOrderWrapper(user.getId(), status);
+            listWrapper.orderByDesc(Order::getCreatedAt);
+            long offset = (long) (cur - 1) * size;
+            listWrapper.last("LIMIT " + offset + "," + size);
+            List<Map<String, Object>> page = toOrderRows(orderMapper.selectList(listWrapper), planMap);
+
+            Map<String, Object> resp = new HashMap<>();
+            resp.put("data", page);
+            resp.put("total", total);
+            return ApiResponse.success(resp);
+        }
+
+        LambdaQueryWrapper<Order> wrapper = userOrderWrapper(user.getId(), status);
+        wrapper.orderByDesc(Order::getCreatedAt);
+        return ApiResponse.success(toOrderRows(orderMapper.selectList(wrapper), planMap));
+    }
+
+    private static LambdaQueryWrapper<Order> userOrderWrapper(Long userId, Integer status) {
         LambdaQueryWrapper<Order> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Order::getUserId, user.getId())
-                .orderByDesc(Order::getCreatedAt);
+        wrapper.eq(Order::getUserId, userId);
         if (status != null) {
             wrapper.eq(Order::getStatus, status);
         }
-        List<Order> orders = orderMapper.selectList(wrapper);
+        return wrapper;
+    }
+
+    private Map<Long, Plan> loadPlanMap() {
         List<Plan> plans = planMapper.selectList(new LambdaQueryWrapper<>());
         Map<Long, Plan> planMap = new HashMap<>();
         for (Plan p : plans) {
             planMap.put(p.getId(), p);
         }
+        return planMap;
+    }
+
+    private static List<Map<String, Object>> toOrderRows(List<Order> orders, Map<Long, Plan> planMap) {
         List<Map<String, Object>> result = new ArrayList<>();
         for (Order o : orders) {
             Map<String, Object> row = new HashMap<>();
@@ -88,7 +125,7 @@ public class OrderController {
             }
             result.add(row);
         }
-        return ApiResponse.success(result);
+        return result;
     }
 
     /**
