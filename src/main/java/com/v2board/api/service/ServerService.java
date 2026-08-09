@@ -791,4 +791,83 @@ public class ServerService {
     private Long getServerTimestamp(String keyPrefix, Long id) {
         return nodeCacheService.getServerTimestamp(keyPrefix, id);
     }
+
+    /**
+     * PHP {@code ServerService::mergeData} — attach Redis runtime fields for admin node list.
+     * <ul>
+     *   <li>{@code available_status=0} red — last check older than 300s (or missing)</li>
+     *   <li>{@code available_status=1} yellow — check ok, last push older than 300s</li>
+     *   <li>{@code available_status=2} blue — check + push both within 300s</li>
+     * </ul>
+     */
+    public void attachAdminRuntimeStatus(Map<String, Object> server) {
+        if (server == null) {
+            return;
+        }
+        String type = String.valueOf(server.getOrDefault("type", "")).trim().toUpperCase(Locale.ROOT);
+        Long id = toLong(server.get("id"));
+        if (type.isEmpty() || id == null) {
+            server.put("online", 0);
+            server.put("last_check_at", 0L);
+            server.put("last_push_at", 0L);
+            server.put("available_status", 0);
+            return;
+        }
+        Long parentId = toLong(server.get("parent_id"));
+        Long targetId = parentId != null && parentId > 0 ? parentId : id;
+        String checkKey = "SERVER_" + type + "_LAST_CHECK_AT";
+        String pushKey = "SERVER_" + type + "_LAST_PUSH_AT";
+        String onlineKey = "SERVER_" + type + "_ONLINE_USER";
+
+        Long lastCheckAt = nodeCacheService.getServerTimestamp(checkKey, targetId);
+        Long lastPushAt = nodeCacheService.getServerTimestamp(pushKey, targetId);
+        long check = lastCheckAt != null ? lastCheckAt : 0L;
+        long push = lastPushAt != null ? lastPushAt : 0L;
+        int online = toInt(nodeCacheService.get(nodeCacheService.buildServerKey(onlineKey, targetId)));
+        long now = System.currentTimeMillis() / 1000L;
+
+        server.put("online", online);
+        server.put("last_check_at", check);
+        server.put("last_push_at", push);
+        server.put("available_status", computeAvailableStatus(now, check, push));
+    }
+
+    /** Package-visible for unit tests. Threshold matches PHP: 300 seconds. */
+    static int computeAvailableStatus(long nowSec, long lastCheckAt, long lastPushAt) {
+        if (nowSec - 300 >= lastCheckAt) {
+            return 0;
+        }
+        if (nowSec - 300 >= lastPushAt) {
+            return 1;
+        }
+        return 2;
+    }
+
+    private static Long toLong(Object raw) {
+        if (raw instanceof Number num) {
+            return num.longValue();
+        }
+        if (raw instanceof String s && !s.isBlank()) {
+            try {
+                return Long.parseLong(s.trim());
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private static int toInt(Object raw) {
+        if (raw instanceof Number num) {
+            return num.intValue();
+        }
+        if (raw instanceof String s && !s.isBlank()) {
+            try {
+                return Integer.parseInt(s.trim());
+            } catch (NumberFormatException ignored) {
+                return 0;
+            }
+        }
+        return 0;
+    }
 }

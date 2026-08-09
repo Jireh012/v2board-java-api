@@ -74,6 +74,34 @@ Paths (registered by `NodeApiRouteRegistrar`):
 
 ---
 
+## Scenario: Admin node list runtime status (available_status)
+
+### 1. Scope / Trigger
+
+- Trigger: Admin `GET …/server/manage/getNodes` must show PHP-compatible status lamps.
+- UI: `AdminServersView` — blue / yellow / red + online count.
+
+### 2. Signatures
+
+- `ServerService.attachAdminRuntimeStatus(Map)` / `computeAvailableStatus(now, check, push)`
+- Redis: `SERVER_{TYPE}_LAST_CHECK_AT_{id}`, `LAST_PUSH_AT`, `ONLINE_USER` (`NodeCacheService`, parent_id → parent keys)
+
+### 3. Contracts
+
+| `available_status` | Meaning (300s window) |
+|--------------------|------------------------|
+| `0` | last_check stale/missing — 未运行 (red) |
+| `1` | check ok, push stale — 无人使用或上报异常 (yellow) |
+| `2` | check + push fresh — 运行正常 (blue) |
+
+Also returns `online`, `last_check_at`, `last_push_at`.
+
+### 4. Tests Required
+
+- `ServerServiceAvailableStatusTest` — three-state threshold.
+
+---
+
 ## Scenario: UniProxy user / alivelist (v2node)
 
 ### 1. Scope / Trigger

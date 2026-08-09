@@ -6,6 +6,7 @@ import com.v2board.api.common.ApiResponse;
 import com.v2board.api.mapper.*;
 import com.v2board.api.model.*;
 import com.v2board.api.service.ConfigService;
+import com.v2board.api.service.ServerService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,6 +47,9 @@ public class AdminManageController {
 
     @Autowired
     private ConfigService configService;
+
+    @Autowired
+    private ServerService serverService;
 
     /**
      * 获取所有节点列表（合并所有协议），按 sort 排序
@@ -166,6 +170,7 @@ public class AdminManageController {
                             "wget -N https://raw.githubusercontent.com/Jireh012/v2node/main/script/install.sh && bash install.sh --api-host %s --node-id %d --api-key %s --api-prefix %s",
                             shellQuote(apiHost), nodeId, shellQuote(apiKey), shellQuote(apiPrefix)));
                 }
+                serverService.attachAdminRuntimeStatus(map);
                 target.add(map);
             } catch (Exception e) {
                 logger.error("Failed to convert {} server to map: {}", type, e.getMessage(), e);
