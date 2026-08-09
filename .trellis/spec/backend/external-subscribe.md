@@ -141,6 +141,33 @@ public void syncOne(Long id) {
 
 ---
 
+## Scenario: Subscribe fetch User-Agent
+
+### 1. Scope / Trigger
+
+- Some upstream panels return **HTTP 403** with body `The User-Agent has been blocked` for non-client UAs.
+- Clients like v2rayN / Clash Verge still work against the same URL.
+
+### 2. Contract
+
+`ExternalSubscribeFetcher` must request with common client UAs (e.g. `clash-verge/…`, `ClashMetaForAndroid/…`, `v2rayN/…`) and **retry the next UA on 403 UA-block**, not a custom `v2board-java-api/…` string alone.
+
+### 3. Wrong vs Correct
+
+#### Wrong
+
+```java
+conn.setRequestProperty("User-Agent", "v2board-java-api/external-subscribe");
+```
+
+#### Correct
+
+```java
+// try clash-verge → ClashMeta → v2rayN; continue only on UA-block 403
+```
+
+---
+
 ## Scenario: Per-source display-name filters (`name_filters`)
 
 ### 1. Scope / Trigger

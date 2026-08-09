@@ -19,18 +19,45 @@ public class ExternalSubscribeFetcher {
     private static final int CONNECT_TIMEOUT_MS = 15000;
     private static final int READ_TIMEOUT_MS = 30000;
     private static final int MAX_REDIRECTS = 5;
+    /**
+     * 部分面板会拦截非客户端 UA（如自定义 java-api 标识 → HTTP 403）。
+     * 优先使用常见订阅客户端 UA，403 时再回退尝试。
+     */
+    private static final String[] USER_AGENTS = {
+            "clash-verge/v1.7.7",
+            "ClashMetaForAndroid/2.11.0",
+            "v2rayN/6.45"
+    };
 
     public String fetch(String url) throws Exception {
         if (url == null || url.isBlank()) {
             throw new IllegalArgumentException("订阅地址为空");
         }
-        String current = url.trim();
+        Exception last = null;
+        for (String ua : USER_AGENTS) {
+            try {
+                return fetchWithUserAgent(url.trim(), ua);
+            } catch (IllegalStateException e) {
+                last = e;
+                String msg = e.getMessage() != null ? e.getMessage() : "";
+                if (msg.contains("HTTP 403") || msg.contains("User-Agent")) {
+                    logger.info("Subscribe fetch blocked for UA={}, retry next: {}", ua, msg);
+                    continue;
+                }
+                throw e;
+            }
+        }
+        throw last != null ? last : new IllegalStateException("拉取失败");
+    }
+
+    private String fetchWithUserAgent(String url, String userAgent) throws Exception {
+        String current = url;
         for (int i = 0; i <= MAX_REDIRECTS; i++) {
             HttpURLConnection conn = (HttpURLConnection) URI.create(current).toURL().openConnection();
             conn.setInstanceFollowRedirects(false);
             conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
             conn.setReadTimeout(READ_TIMEOUT_MS);
-            conn.setRequestProperty("User-Agent", "v2board-java-api/external-subscribe");
+            conn.setRequestProperty("User-Agent", userAgent);
             conn.setRequestProperty("Accept", "*/*");
             int code = conn.getResponseCode();
             if (code >= 300 && code < 400) {
@@ -43,19 +70,36 @@ public class ExternalSubscribeFetcher {
                 continue;
             }
             if (code < 200 || code >= 300) {
+                String errBody = readErrorBody(conn);
                 conn.disconnect();
+                if (code == 403 && errBody != null && errBody.toLowerCase().contains("user-agent")) {
+                    throw new IllegalStateException("拉取失败: HTTP 403 (User-Agent 被拦截)");
+                }
                 throw new IllegalStateException("拉取失败: HTTP " + code);
             }
             try (InputStream in = conn.getInputStream()) {
                 byte[] body = readLimited(in, MAX_BYTES);
                 String contentType = conn.getContentType();
-                logger.debug("Fetched subscribe content, type={}, bytes={}", contentType, body.length);
+                logger.debug("Fetched subscribe content, ua={}, type={}, bytes={}",
+                        userAgent, contentType, body.length);
                 return new String(body, StandardCharsets.UTF_8);
             } finally {
                 conn.disconnect();
             }
         }
         throw new IllegalStateException("重定向次数过多");
+    }
+
+    private static String readErrorBody(HttpURLConnection conn) {
+        try (InputStream err = conn.getErrorStream()) {
+            if (err == null) {
+                return null;
+            }
+            byte[] body = readLimited(err, 4096);
+            return new String(body, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private static String resolveRedirect(String current, String location) {
