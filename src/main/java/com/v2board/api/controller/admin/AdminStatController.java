@@ -242,8 +242,12 @@ public class AdminStatController {
 
     private Map<String, Map<Long, String>> loadAllServers() {
         Map<String, Map<Long, String>> servers = new HashMap<>();
+        Map<Long, String> vmessNames = toNameMap(serverVmessMapper.selectList(
+                new LambdaQueryWrapper<ServerVmess>().isNull(ServerVmess::getParentId)));
         servers.put("shadowsocks", toNameMap(serverShadowsocksMapper.selectList(new LambdaQueryWrapper<ServerShadowsocks>().isNull(ServerShadowsocks::getParentId))));
-        servers.put("vmess", toNameMap(serverVmessMapper.selectList(new LambdaQueryWrapper<ServerVmess>().isNull(ServerVmess::getParentId))));
+        // PHP StatController maps both "vmess" and legacy "v2ray" to Vmess rows
+        servers.put("vmess", vmessNames);
+        servers.put("v2ray", vmessNames);
         servers.put("vless", toNameMap(serverVlessMapper.selectList(new LambdaQueryWrapper<ServerVless>().isNull(ServerVless::getParentId))));
         servers.put("trojan", toNameMap(serverTrojanMapper.selectList(new LambdaQueryWrapper<ServerTrojan>().isNull(ServerTrojan::getParentId))));
         servers.put("hysteria", toNameMap(serverHysteriaMapper.selectList(new LambdaQueryWrapper<ServerHysteria>().isNull(ServerHysteria::getParentId))));

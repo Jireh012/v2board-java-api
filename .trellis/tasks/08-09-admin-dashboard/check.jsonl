@@ -1,0 +1,6 @@
+{"path":".trellis/spec/backend/php-upstream.md","title":"PHP upstream"}
+{"path":".trellis/tasks/08-09-admin-dashboard/prd.md","title":"PRD"}
+{"path":".trellis/tasks/08-09-admin-dashboard/design.md","title":"Design"}
+{"path":"src/main/java/com/v2board/api/controller/admin/AdminStatController.java","title":"AdminStatController"}
+{"path":"../v2board-ui/src/views/admin/AdminDashboardView.vue","title":"AdminDashboardView"}
+{"path":"../v2board-ui/src/api/admin.ts","title":"Stat API types/clients"}

@@ -1,0 +1,7 @@
+{"path":".trellis/spec/backend/php-upstream.md","title":"PHP upstream wyx2685/v2board"}
+{"path":".trellis/spec/backend/index.md","title":"Backend spec index"}
+{"path":"src/main/java/com/v2board/api/controller/admin/AdminStatController.java","title":"Admin stat API"}
+{"path":"../v2board-ui/src/views/admin/AdminDashboardView.vue","title":"Admin dashboard view"}
+{"path":"../v2board-ui/src/api/admin.ts","title":"Admin API clients including fetchStat*"}
+{"path":"../v2board-ui/src/layouts/AdminLayout.vue","title":"Admin nav routes for quick links"}
+{"path":"../v2board-ui/.trellis/spec/frontend/component-guidelines.md","title":"UI component conventions"}
