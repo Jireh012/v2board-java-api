@@ -65,6 +65,9 @@ Before implementing server-admin or external-subscribe features, confirm:
 - [ ] Admin user: `remarks`/`is_staff` mapped; user traffic **bytes** vs plan **GB** (see `../backend/admin-user.md`)
 - [ ] Ticket reply is form-urlencoded `@RequestParam`, not JSON body
 - [ ] Clearing nullable admin fields requires `LambdaUpdateWrapper`, not bare `updateById`
+- [ ] Panel traffic: dynamic prefixes + `SM4_KEY` / `X-A`; bootstrap only `GET /config` (see `../backend/panel-api-sm4.md`)
+- [ ] Node traffic: `{server_api_prefix}/{c|u|p|a|l}` + key from `server_token` — never panel `SM4_KEY` (see `../backend/server-node.md`)
+- [ ] Payment notify / Telegram webhook / subscribe path stay **plaintext** outside panel SM4 zones
 
 ---
 

@@ -122,3 +122,5 @@ See [system-config.md](./system-config.md) — Scenario: Server node group valid
 **Decision**: Derive working key from `server_token` / `ApiKey`. Rotating 通讯密钥 rotates SM4; nodes must update `ApiKey`.
 
 **Related**: install_command uses `--api-key` + `--api-prefix` (no `--sm4-key`); source `Jireh012/v2node`.
+
+**Not** panel `SM4_KEY` / UI `VITE_SM4_KEY` — see [panel-api-sm4.md](./panel-api-sm4.md).

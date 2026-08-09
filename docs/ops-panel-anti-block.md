@@ -135,4 +135,4 @@ wget -N https://raw.githubusercontent.com/Jireh012/v2node/main/script/install.sh
 - 不讨论攻击或探测 GFW。
 - 不提供节点 / 用户 API 经典路径双轨兼容（硬切换）。
 
-更多开发约定见 `.trellis/spec/backend/subscribe-delivery.md`（订阅路径热更新与保存校验）、`.trellis/spec/backend/server-node.md`（节点 SM4 契约）、`.trellis/spec/backend/public-site-config.md`（公开配置引导）。
+更多开发约定见 `.trellis/spec/backend/subscribe-delivery.md`（订阅路径热更新与保存校验）、`.trellis/spec/backend/server-node.md`（节点 SM4 契约）、`.trellis/spec/backend/public-site-config.md`（公开配置引导）、`.trellis/spec/backend/panel-api-sm4.md`（面板前缀改写与 Panel SM4）。

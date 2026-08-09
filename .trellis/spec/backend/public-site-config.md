@@ -96,6 +96,8 @@ return ApiResponse.success(plainMap); // PanelSm4Filter wraps whole ApiResponse
 
 **Decision**: Hardcode `GET /config` on panel and UI (no admin field, no `VITE_PUBLIC_CONFIG_PATH`). Reverse proxy must forward `/config` to the API.
 
+**Related**: Path rewrite + `X-A` for prefixed APIs → [panel-api-sm4.md](./panel-api-sm4.md).
+
 ---
 
 ## Design Decision: Fail closed when SM4_KEY missing
