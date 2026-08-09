@@ -20,7 +20,7 @@
 - Invent config keys or response fields “like PHP” without checking this upstream first.
 - Assume admin UI copy in our Vue app matches PHP labels without verifying the PHP controller/config.
 
-**Related**: [database-guidelines.md](./database-guidelines.md), [system-config.md](./system-config.md), [server-node.md](./server-node.md), sibling UI Trellis when present.
+**Related**: [database-guidelines.md](./database-guidelines.md), [system-config.md](./system-config.md), [server-node.md](./server-node.md), [v2node-upstream.md](./v2node-upstream.md) (node daemon compare), sibling UI Trellis when present.
 
 ---
 

@@ -2,6 +2,8 @@
 
 > Panel↔node communication token, API prefix, SM4 wire, intervals, `base_config`, and v2node one-click install (Jireh012 Release + api-host).
 
+**Upstream compare/merge**: [wyx2685/v2node](https://github.com/wyx2685/v2node) — see [v2node-upstream.md](./v2node-upstream.md). **Install/runtime**: [Jireh012/v2node](https://github.com/Jireh012/v2node).
+
 ---
 
 ## Scenario: Obfuscated node API paths + SM4

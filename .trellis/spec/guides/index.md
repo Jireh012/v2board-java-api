@@ -27,6 +27,8 @@ These guides help you **ask the right questions before coding**.
 
 PHP 对照源码（code-spec）：[php-upstream.md](../backend/php-upstream.md) → **https://github.com/wyx2685/v2board**
 
+v2node 对照上游（code-spec）：[v2node-upstream.md](../backend/v2node-upstream.md) → **https://github.com/wyx2685/v2node**（部署/安装仍用 Jireh012）
+
 ---
 
 ## Quick Reference: Thinking Triggers
@@ -40,6 +42,11 @@ PHP 对照源码（code-spec）：[php-upstream.md](../backend/php-upstream.md) 
 
 - [ ] Use **only** [wyx2685/v2board](https://github.com/wyx2685/v2board) `master` as the PHP reference → [php-upstream.md](../backend/php-upstream.md)
 - [ ] Do **not** default to `v2board/v2board` or other forks unless the user explicitly changes Trellis
+
+### When Aligning / Merging v2node (“对照更新”)
+
+- [ ] Compare against **only** [wyx2685/v2node](https://github.com/wyx2685/v2node) `main` → [v2node-upstream.md](../backend/v2node-upstream.md)
+- [ ] Do **not** use upstream Releases for this panel’s install; deploy stays [Jireh012/v2node](https://github.com/Jireh012/v2node) → [server-node.md](../backend/server-node.md)
 
 ### When to Think About Cross-Layer Issues
 
