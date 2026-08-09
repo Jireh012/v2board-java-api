@@ -56,7 +56,7 @@ PHP 对照源码（code-spec）：[php-upstream.md](../backend/php-upstream.md) 
 - [ ] Public passport flags (`email_verify` / `safe_mode_enable`) or SMTP from admin config → [public-site-config.md](../backend/public-site-config.md) + [passport-email.md](../backend/passport-email.md) (UI: sibling `v2board-ui` `site-brand.md`)
 - [ ] Telegram webhook / bind / ticket notify → [telegram.md](../backend/telegram.md); public `telegram_discuss_link` stays on SM4 public config (never bot token)
 - [ ] Changing public config / panel SM4 / action aliases / payment notify prefix → [public-site-config.md](../backend/public-site-config.md) + [panel-api-sm4.md](../backend/panel-api-sm4.md); `SM4_KEY` ↔ `VITE_SM4_KEY`; catalog new actions; payment stays plaintext `{prefix}/{method}/{uuid}`
-- [ ] Changing node ApiPrefix / query `e` → [server-node.md](../backend/server-node.md) (UI has no node key)
+- [ ] Changing node ApiPrefix / query `e` / one-click install → [server-node.md](../backend/server-node.md) (UI has no node key; install needs Jireh012 **Release** + API `--api-host`)
 
 → Read [Cross-Layer Thinking Guide](./cross-layer-thinking-guide.md)
 

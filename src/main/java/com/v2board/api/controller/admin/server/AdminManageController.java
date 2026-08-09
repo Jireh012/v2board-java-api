@@ -142,14 +142,13 @@ public class AdminManageController {
                 Object serverObj = full.get("server");
                 Map<String, Object> serverCfg = serverObj instanceof Map<?, ?> m
                         ? (Map<String, Object>) m : Map.of();
-                apiHost = String.valueOf(serverCfg.getOrDefault("server_api_url", ""));
-                if (apiHost.isEmpty()) {
-                    Object siteObj = full.get("site");
-                    Map<String, Object> site = siteObj instanceof Map<?, ?> sm
-                            ? (Map<String, Object>) sm : Map.of();
-                    apiHost = String.valueOf(site.getOrDefault("app_url", ""));
-                }
-                apiKey = String.valueOf(serverCfg.getOrDefault("server_token", ""));
+                // Prefer dedicated node API URL → site.app_url → current request origin (admin browser host).
+                apiHost = firstNonBlank(
+                        configString(serverCfg.get("server_api_url")),
+                        configString(full.get("site") instanceof Map<?, ?> site ? site.get("app_url") : null),
+                        configService.resolveCurrentRequestOrigin()
+                );
+                apiKey = configString(serverCfg.get("server_token"));
                 // Ensure prefix exists (auto-gen + persist) so install_command is usable without visiting system config first.
                 apiPrefix = configService.ensureServerApiPrefix();
             } catch (Exception ignored) {
@@ -179,5 +178,30 @@ public class AdminManageController {
             return "''";
         }
         return "'" + value.replace("'", "'\\''") + "'";
+    }
+
+    /** Package-visible for tests. */
+    static String configString(Object raw) {
+        if (raw == null) {
+            return "";
+        }
+        String s = String.valueOf(raw).trim();
+        if (s.isEmpty() || "null".equalsIgnoreCase(s)) {
+            return "";
+        }
+        return s;
+    }
+
+    static String firstNonBlank(String... values) {
+        if (values == null) {
+            return "";
+        }
+        for (String v : values) {
+            String s = configString(v);
+            if (!s.isEmpty()) {
+                return s;
+            }
+        }
+        return "";
     }
 }
