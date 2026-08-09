@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/backend/public-site-config.md", "reason": "SM4_KEY public config envelope; extend with path prefixes"}
+{"file": ".trellis/spec/backend/system-config.md", "reason": "site group save/merge patterns"}
+{"file": ".trellis/tasks/08-09-user-api-sm4-obfuscate/design.md", "reason": "Path rewrite, X-A, public_config_path bootstrap"}
+{"file": ".trellis/tasks/08-09-user-api-sm4-obfuscate/prd.md", "reason": "AC1–AC5"}
+{"file": ".trellis/tasks/08-09-panel-api-sm4-obfuscate/prd.md", "reason": "Parent allowlist and tier-3 decisions"}
+{"file": "docs/ops-panel-anti-block.md", "reason": "Ops for client API prefixes"}

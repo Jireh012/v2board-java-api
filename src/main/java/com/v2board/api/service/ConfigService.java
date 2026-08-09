@@ -4,6 +4,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.v2board.api.common.BusinessException;
+import com.v2board.api.config.ClientApiPathRegistry;
+import com.v2board.api.config.NodeApiRouteRegistrar;
+import com.v2board.api.config.PublicConfigRouteRegistrar;
 import com.v2board.api.config.SubscribeRouteRegistrar;
 import com.v2board.api.mapper.SystemConfigMapper;
 import com.v2board.api.model.SystemConfig;
@@ -17,6 +20,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
+import java.security.SecureRandom;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -40,6 +44,18 @@ public class ConfigService {
     @Autowired(required = false)
     @Lazy
     private SubscribeRouteRegistrar subscribeRouteRegistrar;
+
+    @Autowired(required = false)
+    @Lazy
+    private NodeApiRouteRegistrar nodeApiRouteRegistrar;
+
+    @Autowired(required = false)
+    @Lazy
+    private ClientApiPathRegistry clientApiPathRegistry;
+
+    @Autowired(required = false)
+    @Lazy
+    private PublicConfigRouteRegistrar publicConfigRouteRegistrar;
 
     @Value("${v2board.app-name:V2Board}")
     private String appName;
@@ -94,12 +110,47 @@ public class ConfigService {
     );
 
     private static final int SUBSCRIBE_PATH_MAX_LEN = 128;
+    private static final int SERVER_API_PREFIX_MAX_LEN = 64;
+    private static final int SERVER_API_PREFIX_RANDOM_LEN = 12;
+    private static final int PUBLIC_CONFIG_PATH_RANDOM_LEN = 8;
+    private static final String SERVER_API_PREFIX_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
+    private static final SecureRandom SERVER_API_PREFIX_RANDOM = new SecureRandom();
+
+    /** HTTP prefixes that must not collide with a custom node API prefix. */
+    private static final List<String> SERVER_API_PREFIX_RESERVED = List.of(
+            "/api/v1",
+            "/api/v2",
+            "/api/v1/server",
+            "/api/v2/server"
+    );
+
+    /** Shared reserved bases for client/node/public path prefixes. */
+    private static final List<String> CLIENT_API_PREFIX_RESERVED = List.of(
+            "/api/v1",
+            "/api/v2",
+            "/api/v1/user",
+            "/api/v1/admin",
+            "/api/v1/passport",
+            "/api/v1/guest",
+            "/api/v1/server",
+            "/api/v2/server"
+    );
 
     /**
      * 获取完整配置或按 key 返回某一分组。与 PHP GET /config/fetch 一致。
+     * Empty {@code server.server_api_prefix} is auto-generated and persisted.
      */
     public Map<String, Object> fetch(String key) throws Exception {
         Map<String, Object> full = getFullConfig();
+        boolean changed = ensureServerApiPrefixInPlace(full);
+        changed = ensureClientApiPathsInPlace(full) || changed;
+        if (changed) {
+            persistFullConfig(full);
+            if (nodeApiRouteRegistrar != null) {
+                nodeApiRouteRegistrar.refresh();
+            }
+            refreshClientApiRoutes();
+        }
         if (StringUtils.hasText(key) && full.containsKey(key)) {
             return Map.of(key, full.get(key));
         }
@@ -276,6 +327,96 @@ public class ConfigService {
             return subscribePath.startsWith("/") ? subscribePath : "/" + subscribePath;
         }
         return "/api/v1/client/subscribe";
+    }
+
+    /**
+     * Node API path prefix ({@code server.server_api_prefix}). Empty when unset (caller may ensure).
+     */
+    public String getServerApiPrefix() {
+        try {
+            Map<String, Object> full = getFullConfig();
+            if (full.get("server") instanceof Map<?, ?> server) {
+                String path = str(server.get("server_api_prefix"));
+                if (StringUtils.hasText(path)) {
+                    return normalizeServerApiPrefix(path);
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return "";
+    }
+
+    /**
+     * Ensure {@code server.server_api_prefix} is non-empty (auto-gen + persist). Returns the active prefix.
+     */
+    public String ensureServerApiPrefix() throws Exception {
+        Map<String, Object> full = getFullConfig();
+        if (ensureServerApiPrefixInPlace(full)) {
+            persistFullConfig(full);
+        }
+        return getServerApiPrefixFromMap(full);
+    }
+
+    /** {@code site.passport_api_prefix}; empty when unset. */
+    public String getPassportApiPrefix() {
+        return normalizeServerApiPrefix(getStringFromGroup("site", "passport_api_prefix"));
+    }
+
+    /** {@code site.user_api_prefix}; empty when unset. */
+    public String getUserApiPrefix() {
+        return normalizeServerApiPrefix(getStringFromGroup("site", "user_api_prefix"));
+    }
+
+    /** {@code site.admin_api_prefix}; empty when unset. */
+    public String getAdminApiPrefix() {
+        return normalizeServerApiPrefix(getStringFromGroup("site", "admin_api_prefix"));
+    }
+
+    /** {@code site.public_config_path}; empty when unset. */
+    public String getPublicConfigPath() {
+        return normalizeServerApiPrefix(getStringFromGroup("site", "public_config_path"));
+    }
+
+    /**
+     * Ensure client path prefixes exist (auto-gen + persist). Does not refresh filters/routes —
+     * callers that need hot reload should invoke {@link #refreshClientApiRoutes()} separately.
+     */
+    public Map<String, String> ensureClientApiPaths() throws Exception {
+        Map<String, Object> full = getFullConfig();
+        if (ensureClientApiPathsInPlace(full)) {
+            persistFullConfig(full);
+        }
+        return Map.of(
+                "passport_api_prefix", getSitePathFromMap(full, "passport_api_prefix"),
+                "user_api_prefix", getSitePathFromMap(full, "user_api_prefix"),
+                "admin_api_prefix", getSitePathFromMap(full, "admin_api_prefix"),
+                "public_config_path", getSitePathFromMap(full, "public_config_path")
+        );
+    }
+
+    public String ensurePassportApiPrefix() throws Exception {
+        return ensureClientApiPaths().get("passport_api_prefix");
+    }
+
+    public String ensureUserApiPrefix() throws Exception {
+        return ensureClientApiPaths().get("user_api_prefix");
+    }
+
+    public String ensureAdminApiPrefix() throws Exception {
+        return ensureClientApiPaths().get("admin_api_prefix");
+    }
+
+    public String ensurePublicConfigPath() throws Exception {
+        return ensureClientApiPaths().get("public_config_path");
+    }
+
+    void refreshClientApiRoutes() {
+        if (clientApiPathRegistry != null) {
+            clientApiPathRegistry.refresh();
+        }
+        if (publicConfigRouteRegistrar != null) {
+            publicConfigRouteRegistrar.refresh();
+        }
     }
 
     /**
@@ -716,9 +857,28 @@ public class ConfigService {
         validateSecurePathInSaveBody(body);
         validateSubscribePathInSaveBody(body);
         validateServerInSaveBody(body);
+        validateClientApiPathsInSaveBody(body);
         Map<String, Object> current = getFullConfig();
         deepMerge(current, body);
-        String json = objectMapper.writeValueAsString(current);
+        // Always ensure node API prefix after merge (empty → auto-gen).
+        boolean prefixCreated = ensureServerApiPrefixInPlace(current);
+        boolean clientPathsChanged = ensureClientApiPathsInPlace(current);
+        persistFullConfig(current);
+        // Hot-reload subscribe HTTP route when site.subscribe_path changes (no restart).
+        if (subscribeRouteRegistrar != null && body != null && body.containsKey("site")) {
+            subscribeRouteRegistrar.refresh();
+        }
+        if (nodeApiRouteRegistrar != null
+                && (prefixCreated || (body != null && body.containsKey("server")))) {
+            nodeApiRouteRegistrar.refresh();
+        }
+        if (clientPathsChanged || (body != null && body.containsKey("site"))) {
+            refreshClientApiRoutes();
+        }
+    }
+
+    private void persistFullConfig(Map<String, Object> full) throws Exception {
+        String json = objectMapper.writeValueAsString(full);
         long now = System.currentTimeMillis();
         SystemConfig row = systemConfigMapper.selectOne(
                 new LambdaQueryWrapper<SystemConfig>().eq(SystemConfig::getName, SystemConfig.NAME_V2BOARD));
@@ -733,10 +893,6 @@ public class ConfigService {
             row.setValue(json);
             row.setUpdatedAt(now);
             systemConfigMapper.updateById(row);
-        }
-        // Hot-reload subscribe HTTP route when site.subscribe_path changes (no restart).
-        if (subscribeRouteRegistrar != null && body != null && body.containsKey("site")) {
-            subscribeRouteRegistrar.refresh();
         }
     }
 
@@ -847,6 +1003,351 @@ public class ConfigService {
                 throw new BusinessException(500, "设备限制模式只能为 0 或 1");
             }
         }
+
+        if (server.containsKey("server_api_prefix")) {
+            Object raw = server.get("server_api_prefix");
+            String normalized = normalizeServerApiPrefix(raw == null ? "" : String.valueOf(raw));
+            if (!StringUtils.hasText(normalized)) {
+                // Empty → auto-gen after merge via ensureServerApiPrefixInPlace.
+                server.put("server_api_prefix", "");
+            } else if (!isValidServerApiPrefix(normalized)) {
+                throw new BusinessException(500,
+                        "节点 API 前缀不合法：须以 / 开头，仅含字母数字与 ._~/ -，长度≤64，且不能与保留 API 前缀冲突");
+            } else {
+                server.put("server_api_prefix", normalized);
+            }
+        }
+    }
+
+    /**
+     * If {@code server.server_api_prefix} is blank, generate {@code /n/}+12 alnum and write into map.
+     *
+     * @return true if a new prefix was generated
+     */
+    @SuppressWarnings("unchecked")
+    static boolean ensureServerApiPrefixInPlace(Map<String, Object> full) {
+        if (full == null) {
+            return false;
+        }
+        Object serverObj = full.get("server");
+        Map<String, Object> server;
+        if (serverObj instanceof HashMap || serverObj instanceof LinkedHashMap) {
+            server = (Map<String, Object>) serverObj;
+        } else if (serverObj instanceof Map<?, ?> raw) {
+            server = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> e : raw.entrySet()) {
+                server.put(String.valueOf(e.getKey()), e.getValue());
+            }
+            full.put("server", server);
+        } else {
+            server = new LinkedHashMap<>();
+            full.put("server", server);
+        }
+        String current = normalizeServerApiPrefix(str(server.get("server_api_prefix")));
+        if (StringUtils.hasText(current)) {
+            server.put("server_api_prefix", current);
+            return false;
+        }
+        String generated = generateServerApiPrefix();
+        server.put("server_api_prefix", generated);
+        return true;
+    }
+
+    static String getServerApiPrefixFromMap(Map<String, Object> full) {
+        if (full != null && full.get("server") instanceof Map<?, ?> server) {
+            return normalizeServerApiPrefix(str(server.get("server_api_prefix")));
+        }
+        return "";
+    }
+
+    /** Normalize: trim, ensure leading {@code /}, strip trailing {@code /}. */
+    public static String normalizeServerApiPrefix(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        String t = raw.trim();
+        if (t.isEmpty()) {
+            return "";
+        }
+        if (!t.startsWith("/")) {
+            t = "/" + t;
+        }
+        while (t.length() > 1 && t.endsWith("/")) {
+            t = t.substring(0, t.length() - 1);
+        }
+        return t;
+    }
+
+    static boolean isValidServerApiPrefix(String normalized) {
+        if (normalized == null || normalized.isEmpty() || "/".equals(normalized)) {
+            return false;
+        }
+        if (normalized.length() > SERVER_API_PREFIX_MAX_LEN) {
+            return false;
+        }
+        if (normalized.contains("..")) {
+            return false;
+        }
+        if (!normalized.matches("^/[A-Za-z0-9._~/-]+$")) {
+            return false;
+        }
+        String lower = normalized.toLowerCase(Locale.ROOT);
+        for (String prefix : SERVER_API_PREFIX_RESERVED) {
+            if (lower.equals(prefix) || lower.startsWith(prefix + "/") || prefix.startsWith(lower + "/")) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Auto-gen {@code /n/} + 12 lowercase alphanumeric chars. */
+    static String generateServerApiPrefix() {
+        return generatePrefixedPath("/n/", SERVER_API_PREFIX_RANDOM_LEN);
+    }
+
+    static String generatePassportApiPrefix() {
+        return generatePrefixedPath("/p/", SERVER_API_PREFIX_RANDOM_LEN);
+    }
+
+    static String generateUserApiPrefix() {
+        return generatePrefixedPath("/u/", SERVER_API_PREFIX_RANDOM_LEN);
+    }
+
+    static String generatePublicConfigPath() {
+        return generatePrefixedPath("/c/", PUBLIC_CONFIG_PATH_RANDOM_LEN);
+    }
+
+    static String generateAdminApiPrefix() {
+        return generatePrefixedPath("/a/", SERVER_API_PREFIX_RANDOM_LEN);
+    }
+
+    private static String generatePrefixedPath(String prefix, int randomLen) {
+        StringBuilder sb = new StringBuilder(prefix);
+        for (int i = 0; i < randomLen; i++) {
+            int idx = SERVER_API_PREFIX_RANDOM.nextInt(SERVER_API_PREFIX_ALPHABET.length());
+            sb.append(SERVER_API_PREFIX_ALPHABET.charAt(idx));
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Validate {@code site.passport_api_prefix} / {@code user_api_prefix} / {@code admin_api_prefix}
+     * / {@code public_config_path} when present in save body. Empty → auto-gen after merge.
+     */
+    @SuppressWarnings("unchecked")
+    private void validateClientApiPathsInSaveBody(Map<String, Object> body) {
+        if (body == null || !(body.get("site") instanceof Map<?, ?> siteRaw)) {
+            return;
+        }
+        Map<String, Object> site = mutableSiteMap(body, siteRaw);
+        normalizeClientPathKeyInPlace(site, "passport_api_prefix", "用户 Passport API 前缀");
+        normalizeClientPathKeyInPlace(site, "user_api_prefix", "用户 API 前缀");
+        normalizeClientPathKeyInPlace(site, "admin_api_prefix", "管理 API 前缀");
+        normalizeClientPathKeyInPlace(site, "public_config_path", "公开配置路径");
+
+        String passport = normalizeServerApiPrefix(str(site.get("passport_api_prefix")));
+        String user = normalizeServerApiPrefix(str(site.get("user_api_prefix")));
+        String admin = normalizeServerApiPrefix(str(site.get("admin_api_prefix")));
+        String pub = normalizeServerApiPrefix(str(site.get("public_config_path")));
+        assertClientPathsNoMutualConflict(passport, user, admin, pub);
+
+        String subscribe = "";
+        if (site.containsKey("subscribe_path")) {
+            subscribe = normalizeSubscribePathInput(str(site.get("subscribe_path")));
+        } else {
+            subscribe = normalizeSubscribePathInput(getSubscribePath());
+        }
+        String serverPrefix = "";
+        if (body.get("server") instanceof Map<?, ?> server && server.containsKey("server_api_prefix")) {
+            serverPrefix = normalizeServerApiPrefix(str(server.get("server_api_prefix")));
+        } else {
+            serverPrefix = getServerApiPrefix();
+        }
+        assertNoConflictWithExisting(passport, "Passport API 前缀", subscribe, serverPrefix);
+        assertNoConflictWithExisting(user, "用户 API 前缀", subscribe, serverPrefix);
+        assertNoConflictWithExisting(admin, "管理 API 前缀", subscribe, serverPrefix);
+        assertNoConflictWithExisting(pub, "公开配置路径", subscribe, serverPrefix);
+    }
+
+    private static void assertClientPathsNoMutualConflict(String passport, String user, String admin, String pub) {
+        if (StringUtils.hasText(passport) && StringUtils.hasText(user) && pathsConflict(passport, user)) {
+            throw new BusinessException(500, "Passport API 前缀与用户 API 前缀不能冲突");
+        }
+        if (StringUtils.hasText(passport) && StringUtils.hasText(admin) && pathsConflict(passport, admin)) {
+            throw new BusinessException(500, "Passport API 前缀与管理 API 前缀不能冲突");
+        }
+        if (StringUtils.hasText(passport) && StringUtils.hasText(pub) && pathsConflict(passport, pub)) {
+            throw new BusinessException(500, "Passport API 前缀与公开配置路径不能冲突");
+        }
+        if (StringUtils.hasText(user) && StringUtils.hasText(admin) && pathsConflict(user, admin)) {
+            throw new BusinessException(500, "用户 API 前缀与管理 API 前缀不能冲突");
+        }
+        if (StringUtils.hasText(user) && StringUtils.hasText(pub) && pathsConflict(user, pub)) {
+            throw new BusinessException(500, "用户 API 前缀与公开配置路径不能冲突");
+        }
+        if (StringUtils.hasText(admin) && StringUtils.hasText(pub) && pathsConflict(admin, pub)) {
+            throw new BusinessException(500, "管理 API 前缀与公开配置路径不能冲突");
+        }
+    }
+
+    private void assertNoConflictWithExisting(String candidate, String label, String subscribe, String serverPrefix) {
+        if (!StringUtils.hasText(candidate)) {
+            return;
+        }
+        if (StringUtils.hasText(subscribe) && pathsConflict(candidate, subscribe)) {
+            throw new BusinessException(500, label + "不能与订阅路径冲突");
+        }
+        if (StringUtils.hasText(serverPrefix) && pathsConflict(candidate, serverPrefix)) {
+            throw new BusinessException(500, label + "不能与节点 API 前缀冲突");
+        }
+        String secure = getSecurePath();
+        if (StringUtils.hasText(secure)) {
+            String securePath = "/" + secure.trim();
+            if (pathsConflict(candidate, securePath)) {
+                throw new BusinessException(500, label + "不能与后台路径冲突");
+            }
+        }
+    }
+
+    private static void normalizeClientPathKeyInPlace(Map<String, Object> site, String key, String label) {
+        if (!site.containsKey(key)) {
+            return;
+        }
+        Object raw = site.get(key);
+        String normalized = normalizeServerApiPrefix(raw == null ? "" : String.valueOf(raw));
+        if (!StringUtils.hasText(normalized)) {
+            site.put(key, "");
+            return;
+        }
+        if (!isValidClientApiPrefix(normalized)) {
+            throw new BusinessException(500,
+                    label + "不合法：须以 / 开头，仅含字母数字与 ._~/ -，长度≤64，且不能与保留 API 前缀冲突");
+        }
+        site.put(key, normalized);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> mutableSiteMap(Map<String, Object> body, Map<?, ?> siteRaw) {
+        if (siteRaw instanceof HashMap || siteRaw instanceof LinkedHashMap) {
+            return (Map<String, Object>) siteRaw;
+        }
+        Map<String, Object> site = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> e : siteRaw.entrySet()) {
+            site.put(String.valueOf(e.getKey()), e.getValue());
+        }
+        try {
+            body.put("site", site);
+        } catch (UnsupportedOperationException ignored) {
+            // Immutable save body (e.g. Map.of in unit tests): validate against copy only.
+        }
+        return site;
+    }
+
+    /**
+     * Ensure blank {@code site.passport_api_prefix} / {@code user_api_prefix} /
+     * {@code admin_api_prefix} / {@code public_config_path}.
+     *
+     * @return true if any value was generated or normalized into the map
+     */
+    @SuppressWarnings("unchecked")
+    static boolean ensureClientApiPathsInPlace(Map<String, Object> full) {
+        if (full == null) {
+            return false;
+        }
+        Object siteObj = full.get("site");
+        Map<String, Object> site;
+        if (siteObj instanceof HashMap || siteObj instanceof LinkedHashMap) {
+            site = (Map<String, Object>) siteObj;
+        } else if (siteObj instanceof Map<?, ?> raw) {
+            site = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> e : raw.entrySet()) {
+                site.put(String.valueOf(e.getKey()), e.getValue());
+            }
+            full.put("site", site);
+        } else {
+            site = new LinkedHashMap<>();
+            full.put("site", site);
+        }
+        boolean changed = false;
+        changed = ensureSitePathKey(site, "passport_api_prefix", ConfigService::generatePassportApiPrefix) || changed;
+        changed = ensureSitePathKey(site, "user_api_prefix", ConfigService::generateUserApiPrefix) || changed;
+        changed = ensureSitePathKey(site, "admin_api_prefix", ConfigService::generateAdminApiPrefix) || changed;
+        changed = ensureSitePathKey(site, "public_config_path", ConfigService::generatePublicConfigPath) || changed;
+
+        String passport = normalizeServerApiPrefix(str(site.get("passport_api_prefix")));
+        String user = normalizeServerApiPrefix(str(site.get("user_api_prefix")));
+        String admin = normalizeServerApiPrefix(str(site.get("admin_api_prefix")));
+        String pub = normalizeServerApiPrefix(str(site.get("public_config_path")));
+        // Avoid rare auto-gen collisions.
+        if (clientPathsHaveConflict(passport, user, admin, pub)) {
+            site.put("passport_api_prefix", generatePassportApiPrefix());
+            site.put("user_api_prefix", generateUserApiPrefix());
+            site.put("admin_api_prefix", generateAdminApiPrefix());
+            site.put("public_config_path", generatePublicConfigPath());
+            changed = true;
+        }
+        return changed;
+    }
+
+    private static boolean clientPathsHaveConflict(String passport, String user, String admin, String pub) {
+        return pathsConflict(passport, user)
+                || pathsConflict(passport, admin)
+                || pathsConflict(passport, pub)
+                || pathsConflict(user, admin)
+                || pathsConflict(user, pub)
+                || pathsConflict(admin, pub);
+    }
+
+    private static boolean ensureSitePathKey(Map<String, Object> site, String key,
+                                            java.util.function.Supplier<String> generator) {
+        String current = normalizeServerApiPrefix(str(site.get(key)));
+        if (StringUtils.hasText(current)) {
+            if (!current.equals(str(site.get(key)))) {
+                site.put(key, current);
+                return true;
+            }
+            return false;
+        }
+        site.put(key, generator.get());
+        return true;
+    }
+
+    static String getSitePathFromMap(Map<String, Object> full, String key) {
+        if (full != null && full.get("site") instanceof Map<?, ?> site) {
+            return normalizeServerApiPrefix(str(site.get(key)));
+        }
+        return "";
+    }
+
+    static boolean isValidClientApiPrefix(String normalized) {
+        if (normalized == null || normalized.isEmpty() || "/".equals(normalized)) {
+            return false;
+        }
+        if (normalized.length() > SERVER_API_PREFIX_MAX_LEN) {
+            return false;
+        }
+        if (normalized.contains("..")) {
+            return false;
+        }
+        if (!normalized.matches("^/[A-Za-z0-9._~/-]+$")) {
+            return false;
+        }
+        String lower = normalized.toLowerCase(Locale.ROOT);
+        for (String prefix : CLIENT_API_PREFIX_RESERVED) {
+            if (lower.equals(prefix) || lower.startsWith(prefix + "/") || prefix.startsWith(lower + "/")) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    static boolean pathsConflict(String a, String b) {
+        if (!StringUtils.hasText(a) || !StringUtils.hasText(b)) {
+            return false;
+        }
+        String la = a.toLowerCase(Locale.ROOT);
+        String lb = b.toLowerCase(Locale.ROOT);
+        return la.equals(lb) || la.startsWith(lb + "/") || lb.startsWith(la + "/");
     }
 
     private static void requireIntAtLeast(Map<?, ?> server, String key, int minInclusive, String message) {
@@ -912,7 +1413,8 @@ public class ConfigService {
                 "commission_distribution_l2", "commission_distribution_l3");
         putPhpSection(defaults, "site", flat,
                 "logo", "force_https", "stop_register", "app_name", "app_description", "app_url",
-                "subscribe_url", "subscribe_path", "try_out_plan_id", "try_out_hour", "tos_url",
+                "subscribe_url", "subscribe_path", "passport_api_prefix", "user_api_prefix",
+                "admin_api_prefix", "public_config_path", "try_out_plan_id", "try_out_hour", "tos_url",
                 "currency", "currency_symbol");
         putPhpSection(defaults, "subscribe", flat,
                 "plan_change_enable", "reset_traffic_method", "surplus_enable", "allow_new_period",
@@ -922,7 +1424,7 @@ public class ConfigService {
                 "frontend_theme", "frontend_theme_sidebar", "frontend_theme_header",
                 "frontend_theme_color", "frontend_background_url");
         putPhpSection(defaults, "server", flat,
-                "server_api_url", "server_token", "server_pull_interval", "server_push_interval",
+                "server_api_url", "server_api_prefix", "server_token", "server_pull_interval", "server_push_interval",
                 "server_node_report_min_traffic", "server_device_online_min_traffic", "device_limit_mode");
         putPhpSection(defaults, "email", flat,
                 "email_template", "email_host", "email_port", "email_username", "email_password",
@@ -984,6 +1486,10 @@ public class ConfigService {
         site.put("app_url", appUrl != null ? appUrl : "");
         site.put("subscribe_url", subscribeUrl != null ? subscribeUrl : "");
         site.put("subscribe_path", subscribePath != null ? subscribePath : "/api/v1/client/subscribe");
+        site.put("passport_api_prefix", "");
+        site.put("user_api_prefix", "");
+        site.put("admin_api_prefix", "");
+        site.put("public_config_path", "");
         site.put("try_out_plan_id", 0);
         site.put("try_out_hour", 1);
         site.put("tos_url", "");
@@ -1011,6 +1517,7 @@ public class ConfigService {
         ));
         data.put("server", mutableMap(
                 "server_api_url", "",
+                "server_api_prefix", "",
                 "server_token", "",
                 "server_pull_interval", 60,
                 "server_push_interval", 60,

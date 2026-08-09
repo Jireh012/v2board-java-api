@@ -81,6 +81,48 @@ public final class Sm4Util {
         }
     }
 
+    /**
+     * Compact wire form for query param {@code e}: {@code base64url(iv).base64url(ciphertext)} (no padding).
+     */
+    public static String encryptToCompact(String plaintextUtf8, byte[] key) {
+        try {
+            byte[] iv = new byte[BLOCK];
+            RANDOM.nextBytes(iv);
+            Cipher cipher = Cipher.getInstance(TRANSFORMATION, BouncyCastleProvider.PROVIDER_NAME);
+            cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, "SM4"), new IvParameterSpec(iv));
+            byte[] cipherBytes = cipher.doFinal(plaintextUtf8.getBytes(StandardCharsets.UTF_8));
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(iv)
+                    + "."
+                    + Base64.getUrlEncoder().withoutPadding().encodeToString(cipherBytes);
+        } catch (IllegalArgumentException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException("SM4 compact encrypt failed: " + e.getMessage(), e);
+        }
+    }
+
+    public static String decryptFromCompact(String compact, byte[] key) {
+        if (compact == null || compact.isBlank()) {
+            throw new IllegalArgumentException("SM4 compact ciphertext is empty");
+        }
+        int dot = compact.indexOf('.');
+        if (dot <= 0 || dot >= compact.length() - 1) {
+            throw new IllegalArgumentException("SM4 compact ciphertext must be iv.payload");
+        }
+        try {
+            byte[] iv = Base64.getUrlDecoder().decode(compact.substring(0, dot));
+            byte[] payload = Base64.getUrlDecoder().decode(compact.substring(dot + 1));
+            Cipher cipher = Cipher.getInstance(TRANSFORMATION, BouncyCastleProvider.PROVIDER_NAME);
+            cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "SM4"), new IvParameterSpec(iv));
+            byte[] plain = cipher.doFinal(payload);
+            return new String(plain, StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException("SM4 compact decrypt failed: " + e.getMessage(), e);
+        }
+    }
+
     private static byte[] hexToBytes(String hex) {
         int len = hex.length();
         byte[] out = new byte[len / 2];

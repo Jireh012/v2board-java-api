@@ -9,6 +9,9 @@
 |------|----------|------|
 | `secure_path` | 管理端 → 系统配置 → 安全 | 自定义后台入口路径段，避免 `/admin` 等默认识别路径 |
 | `subscribe_path` | 管理端 → 系统配置 → 站点 | 自定义订阅 HTTP 路径；保存后热更新，旧路径立即失效 |
+| `passport_api_prefix` / `user_api_prefix` / `admin_api_prefix` | 管理端 → 系统配置 → 站点 | 用户/管理 API 中性前缀 + 面板 `SM4_KEY` 体加密；旧 `/api/v1/passport|user|admin` 硬 404 |
+| `public_config_path` | 管理端 → 系统配置 → 站点 | 未登录引导配置路径；须与前端 `VITE_PUBLIC_CONFIG_PATH` 一致 |
+| `server_api_prefix` + 通讯密钥 | 管理端 → 系统配置 → 节点 | 节点 API 中性前缀 + SM4（由通讯密钥派生）；旧 UniProxy/`/api/v2/server` 已关闭 |
 | 安全模式 `safe_mode_enable` | 管理端 → 系统配置 → 安全 | 未登录仅开放登录/注册/找回等必要页 |
 | 站点名 `app_name` | 管理端 → 系统配置 → 站点 | 前端标题与支付默认商品名等对外文案 |
 
@@ -60,12 +63,63 @@
 
 ---
 
-## 5. 与本仓配置的配合清单
+## 5. 节点 API 硬切换（面板 ↔ v2node）
+
+本仓已关闭经典特征路径：`/api/v1/server/UniProxy/**`、`/api/v2/server/**`。节点只走：
+
+```text
+{server_api_prefix}/{c|u|p|a|l}?e=<SM4 compact>
+```
+
+要点：
+
+1. **先升面板**：管理端「节点」确认 `server_api_prefix`（空则自动生成）与 ≥16 位通讯密钥。
+2. **再改全部 v2node**：`config.json` 写入相同 `ApiHost`、`ApiKey`（=通讯密钥）、`ApiPrefix`（=`server_api_prefix`）、`NodeID`。
+3. **SM4 材料**：工作密钥 = `SHA-256(UTF-8(通讯密钥))` 前 16 字节；**不要**与公开站点配置的 `SM4_KEY` / `VITE_SM4_KEY` 混用。
+4. **一键安装**示例（含 `--api-prefix`，无 `--sm4-key`）：
+
+```bash
+wget -N https://raw.githubusercontent.com/Jireh012/v2node/main/script/install.sh && bash install.sh \
+  --api-host '<面板URL>' --node-id <id> --api-key '<通讯密钥>' --api-prefix '<server_api_prefix>'
+```
+
+5. 轮换通讯密钥 = 同时轮换节点 SM4：须同步更新各节点 `ApiKey`。
+
+---
+
+## 6. 用户/管理端 API 硬切换（面板 ↔ v2board-ui）
+
+用户 Passport / User / Admin API 已关闭经典路径：`/api/v1/passport/**`、`/api/v1/user/**`、`/api/v1/admin/**` → 404。浏览器只走：
+
+```text
+{passport_api_prefix}/…   {user_api_prefix}/…   {admin_api_prefix}/…
+```
+
+请求/响应 JSON 为面板 `SM4_KEY` 信封；鉴权 header `X-A`（JWT 的 SM4 compact），不使用明文 `Authorization` / `auth_data`。
+
+引导配置：
+
+1. 管理端「站点」确认或生成 `public_config_path`、`passport_api_prefix`、`user_api_prefix`、`admin_api_prefix`（空则自动生成）。
+2. 前端构建环境写入相同 `VITE_PUBLIC_CONFIG_PATH` 与 `VITE_SM4_KEY`（= `SM4_KEY`）。
+3. UI 先 GET 公开配置路径拿到前缀，再访问登录与用户/管理 API。
+4. `admin_api_prefix` 与 UI 入口 `secure_path` 无关；勿混用。
+
+**明文例外（勿改到加密前缀下）**：支付 notify `/api/v1/guest/payment/notify/**`、Telegram webhook、订阅拉取路径。
+
+---
+
+## 7. 与本仓配置的配合清单
 
 部署或巡检时勾选：
 
 - [ ] `secure_path` 已改为 ≥8 位非保留段，且未对外传播旧路径
 - [ ] `subscribe_path` 已自定义（勿长期依赖默认 `/api/v1/client/subscribe`）；保存后用新路径实测，旧默认路径应 404
+- [ ] `public_config_path` 与前端 `VITE_PUBLIC_CONFIG_PATH` 一致；公开配置可拉取并含 passport/user/admin 前缀
+- [ ] `passport_api_prefix` / `user_api_prefix` / `admin_api_prefix` 已确认；旧 `/api/v1/passport|user|admin` 404
+- [ ] `VITE_SM4_KEY` = 面板 `SM4_KEY`；用户/管理端业务 JSON 为信封；鉴权走 `X-A`
+- [ ] `server_api_prefix` 已确认；节点 `ApiPrefix` 一致；旧 UniProxy 路径 404
+- [ ] 通讯密钥 ≥16；节点 `ApiKey` 一致；勿把公开 `SM4_KEY` 当作节点密钥
+- [ ] 支付 notify / Telegram / 订阅仍为明文经典路径
 - [ ] `subscribe_url` / `app_url` 指向反代域名，而非源站 IP
 - [ ] 安全模式按需开启；公开配置 SM4 密钥仅用于混淆，不是访问控制
 - [ ] 前端壳标题由 `app_name` 覆盖；支付未填 `product_name` 时使用 `app_name + " - 订阅"`
@@ -73,11 +127,12 @@
 
 ---
 
-## 6. 明确不做的事
+## 8. 明确不做的事
 
-- 不改写全量 `/api/v1/**` API 前缀（抗扫描有限收益、兼容成本高）。
+- 不改写全量 `/api/v1/**` API 前缀（抗扫描有限收益、兼容成本高）；用户/管理为可配置 base 前缀。
 - 不提供假落地页 / 整站伪装方案。
 - 不涉及节点协议混淆或客户端抗 DPI。
 - 不讨论攻击或探测 GFW。
+- 不提供节点 / 用户 API 经典路径双轨兼容（硬切换）。
 
-更多开发约定见 `.trellis/spec/backend/subscribe-delivery.md`（订阅路径热更新与保存校验）。
+更多开发约定见 `.trellis/spec/backend/subscribe-delivery.md`（订阅路径热更新与保存校验）、`.trellis/spec/backend/server-node.md`（节点 SM4 契约）、`.trellis/spec/backend/public-site-config.md`（公开配置引导）。

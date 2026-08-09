@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/backend/server-node.md", "reason": "UniProxy/V2Server base_config, token≥16, device_limit_mode contracts"}
+{"file": ".trellis/spec/backend/php-upstream.md", "reason": "Canonical PHP fork for drift arbitration"}
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend spec index and pre-dev checklist routing"}
+{"file": ".trellis/tasks/08-09-v2node-followup/design.md", "reason": "Endpoint boundaries, fix priority, candidate drifts"}
+{"file": ".trellis/tasks/08-09-v2node-followup/prd.md", "reason": "Goal, AC, out of scope for this MVP"}

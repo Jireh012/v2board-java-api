@@ -1,5 +1,6 @@
 package com.v2board.api.controller.server;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.v2board.api.common.BusinessException;
 import com.v2board.api.model.ServerAnytls;
@@ -16,27 +17,31 @@ import com.v2board.api.service.NodeCacheService;
 import com.v2board.api.service.ServerService;
 import com.v2board.api.service.UserService;
 import com.v2board.api.util.Helper;
+import com.v2board.api.util.NodeSm4Codec;
+import com.v2board.api.util.NodeTypeCodes;
 import jakarta.servlet.http.HttpServletRequest;
-import org.msgpack.jackson.dataformat.MessagePackFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
 
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.*;
 
-@RestController
-@RequestMapping("/api/v1/server/UniProxy")
+/**
+ * Node API handlers registered dynamically at {@code {server_api_prefix}/{c,u,p,a,l}}.
+ * Classic UniProxy paths are intentionally not mapped.
+ */
+@Component
 public class UniProxyController {
+
+    private static final List<String> FORBIDDEN_PLAINTEXT_PARAMS =
+            List.of("token", "node_id", "node_type", "k", "i", "t");
 
     @Autowired
     private ServerService serverService;
@@ -53,10 +58,10 @@ public class UniProxyController {
     @Autowired
     private ObjectMapper objectMapper;
 
-    private final ObjectMapper msgpackMapper = new ObjectMapper(new MessagePackFactory());
+    @Autowired
+    private NodeSm4Codec nodeSm4Codec;
 
-    @GetMapping("/user")
-    public ResponseEntity<byte[]> user(HttpServletRequest request) throws Exception {
+    public ResponseEntity<?> user(HttpServletRequest request) throws Exception {
         NodeContext ctx = resolveNodeContext(request);
 
         String lastCheckKey = nodeCacheService.buildServerKey("SERVER_" + ctx.nodeTypeUpper + "_LAST_CHECK_AT",
@@ -68,64 +73,19 @@ public class UniProxyController {
         List<User> users = userService.getAvailableUsers(groupIds);
         List<Map<String, Object>> userList = new ArrayList<>();
         for (User user : users) {
-            Map<String, Object> m = new LinkedHashMap<>();
-            if (user.getId() != null)
-                m.put("id", user.getId());
-            if (user.getUuid() != null)
-                m.put("uuid", user.getUuid());
-            if (user.getDeviceLimit() != null)
-                m.put("device_limit", user.getDeviceLimit());
-            if (user.getGroupId() != null)
-                m.put("group_id", user.getGroupId());
-            if (user.getTransferEnable() != null)
-                m.put("transfer_enable", user.getTransferEnable());
-            if (user.getU() != null)
-                m.put("u", user.getU());
-            if (user.getD() != null)
-                m.put("d", user.getD());
-            if (user.getExpiredAt() != null)
-                m.put("expired_at", user.getExpiredAt());
-            userList.add(m);
+            userList.add(buildUserEntry(user));
         }
 
         Map<String, Object> response = Map.of("users", userList);
-        String responseFormat = request.getHeader("X-Response-Format");
-        String ifNoneMatch = request.getHeader(HttpHeaders.IF_NONE_MATCH);
-
-        if (responseFormat != null && responseFormat.toLowerCase().contains("msgpack")) {
-            byte[] body = msgpackMapper.writeValueAsBytes(response);
-            String eTag = sha1Hex(body);
-            if (ifNoneMatch != null && ifNoneMatch.contains(eTag)) {
-                return ResponseEntity.status(HttpStatus.NOT_MODIFIED)
-                        .header(HttpHeaders.ETAG, "\"" + eTag + "\"")
-                        .build();
-            }
-            return ResponseEntity.ok()
-                    .contentType(MediaType.valueOf("application/x-msgpack"))
-                    .header(HttpHeaders.ETAG, "\"" + eTag + "\"")
-                    .body(body);
-        } else {
-            byte[] body = objectMapper.writeValueAsBytes(response);
-            String eTag = sha1Hex(body);
-            if (ifNoneMatch != null && ifNoneMatch.contains(eTag)) {
-                return ResponseEntity.status(HttpStatus.NOT_MODIFIED)
-                        .header(HttpHeaders.ETAG, "\"" + eTag + "\"")
-                        .build();
-            }
-            return ResponseEntity.ok()
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header(HttpHeaders.ETAG, "\"" + eTag + "\"")
-                    .body(body);
-        }
+        return encryptedJsonResponse(request, response, ctx.workingKey);
     }
 
-    @PostMapping("/push")
-    public ResponseEntity<Map<String, Object>> push(
+    public ResponseEntity<?> push(
             HttpServletRequest request,
-            @RequestBody(required = false) Map<String, List<Long>> body) throws Exception {
+            @RequestBody(required = false) Map<String, Object> envelope) throws Exception {
         NodeContext ctx = resolveNodeContext(request);
 
-        Map<String, List<Long>> data = body != null ? body : new HashMap<>();
+        Map<String, List<Long>> data = decryptTrafficBody(envelope, ctx.workingKey);
         if (data.isEmpty()) {
             throw new BusinessException(400, "Invalid traffic data");
         }
@@ -138,17 +98,18 @@ public class UniProxyController {
         nodeCacheService.set(lastPushKey, now, Duration.ofHours(1));
 
         double rate = ctx.rate;
-        // 第一阶段：仅写入 Redis hash（对齐 PHP TrafficFetchJob）
         userService.trafficFetch(rate, data);
-        // 第二阶段：异步统计（对齐 PHP StatUserJob + StatServerJob）
         userService.recordStatUserAsync(data, rate);
         userService.recordStatServerAsync(data, ctx.nodeId, ctx.nodeType, rate);
 
-        return ResponseEntity.ok(Map.of("data", true));
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(nodeSm4Codec.encryptBody(Map.of("data", true), ctx.workingKey));
     }
 
-    @GetMapping("/alivelist")
-    public ResponseEntity<Map<String, Object>> alivelist() throws Exception {
+    public ResponseEntity<?> alivelist(HttpServletRequest request) throws Exception {
+        NodeContext ctx = resolveNodeContext(request);
+
         String cacheKey = "ALIVE_LIST";
         Object cached = nodeCacheService.get(cacheKey);
         Map<Long, Integer> alive;
@@ -203,18 +164,19 @@ public class UniProxyController {
         }
         Map<String, Object> body = new HashMap<>();
         body.put("alive", alive);
-        return ResponseEntity.ok(body);
+        return encryptedJsonResponse(request, body, ctx.workingKey);
     }
 
-    @PostMapping("/alive")
-    public ResponseEntity<Map<String, Object>> alive(
+    public ResponseEntity<?> alive(
             HttpServletRequest request,
-            @RequestBody(required = false) Map<String, List<String>> body) throws Exception {
+            @RequestBody(required = false) Map<String, Object> envelope) throws Exception {
         NodeContext ctx = resolveNodeContext(request);
 
-        Map<String, List<String>> data = body != null ? body : new HashMap<>();
+        Map<String, List<String>> data = decryptAliveBody(envelope, ctx.workingKey);
         if (data.isEmpty()) {
-            return ResponseEntity.ok(Map.of("data", true));
+            return ResponseEntity.ok()
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(nodeSm4Codec.encryptBody(Map.of("data", true), ctx.workingKey));
         }
 
         long updateAt = System.currentTimeMillis() / 1000;
@@ -229,7 +191,9 @@ public class UniProxyController {
             cacheKeys.add("ALIVE_IP_USER_" + uid);
         }
         if (cacheKeys.isEmpty()) {
-            return ResponseEntity.ok(Map.of("data", true));
+            return ResponseEntity.ok()
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(nodeSm4Codec.encryptBody(Map.of("data", true), ctx.workingKey));
         }
 
         List<Object> cachedList = nodeCacheService.multiGet(cacheKeys);
@@ -305,11 +269,12 @@ public class UniProxyController {
             nodeCacheService.set(key, ipsMap, Duration.ofSeconds(120));
         }
 
-        return ResponseEntity.ok(Map.of("data", true));
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(nodeSm4Codec.encryptBody(Map.of("data", true), ctx.workingKey));
     }
 
-    @GetMapping("/config")
-    public ResponseEntity<Map<String, Object>> config(HttpServletRequest request) throws Exception {
+    public ResponseEntity<?> config(HttpServletRequest request) throws Exception {
         NodeContext ctx = resolveNodeContext(request);
         Object server = ctx.server;
 
@@ -402,23 +367,66 @@ public class UniProxyController {
                 Collections.emptyMap());
         resp.put("base_config", buildBaseConfig(serverConfig));
 
-        byte[] body = objectMapper.writeValueAsBytes(resp);
-        String eTag = sha1Hex(body);
+        return encryptedJsonResponse(request, resp, ctx.workingKey);
+    }
+
+    private ResponseEntity<?> encryptedJsonResponse(HttpServletRequest request, Object businessBody, byte[] workingKey)
+            throws Exception {
+        byte[] plainBytes = objectMapper.writeValueAsBytes(businessBody);
+        String eTag = sha1Hex(plainBytes);
         String ifNoneMatch = request.getHeader(HttpHeaders.IF_NONE_MATCH);
         if (ifNoneMatch != null && ifNoneMatch.contains(eTag)) {
             return ResponseEntity.status(HttpStatus.NOT_MODIFIED)
                     .header(HttpHeaders.ETAG, "\"" + eTag + "\"")
                     .build();
         }
-
+        Map<String, String> envelope = nodeSm4Codec.encryptBody(businessBody, workingKey);
         return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_JSON)
                 .header(HttpHeaders.ETAG, "\"" + eTag + "\"")
-                .body(resp);
+                .body(envelope);
+    }
+
+    private Map<String, List<Long>> decryptTrafficBody(Map<String, Object> envelope, byte[] workingKey) {
+        if (envelope == null || envelope.isEmpty()) {
+            return new HashMap<>();
+        }
+        // Plain business map (legacy) is rejected — require SM4 envelope.
+        if (!envelope.containsKey("iv") || !envelope.containsKey("payload")) {
+            throw new BusinessException(400, "Invalid traffic data");
+        }
+        try {
+            String json = nodeSm4Codec.decryptBodyToJson(envelope, workingKey);
+            return objectMapper.readValue(json, new TypeReference<Map<String, List<Long>>>() {});
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BusinessException(400, "Invalid traffic data");
+        }
+    }
+
+    private Map<String, List<String>> decryptAliveBody(Map<String, Object> envelope, byte[] workingKey) {
+        if (envelope == null || envelope.isEmpty()) {
+            return new HashMap<>();
+        }
+        if (!envelope.containsKey("iv") || !envelope.containsKey("payload")) {
+            throw new BusinessException(400, "Invalid alive data");
+        }
+        try {
+            String json = nodeSm4Codec.decryptBodyToJson(envelope, workingKey);
+            return objectMapper.readValue(json, new TypeReference<Map<String, List<String>>>() {});
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BusinessException(400, "Invalid alive data");
+        }
     }
 
     private NodeContext resolveNodeContext(HttpServletRequest request) throws Exception {
-        String token = request.getParameter("token");
-        if (!StringUtils.hasText(token)) {
+        rejectPlaintextIdentityParams(request);
+
+        String e = request.getParameter("e");
+        if (!StringUtils.hasText(e)) {
             throw new BusinessException(500, "token is null");
         }
 
@@ -426,31 +434,27 @@ public class UniProxyController {
         @SuppressWarnings("unchecked")
         Map<String, Object> serverConfig = (Map<String, Object>) full.getOrDefault("server", Collections.emptyMap());
         String configuredToken = configuredServerToken(serverConfig);
-        // Blank/short configured token must not authenticate (incl. empty==empty).
-        if (!isValidConfiguredNodeToken(configuredToken) || !token.equals(configuredToken)) {
+        if (!isValidConfiguredNodeToken(configuredToken)) {
             throw new BusinessException(500, "token is error");
         }
 
-        String nodeType = request.getParameter("node_type");
+        byte[] workingKey = NodeSm4Codec.deriveWorkingKey(configuredToken);
+        NodeSm4Codec.NodeIdentity identity;
+        try {
+            identity = nodeSm4Codec.decryptIdentityQuery(e.trim(), workingKey);
+        } catch (Exception ex) {
+            throw new BusinessException(500, "token is error");
+        }
+        if (!configuredToken.equals(identity.k())) {
+            throw new BusinessException(500, "token is error");
+        }
+
+        String nodeType = NodeTypeCodes.toNodeType(identity.typeCode());
         if (!StringUtils.hasText(nodeType)) {
             throw new BusinessException(500, "node_type is null");
         }
-        if ("v2ray".equals(nodeType))
-            nodeType = "vmess";
-        if ("hysteria2".equals(nodeType))
-            nodeType = "hysteria";
 
-        String nodeIdStr = request.getParameter("node_id");
-        if (!StringUtils.hasText(nodeIdStr)) {
-            throw new BusinessException(500, "node_id is null");
-        }
-        Long nodeId;
-        try {
-            nodeId = Long.valueOf(nodeIdStr);
-        } catch (NumberFormatException e) {
-            throw new BusinessException(500, "node_id is invalid");
-        }
-
+        Long nodeId = identity.nodeId();
         Object server = serverService.findServer(nodeType, nodeId);
         if (server == null) {
             throw new BusinessException(500, "server is not exist");
@@ -499,7 +503,17 @@ public class UniProxyController {
         ctx.server = server;
         ctx.groupIds = groupIds;
         ctx.rate = rate;
+        ctx.workingKey = workingKey;
         return ctx;
+    }
+
+    /** Package-visible for tests — plaintext identity query must be rejected. */
+    static void rejectPlaintextIdentityParams(HttpServletRequest request) {
+        for (String name : FORBIDDEN_PLAINTEXT_PARAMS) {
+            if (StringUtils.hasText(request.getParameter(name))) {
+                throw new BusinessException(500, "token is error");
+            }
+        }
     }
 
     private String sha1Hex(byte[] data) {
@@ -541,6 +555,36 @@ public class UniProxyController {
         } catch (Exception e) {
             return Collections.emptyMap();
         }
+    }
+
+    /**
+     * Package-visible for tests — UniProxy user payload for v2node {@code UserInfo}
+     * ({@code id}, {@code uuid}, {@code speed_limit}, {@code device_limit}) plus PHP-compatible extras.
+     */
+    Map<String, Object> buildUserEntry(User user) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        if (user == null) {
+            return m;
+        }
+        if (user.getId() != null)
+            m.put("id", user.getId());
+        if (user.getUuid() != null)
+            m.put("uuid", user.getUuid());
+        if (user.getSpeedLimit() != null)
+            m.put("speed_limit", user.getSpeedLimit());
+        if (user.getDeviceLimit() != null)
+            m.put("device_limit", user.getDeviceLimit());
+        if (user.getGroupId() != null)
+            m.put("group_id", user.getGroupId());
+        if (user.getTransferEnable() != null)
+            m.put("transfer_enable", user.getTransferEnable());
+        if (user.getU() != null)
+            m.put("u", user.getU());
+        if (user.getD() != null)
+            m.put("d", user.getD());
+        if (user.getExpiredAt() != null)
+            m.put("expired_at", user.getExpiredAt());
+        return m;
     }
 
     /** Package-visible for tests — UniProxy/v2node base_config contract. */
@@ -664,5 +708,6 @@ public class UniProxyController {
         Object server;
         List<Integer> groupIds;
         double rate;
+        byte[] workingKey;
     }
 }

@@ -1,10 +1,7 @@
 package com.v2board.api.controller.passport;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.v2board.api.common.ApiResponse;
 import com.v2board.api.service.ConfigService;
-import com.v2board.api.util.Sm4Util;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -19,7 +16,7 @@ import static org.mockito.Mockito.when;
 class CommControllerConfigTest {
 
     @Test
-    void config_returnsSm4EnvelopeOnly() throws Exception {
+    void config_returnsPlainPublicFieldsIncludingPrefixes() throws Exception {
         ConfigService configService = mock(ConfigService.class);
         when(configService.getAppName()).thenReturn("DynamicSite");
         when(configService.getStopRegister()).thenReturn(0);
@@ -34,37 +31,40 @@ class CommControllerConfigTest {
         when(configService.getFrontendThemeColor()).thenReturn("green");
         when(configService.getFrontendBackgroundUrl()).thenReturn("https://cdn.example/bg.jpg");
         when(configService.getTelegramDiscussLink()).thenReturn("https://t.me/example");
+        when(configService.ensureClientApiPaths()).thenReturn(Map.of(
+                "passport_api_prefix", "/p/abcdefghijkl",
+                "user_api_prefix", "/u/mnopqrstuvwx",
+                "admin_api_prefix", "/a/zyxwvutsrqpo",
+                "public_config_path", "/c/cfgpath1"
+        ));
 
         CommController controller = new CommController();
         ReflectionTestUtils.setField(controller, "configService", configService);
-        ReflectionTestUtils.setField(controller, "objectMapper", new ObjectMapper());
-        ReflectionTestUtils.setField(controller, "sm4Key", "0123456789abcdef");
 
-        ApiResponse<Map<String, String>> resp = controller.config();
+        ApiResponse<Map<String, Object>> resp = controller.config();
         assertEquals(0, resp.getCode());
         assertNotNull(resp.getData());
-        assertEquals(2, resp.getData().size());
-        assertNotNull(resp.getData().get("iv"));
-        assertNotNull(resp.getData().get("payload"));
-        assertFalse(resp.getData().containsKey("app_name"));
-
-        byte[] key = Sm4Util.parseKey("0123456789abcdef");
-        String json = Sm4Util.decryptFromEnvelope(resp.getData().get("iv"), resp.getData().get("payload"), key);
-        Map<String, Object> plain = new ObjectMapper().readValue(json, new TypeReference<>() {});
-        assertEquals("DynamicSite", plain.get("app_name"));
-        assertEquals(0, ((Number) plain.get("stop_register")).intValue());
-        assertEquals(1, ((Number) plain.get("invite_force")).intValue());
-        assertEquals(1, ((Number) plain.get("email_verify")).intValue());
-        assertEquals(1, ((Number) plain.get("safe_mode_enable")).intValue());
-        assertEquals("admin888", plain.get("secure_path"));
-        assertEquals(1, ((Number) plain.get("recaptcha_enable")).intValue());
-        assertEquals("site-key-public", plain.get("recaptcha_site_key"));
-        assertEquals("light", plain.get("frontend_theme_sidebar"));
-        assertEquals("dark", plain.get("frontend_theme_header"));
-        assertEquals("green", plain.get("frontend_theme_color"));
-        assertEquals("https://cdn.example/bg.jpg", plain.get("frontend_background_url"));
-        assertEquals("https://t.me/example", plain.get("telegram_discuss_link"));
-        assertFalse(plain.containsKey("recaptcha_key"));
-        assertEquals(13, plain.size());
+        Map<String, Object> data = resp.getData();
+        assertFalse(data.containsKey("iv"));
+        assertFalse(data.containsKey("payload"));
+        assertEquals("DynamicSite", data.get("app_name"));
+        assertEquals(0, ((Number) data.get("stop_register")).intValue());
+        assertEquals(1, ((Number) data.get("invite_force")).intValue());
+        assertEquals(1, ((Number) data.get("email_verify")).intValue());
+        assertEquals(1, ((Number) data.get("safe_mode_enable")).intValue());
+        assertEquals("admin888", data.get("secure_path"));
+        assertEquals(1, ((Number) data.get("recaptcha_enable")).intValue());
+        assertEquals("site-key-public", data.get("recaptcha_site_key"));
+        assertEquals("light", data.get("frontend_theme_sidebar"));
+        assertEquals("dark", data.get("frontend_theme_header"));
+        assertEquals("green", data.get("frontend_theme_color"));
+        assertEquals("https://cdn.example/bg.jpg", data.get("frontend_background_url"));
+        assertEquals("https://t.me/example", data.get("telegram_discuss_link"));
+        assertEquals("/p/abcdefghijkl", data.get("passport_api_prefix"));
+        assertEquals("/u/mnopqrstuvwx", data.get("user_api_prefix"));
+        assertEquals("/a/zyxwvutsrqpo", data.get("admin_api_prefix"));
+        assertEquals("/c/cfgpath1", data.get("public_config_path"));
+        assertFalse(data.containsKey("recaptcha_key"));
+        assertEquals(17, data.size());
     }
 }

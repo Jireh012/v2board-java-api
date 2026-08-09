@@ -135,6 +135,7 @@ public class AdminManageController {
     private void addServersWithType(List<Map<String, Object>> target, List<?> servers, String type) {
         String apiHost = "";
         String apiKey = "";
+        String apiPrefix = "";
         if ("v2node".equals(type)) {
             try {
                 Map<String, Object> full = configService.getFullConfig();
@@ -149,6 +150,8 @@ public class AdminManageController {
                     apiHost = String.valueOf(site.getOrDefault("app_url", ""));
                 }
                 apiKey = String.valueOf(serverCfg.getOrDefault("server_token", ""));
+                // Ensure prefix exists (auto-gen + persist) so install_command is usable without visiting system config first.
+                apiPrefix = configService.ensureServerApiPrefix();
             } catch (Exception ignored) {
             }
         }
@@ -161,8 +164,8 @@ public class AdminManageController {
                 if ("v2node".equals(type) && map.get("id") != null) {
                     int nodeId = ((Number) map.get("id")).intValue();
                     map.put("install_command", String.format(
-                            "wget -N https://raw.githubusercontent.com/wyx2685/v2node/master/script/install.sh && bash install.sh --api-host %s --node-id %d --api-key %s",
-                            shellQuote(apiHost), nodeId, shellQuote(apiKey)));
+                            "wget -N https://raw.githubusercontent.com/Jireh012/v2node/main/script/install.sh && bash install.sh --api-host %s --node-id %d --api-key %s --api-prefix %s",
+                            shellQuote(apiHost), nodeId, shellQuote(apiKey), shellQuote(apiPrefix)));
                 }
                 target.add(map);
             } catch (Exception e) {

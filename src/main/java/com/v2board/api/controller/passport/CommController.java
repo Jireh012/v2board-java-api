@@ -1,25 +1,22 @@
 package com.v2board.api.controller.passport;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.v2board.api.common.ApiResponse;
-import com.v2board.api.common.BusinessException;
 import com.v2board.api.mapper.InviteCodeMapper;
 import com.v2board.api.model.InviteCode;
 import com.v2board.api.service.ConfigService;
 import com.v2board.api.service.PassportService;
-import com.v2board.api.util.Sm4Util;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * 对齐 PHP V1\Passport\CommController
+ * 对齐 PHP V1\Passport\CommController。
+ * 公开配置 {@link #config()} 由 {@code PublicConfigRouteRegistrar} 挂到 {@code site.public_config_path}；
+ * 整包响应由 {@code PanelSm4Filter} 外层 SM4 加密（data 内为明文公开字段，避免双重 SM4）。
  */
 @RestController
 @RequestMapping("/api/v1/passport/comm")
@@ -34,20 +31,10 @@ public class CommController {
     @Autowired
     private ConfigService configService;
 
-    @Autowired
-    private ObjectMapper objectMapper;
-
-    @Value("${v2board.sm4-key:}")
-    private String sm4Key;
-
     /**
-     * 公开站点配置（仅非敏感字段），data 为 SM4-CBC 信封 {@code {iv,payload}}。
+     * 公开站点配置（仅非敏感字段）。返回普通 ApiResponse；外层信封由 PanelSm4Filter 负责。
      */
-    @GetMapping("/config")
-    public ApiResponse<Map<String, String>> config() {
-        if (!StringUtils.hasText(sm4Key)) {
-            throw new BusinessException(500, "SM4 key not configured");
-        }
+    public ApiResponse<Map<String, Object>> config() {
         Map<String, Object> plain = new LinkedHashMap<>();
         plain.put("app_name", configService.getAppName());
         plain.put("stop_register", configService.getStopRegister());
@@ -63,16 +50,18 @@ public class CommController {
         plain.put("frontend_background_url", configService.getFrontendBackgroundUrl());
         plain.put("telegram_discuss_link", configService.getTelegramDiscussLink());
         try {
-            String json = objectMapper.writeValueAsString(plain);
-            byte[] key = Sm4Util.parseKey(sm4Key);
-            return ApiResponse.success(Sm4Util.encryptToEnvelope(json, key));
-        } catch (BusinessException e) {
-            throw e;
-        } catch (IllegalArgumentException e) {
-            throw new BusinessException(500, "SM4 key invalid: " + e.getMessage());
+            Map<String, String> paths = configService.ensureClientApiPaths();
+            plain.put("passport_api_prefix", paths.get("passport_api_prefix"));
+            plain.put("user_api_prefix", paths.get("user_api_prefix"));
+            plain.put("admin_api_prefix", paths.get("admin_api_prefix"));
+            plain.put("public_config_path", paths.get("public_config_path"));
         } catch (Exception e) {
-            throw new BusinessException(500, "加密公开配置失败");
+            plain.put("passport_api_prefix", configService.getPassportApiPrefix());
+            plain.put("user_api_prefix", configService.getUserApiPrefix());
+            plain.put("admin_api_prefix", configService.getAdminApiPrefix());
+            plain.put("public_config_path", configService.getPublicConfigPath());
         }
+        return ApiResponse.success(plain);
     }
 
     @PostMapping("/sendEmailVerify")

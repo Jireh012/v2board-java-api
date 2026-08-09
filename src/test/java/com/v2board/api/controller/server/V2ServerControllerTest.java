@@ -62,4 +62,21 @@ class V2ServerControllerTest {
         assertFalse(V2ServerController.isValidConfiguredNodeToken("short-token"));
         assertTrue(V2ServerController.isValidConfiguredNodeToken("abcdefghijklmnop"));
     }
+
+    @Test
+    void buildV2nodeConfig_baseConfigDefaultsWhenMissing() {
+        ServerV2node node = new ServerV2node();
+        node.setProtocol("vmess");
+        node.setServerPort(443);
+
+        Map<String, Object> resp = controller.buildV2nodeConfig(node, Map.of());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> base = (Map<String, Object>) resp.get("base_config");
+        assertNotNull(base);
+        assertEquals(60, base.get("push_interval"));
+        assertEquals(60, base.get("pull_interval"));
+        assertEquals(0, base.get("node_report_min_traffic"));
+        assertEquals(0, base.get("device_online_min_traffic"));
+    }
 }

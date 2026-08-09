@@ -5,8 +5,11 @@ import com.v2board.api.common.BusinessException;
 import com.v2board.api.model.User;
 import com.v2board.api.service.AuthService;
 import com.v2board.api.service.UserService;
+import com.v2board.api.util.PanelSm4Support;
+import com.v2board.api.util.Sm4Util;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -25,6 +28,9 @@ public class UserAuthController {
     @Autowired
     private AuthService authService;
 
+    @Value("${v2board.sm4-key:}")
+    private String sm4Key;
+
     /**
      * 对齐 PHP 版 /api/v1/user/checkLogin
      * 兼容 GET/POST 两种请求方式。
@@ -32,6 +38,11 @@ public class UserAuthController {
      */
     @RequestMapping(value = "/checkLogin", method = {RequestMethod.GET, RequestMethod.POST})
     public ApiResponse<Map<String, Object>> checkLogin(HttpServletRequest request) {
+        if (PanelSm4Support.rejectClassicAuth(request)
+                && (StringUtils.hasText(request.getHeader("Authorization"))
+                || StringUtils.hasText(request.getParameter("auth_data")))) {
+            return ApiResponse.success(Map.of("is_login", false));
+        }
         String jwt = resolveJwt(request);
         if (!StringUtils.hasText(jwt)) {
             return ApiResponse.success(Map.of("is_login", false));
@@ -72,6 +83,19 @@ public class UserAuthController {
     }
 
     private String resolveJwt(HttpServletRequest request) {
+        if (PanelSm4Support.rejectClassicAuth(request) || PanelSm4Support.isPanelSm4(request)) {
+            String xa = request.getHeader(PanelSm4Support.HEADER_X_A);
+            if (StringUtils.hasText(xa) && StringUtils.hasText(sm4Key)) {
+                try {
+                    return Sm4Util.decryptFromCompact(xa.trim(), Sm4Util.parseKey(sm4Key));
+                } catch (Exception ignored) {
+                    return null;
+                }
+            }
+            if (PanelSm4Support.rejectClassicAuth(request)) {
+                return null;
+            }
+        }
         String authHeader = request.getHeader("Authorization");
         if (StringUtils.hasText(authHeader) && authHeader.startsWith("Bearer ")) {
             return authHeader.substring(7);

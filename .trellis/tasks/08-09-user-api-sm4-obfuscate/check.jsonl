@@ -1,0 +1,4 @@
+{"file": ".trellis/tasks/08-09-user-api-sm4-obfuscate/prd.md", "reason": "AC1–AC5"}
+{"file": ".trellis/spec/backend/public-site-config.md", "reason": "Public config single envelope + prefixes"}
+{"file": ".trellis/tasks/08-09-panel-api-sm4-obfuscate/prd.md", "reason": "Payment/telegram remain plaintext"}
+{"file": "docs/ops-panel-anti-block.md", "reason": "Document Vite path alignment"}

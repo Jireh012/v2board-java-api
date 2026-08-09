@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -25,10 +26,13 @@ public class AdminAuthController {
     private AuthService authService;
 
     /**
-     * 管理端登录占位实现，实际应结合 is_admin 字段与权限系统。
+     * 管理端登录。JSON body（加密区经 PanelSm4Filter 解密后到达此处）。
      */
     @PostMapping("/login")
-    public ApiResponse<Map<String, Object>> login(HttpServletRequest request, String email, String password) {
+    public ApiResponse<Map<String, Object>> login(HttpServletRequest request,
+                                                  @RequestBody Map<String, Object> body) {
+        String email = body != null && body.get("email") != null ? String.valueOf(body.get("email")).trim() : "";
+        String password = body != null && body.get("password") != null ? String.valueOf(body.get("password")) : "";
         if (!StringUtils.hasText(email) || !StringUtils.hasText(password)) {
             throw new BusinessException(422, "邮箱和密码不能为空");
         }
@@ -46,4 +50,3 @@ public class AdminAuthController {
         return ApiResponse.success(data);
     }
 }
-

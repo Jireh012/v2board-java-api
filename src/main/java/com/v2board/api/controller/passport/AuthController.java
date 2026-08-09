@@ -8,8 +8,11 @@ import com.v2board.api.service.LoginPasswordLimitService;
 import com.v2board.api.service.PassportService;
 import com.v2board.api.service.RecaptchaService;
 import com.v2board.api.service.UserService;
+import com.v2board.api.util.PanelSm4Support;
+import com.v2board.api.util.Sm4Util;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
@@ -37,11 +40,16 @@ public class AuthController {
     @Autowired
     private LoginPasswordLimitService loginPasswordLimitService;
 
+    @Value("${v2board.sm4-key:}")
+    private String sm4Key;
+
     @PostMapping("/login")
     public ApiResponse<Map<String, Object>> login(HttpServletRequest request,
-                                                  @RequestParam("email") String email,
-                                                  @RequestParam("password") String password,
-                                                  @RequestParam(value = "recaptcha_data", required = false) String recaptchaData) {
+                                                  @RequestBody Map<String, Object> body) {
+        String email = body != null && body.get("email") != null ? String.valueOf(body.get("email")).trim() : "";
+        String password = body != null && body.get("password") != null ? String.valueOf(body.get("password")) : "";
+        String recaptchaData = body != null && body.get("recaptcha_data") != null
+                ? String.valueOf(body.get("recaptcha_data")) : null;
         if (!StringUtils.hasText(email) || !StringUtils.hasText(password)) {
             throw new BusinessException(422, "邮箱和密码不能为空");
         }
@@ -79,12 +87,24 @@ public class AuthController {
     @PostMapping("/getQuickLoginUrl")
     public ApiResponse<String> getQuickLoginUrl(@RequestBody(required = false) Map<String, Object> body,
                                                 HttpServletRequest request) throws Exception {
-        String auth = request.getHeader("Authorization");
-        if (auth != null && auth.startsWith("Bearer ")) {
-            auth = auth.substring(7);
-        }
-        if (!StringUtils.hasText(auth) && body != null) {
-            auth = String.valueOf(body.get("auth_data"));
+        String auth = null;
+        if (PanelSm4Support.rejectClassicAuth(request)) {
+            String xa = request.getHeader(PanelSm4Support.HEADER_X_A);
+            if (StringUtils.hasText(xa) && StringUtils.hasText(sm4Key)) {
+                try {
+                    auth = Sm4Util.decryptFromCompact(xa.trim(), Sm4Util.parseKey(sm4Key));
+                } catch (Exception ignored) {
+                    auth = null;
+                }
+            }
+        } else {
+            auth = request.getHeader("Authorization");
+            if (auth != null && auth.startsWith("Bearer ")) {
+                auth = auth.substring(7);
+            }
+            if (!StringUtils.hasText(auth) && body != null && body.get("auth_data") != null) {
+                auth = String.valueOf(body.get("auth_data"));
+            }
         }
         String redirect = body != null ? String.valueOf(body.getOrDefault("redirect", "dashboard")) : "dashboard";
         return ApiResponse.success(passportService.getQuickLoginUrl(auth, redirect));

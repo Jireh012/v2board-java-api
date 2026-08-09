@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/backend/server-node.md", "reason": "Verify base_config/token/alive mode still match after edits"}
+{"file": ".trellis/spec/backend/php-upstream.md", "reason": "Ensure fixes cite PHP as source of truth"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Test and consistency expectations for Controller changes"}
+{"file": ".trellis/tasks/08-09-v2node-followup/prd.md", "reason": "Acceptance criteria AC1–AC4"}
+{"file": ".trellis/tasks/08-09-v2node-followup/implement.md", "reason": "Validation commands and checklist completeness"}

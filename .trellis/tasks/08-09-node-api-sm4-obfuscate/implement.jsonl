@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/backend/server-node.md", "reason": "Node auth/base_config; will update for obfuscated wire"}
+{"file": ".trellis/spec/backend/system-config.md", "reason": "server group save/merge/validation"}
+{"file": ".trellis/spec/backend/public-site-config.md", "reason": "Sm4Util envelope; do not reuse public SM4_KEY for nodes"}
+{"file": ".trellis/tasks/08-09-node-api-sm4-obfuscate/design.md", "reason": "Wire contract: prefix, e, SHA256 key derive"}
+{"file": ".trellis/tasks/08-09-node-api-sm4-obfuscate/prd.md", "reason": "AC1–AC10"}
+{"file": "docs/ops-panel-anti-block.md", "reason": "Ops cutover for node API obfuscation"}

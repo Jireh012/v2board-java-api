@@ -5,8 +5,10 @@ import org.junit.jupiter.api.Test;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class Sm4UtilTest {
 
@@ -34,5 +36,15 @@ class Sm4UtilTest {
     void parseKey_rejectsBadLength() {
         assertThrows(IllegalArgumentException.class, () -> Sm4Util.parseKey("short"));
         assertThrows(IllegalArgumentException.class, () -> Sm4Util.parseKey(""));
+    }
+
+    @Test
+    void compact_roundTrip() {
+        byte[] key = Sm4Util.parseKey("0123456789abcdef");
+        String plain = "{\"k\":\"tok\",\"i\":1,\"t\":\"vn\"}";
+        String compact = Sm4Util.encryptToCompact(plain, key);
+        assertTrue(compact.contains("."));
+        assertFalse(compact.contains("="));
+        assertEquals(plain, Sm4Util.decryptFromCompact(compact, key));
     }
 }

@@ -1,0 +1,30 @@
+{
+  "id": "panel-api-sm4-obfuscate",
+  "name": "panel-api-sm4-obfuscate",
+  "title": "面板 API 去特征与 SM4（总）",
+  "description": "用户/管理/节点 API 中性路径+SM4；支付回调等第三方入口明文例外",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "Jireh",
+  "assignee": "Jireh",
+  "createdAt": "2026-08-09",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "08-09-node-api-sm4-obfuscate",
+    "08-09-user-api-sm4-obfuscate",
+    "08-09-admin-api-sm4-obfuscate"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

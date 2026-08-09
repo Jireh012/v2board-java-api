@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/public-site-config.md", "reason": "Existing SM4_KEY / public config envelope"}
+{"file": ".trellis/spec/backend/server-node.md", "reason": "Node contracts superseded by node child"}
+{"file": ".trellis/tasks/08-09-panel-api-sm4-obfuscate/prd.md", "reason": "Parent AC and plaintext allowlist"}
+{"file": "docs/ops-panel-anti-block.md", "reason": "Ops notes for prefixes and callback exceptions"}
