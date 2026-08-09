@@ -184,7 +184,7 @@ When a key is present in the save body:
 | `site.passport_api_prefix` | Empty → auto-gen `/p/`+12; hard-cutover classic `/api/v1/passport`. |
 | `site.user_api_prefix` | Empty → auto-gen `/u/`+12; hard-cutover classic `/api/v1/user`. |
 | `site.admin_api_prefix` | Empty → auto-gen `/a/`+12; hard-cutover classic `/api/v1/admin`. |
-| `site.public_config_path` | Empty → auto-gen `/c/`+8; must match frontend `VITE_PUBLIC_CONFIG_PATH`. |
+| Fixed `GET /config` | Public bootstrap path is code-fixed (`ConfigService.FIXED_PUBLIC_CONFIG_PATH`); not a site config field. |
 | `server_pull_interval` / `server_push_interval` | Integer ≥ 1 |
 | `server_node_report_min_traffic` / `server_device_online_min_traffic` | Integer ≥ 0 |
 | `device_limit_mode` | 0 or 1 |

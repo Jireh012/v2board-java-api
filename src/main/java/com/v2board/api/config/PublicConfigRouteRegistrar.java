@@ -10,16 +10,14 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
 import java.lang.reflect.Method;
-import java.util.Map;
 
 /**
- * Registers public site config at {@code site.public_config_path} (not classic passport path).
+ * Registers public site config at fixed {@link ConfigService#FIXED_PUBLIC_CONFIG_PATH} ({@code /config}).
  */
 @Component
 @Order(105)
@@ -54,14 +52,9 @@ public class PublicConfigRouteRegistrar implements ApplicationRunner {
     public void refresh() {
         synchronized (lock) {
             try {
-                Map<String, String> paths = configService.ensureClientApiPaths();
-                String path = paths.get("public_config_path");
-                if (!StringUtils.hasText(path)) {
-                    logger.error("public_config_path empty after ensure; route not registered");
-                    unregisterCurrent();
-                    return;
-                }
-                path = ConfigService.normalizeServerApiPrefix(path);
+                // Ensure passport/user/admin prefixes exist; public path is always fixed.
+                configService.ensureClientApiPaths();
+                String path = ConfigService.FIXED_PUBLIC_CONFIG_PATH;
                 if (path.equals(currentPath) && currentMapping != null) {
                     return;
                 }

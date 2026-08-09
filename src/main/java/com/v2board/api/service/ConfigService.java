@@ -94,10 +94,16 @@ public class ConfigService {
 
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
+    /**
+     * Fixed unauthenticated bootstrap path for public site config (SM4 envelope).
+     * Not configurable; frontend always GETs this path.
+     */
+    public static final String FIXED_PUBLIC_CONFIG_PATH = "/config";
+
     /** UI route segments that must not be used as custom admin path. */
     private static final Set<String> SECURE_PATH_RESERVED = Set.of(
             "login", "register", "forget", "dashboard", "plan", "order", "server",
-            "invite", "ticket", "traffic", "knowledge", "profile", "api"
+            "invite", "ticket", "traffic", "knowledge", "profile", "api", "config"
     );
 
     /** HTTP prefixes that must not collide with a custom subscribe path. */
@@ -106,13 +112,13 @@ public class ConfigService {
             "/api/v1/admin",
             "/api/v1/passport",
             "/api/v1/guest",
-            "/api/v1/server"
+            "/api/v1/server",
+            FIXED_PUBLIC_CONFIG_PATH
     );
 
     private static final int SUBSCRIBE_PATH_MAX_LEN = 128;
     private static final int SERVER_API_PREFIX_MAX_LEN = 64;
     private static final int SERVER_API_PREFIX_RANDOM_LEN = 12;
-    private static final int PUBLIC_CONFIG_PATH_RANDOM_LEN = 8;
     private static final String SERVER_API_PREFIX_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
     private static final SecureRandom SERVER_API_PREFIX_RANDOM = new SecureRandom();
 
@@ -121,10 +127,11 @@ public class ConfigService {
             "/api/v1",
             "/api/v2",
             "/api/v1/server",
-            "/api/v2/server"
+            "/api/v2/server",
+            FIXED_PUBLIC_CONFIG_PATH
     );
 
-    /** Shared reserved bases for client/node/public path prefixes. */
+    /** Shared reserved bases for client/node path prefixes. */
     private static final List<String> CLIENT_API_PREFIX_RESERVED = List.of(
             "/api/v1",
             "/api/v2",
@@ -133,7 +140,8 @@ public class ConfigService {
             "/api/v1/passport",
             "/api/v1/guest",
             "/api/v1/server",
-            "/api/v2/server"
+            "/api/v2/server",
+            FIXED_PUBLIC_CONFIG_PATH
     );
 
     /**
@@ -372,9 +380,9 @@ public class ConfigService {
         return normalizeServerApiPrefix(getStringFromGroup("site", "admin_api_prefix"));
     }
 
-    /** {@code site.public_config_path}; empty when unset. */
+    /** Fixed public config bootstrap path {@link #FIXED_PUBLIC_CONFIG_PATH}. */
     public String getPublicConfigPath() {
-        return normalizeServerApiPrefix(getStringFromGroup("site", "public_config_path"));
+        return FIXED_PUBLIC_CONFIG_PATH;
     }
 
     /**
@@ -390,7 +398,7 @@ public class ConfigService {
                 "passport_api_prefix", getSitePathFromMap(full, "passport_api_prefix"),
                 "user_api_prefix", getSitePathFromMap(full, "user_api_prefix"),
                 "admin_api_prefix", getSitePathFromMap(full, "admin_api_prefix"),
-                "public_config_path", getSitePathFromMap(full, "public_config_path")
+                "public_config_path", FIXED_PUBLIC_CONFIG_PATH
         );
     }
 
@@ -406,8 +414,8 @@ public class ConfigService {
         return ensureClientApiPaths().get("admin_api_prefix");
     }
 
-    public String ensurePublicConfigPath() throws Exception {
-        return ensureClientApiPaths().get("public_config_path");
+    public String ensurePublicConfigPath() {
+        return FIXED_PUBLIC_CONFIG_PATH;
     }
 
     void refreshClientApiRoutes() {
@@ -1113,10 +1121,6 @@ public class ConfigService {
         return generatePrefixedPath("/u/", SERVER_API_PREFIX_RANDOM_LEN);
     }
 
-    static String generatePublicConfigPath() {
-        return generatePrefixedPath("/c/", PUBLIC_CONFIG_PATH_RANDOM_LEN);
-    }
-
     static String generateAdminApiPrefix() {
         return generatePrefixedPath("/a/", SERVER_API_PREFIX_RANDOM_LEN);
     }
@@ -1132,7 +1136,7 @@ public class ConfigService {
 
     /**
      * Validate {@code site.passport_api_prefix} / {@code user_api_prefix} / {@code admin_api_prefix}
-     * / {@code public_config_path} when present in save body. Empty → auto-gen after merge.
+     * when present in save body. Empty → auto-gen after merge. Ignores legacy {@code public_config_path}.
      */
     @SuppressWarnings("unchecked")
     private void validateClientApiPathsInSaveBody(Map<String, Object> body) {
@@ -1140,16 +1144,15 @@ public class ConfigService {
             return;
         }
         Map<String, Object> site = mutableSiteMap(body, siteRaw);
+        site.remove("public_config_path");
         normalizeClientPathKeyInPlace(site, "passport_api_prefix", "用户 Passport API 前缀");
         normalizeClientPathKeyInPlace(site, "user_api_prefix", "用户 API 前缀");
         normalizeClientPathKeyInPlace(site, "admin_api_prefix", "管理 API 前缀");
-        normalizeClientPathKeyInPlace(site, "public_config_path", "公开配置路径");
 
         String passport = normalizeServerApiPrefix(str(site.get("passport_api_prefix")));
         String user = normalizeServerApiPrefix(str(site.get("user_api_prefix")));
         String admin = normalizeServerApiPrefix(str(site.get("admin_api_prefix")));
-        String pub = normalizeServerApiPrefix(str(site.get("public_config_path")));
-        assertClientPathsNoMutualConflict(passport, user, admin, pub);
+        assertClientPathsNoMutualConflict(passport, user, admin);
 
         String subscribe = "";
         if (site.containsKey("subscribe_path")) {
@@ -1166,27 +1169,26 @@ public class ConfigService {
         assertNoConflictWithExisting(passport, "Passport API 前缀", subscribe, serverPrefix);
         assertNoConflictWithExisting(user, "用户 API 前缀", subscribe, serverPrefix);
         assertNoConflictWithExisting(admin, "管理 API 前缀", subscribe, serverPrefix);
-        assertNoConflictWithExisting(pub, "公开配置路径", subscribe, serverPrefix);
     }
 
-    private static void assertClientPathsNoMutualConflict(String passport, String user, String admin, String pub) {
+    private static void assertClientPathsNoMutualConflict(String passport, String user, String admin) {
         if (StringUtils.hasText(passport) && StringUtils.hasText(user) && pathsConflict(passport, user)) {
             throw new BusinessException(500, "Passport API 前缀与用户 API 前缀不能冲突");
         }
         if (StringUtils.hasText(passport) && StringUtils.hasText(admin) && pathsConflict(passport, admin)) {
             throw new BusinessException(500, "Passport API 前缀与管理 API 前缀不能冲突");
         }
-        if (StringUtils.hasText(passport) && StringUtils.hasText(pub) && pathsConflict(passport, pub)) {
-            throw new BusinessException(500, "Passport API 前缀与公开配置路径不能冲突");
-        }
         if (StringUtils.hasText(user) && StringUtils.hasText(admin) && pathsConflict(user, admin)) {
             throw new BusinessException(500, "用户 API 前缀与管理 API 前缀不能冲突");
         }
-        if (StringUtils.hasText(user) && StringUtils.hasText(pub) && pathsConflict(user, pub)) {
-            throw new BusinessException(500, "用户 API 前缀与公开配置路径不能冲突");
+        if (StringUtils.hasText(passport) && pathsConflict(passport, FIXED_PUBLIC_CONFIG_PATH)) {
+            throw new BusinessException(500, "Passport API 前缀不能与固定公开配置路径 /config 冲突");
         }
-        if (StringUtils.hasText(admin) && StringUtils.hasText(pub) && pathsConflict(admin, pub)) {
-            throw new BusinessException(500, "管理 API 前缀与公开配置路径不能冲突");
+        if (StringUtils.hasText(user) && pathsConflict(user, FIXED_PUBLIC_CONFIG_PATH)) {
+            throw new BusinessException(500, "用户 API 前缀不能与固定公开配置路径 /config 冲突");
+        }
+        if (StringUtils.hasText(admin) && pathsConflict(admin, FIXED_PUBLIC_CONFIG_PATH)) {
+            throw new BusinessException(500, "管理 API 前缀不能与固定公开配置路径 /config 冲突");
         }
     }
 
@@ -1245,7 +1247,7 @@ public class ConfigService {
 
     /**
      * Ensure blank {@code site.passport_api_prefix} / {@code user_api_prefix} /
-     * {@code admin_api_prefix} / {@code public_config_path}.
+     * {@code admin_api_prefix}. Strips legacy {@code public_config_path} from site map.
      *
      * @return true if any value was generated or normalized into the map
      */
@@ -1269,33 +1271,34 @@ public class ConfigService {
             full.put("site", site);
         }
         boolean changed = false;
+        if (site.containsKey("public_config_path")) {
+            site.remove("public_config_path");
+            changed = true;
+        }
         changed = ensureSitePathKey(site, "passport_api_prefix", ConfigService::generatePassportApiPrefix) || changed;
         changed = ensureSitePathKey(site, "user_api_prefix", ConfigService::generateUserApiPrefix) || changed;
         changed = ensureSitePathKey(site, "admin_api_prefix", ConfigService::generateAdminApiPrefix) || changed;
-        changed = ensureSitePathKey(site, "public_config_path", ConfigService::generatePublicConfigPath) || changed;
 
         String passport = normalizeServerApiPrefix(str(site.get("passport_api_prefix")));
         String user = normalizeServerApiPrefix(str(site.get("user_api_prefix")));
         String admin = normalizeServerApiPrefix(str(site.get("admin_api_prefix")));
-        String pub = normalizeServerApiPrefix(str(site.get("public_config_path")));
-        // Avoid rare auto-gen collisions.
-        if (clientPathsHaveConflict(passport, user, admin, pub)) {
+        // Avoid rare auto-gen collisions (incl. fixed /config).
+        if (clientPathsHaveConflict(passport, user, admin)) {
             site.put("passport_api_prefix", generatePassportApiPrefix());
             site.put("user_api_prefix", generateUserApiPrefix());
             site.put("admin_api_prefix", generateAdminApiPrefix());
-            site.put("public_config_path", generatePublicConfigPath());
             changed = true;
         }
         return changed;
     }
 
-    private static boolean clientPathsHaveConflict(String passport, String user, String admin, String pub) {
+    private static boolean clientPathsHaveConflict(String passport, String user, String admin) {
         return pathsConflict(passport, user)
                 || pathsConflict(passport, admin)
-                || pathsConflict(passport, pub)
                 || pathsConflict(user, admin)
-                || pathsConflict(user, pub)
-                || pathsConflict(admin, pub);
+                || pathsConflict(passport, FIXED_PUBLIC_CONFIG_PATH)
+                || pathsConflict(user, FIXED_PUBLIC_CONFIG_PATH)
+                || pathsConflict(admin, FIXED_PUBLIC_CONFIG_PATH);
     }
 
     private static boolean ensureSitePathKey(Map<String, Object> site, String key,
@@ -1414,7 +1417,7 @@ public class ConfigService {
         putPhpSection(defaults, "site", flat,
                 "logo", "force_https", "stop_register", "app_name", "app_description", "app_url",
                 "subscribe_url", "subscribe_path", "passport_api_prefix", "user_api_prefix",
-                "admin_api_prefix", "public_config_path", "try_out_plan_id", "try_out_hour", "tos_url",
+                "admin_api_prefix", "try_out_plan_id", "try_out_hour", "tos_url",
                 "currency", "currency_symbol");
         putPhpSection(defaults, "subscribe", flat,
                 "plan_change_enable", "reset_traffic_method", "surplus_enable", "allow_new_period",
@@ -1489,7 +1492,6 @@ public class ConfigService {
         site.put("passport_api_prefix", "");
         site.put("user_api_prefix", "");
         site.put("admin_api_prefix", "");
-        site.put("public_config_path", "");
         site.put("try_out_plan_id", 0);
         site.put("try_out_hour", 1);
         site.put("tos_url", "");

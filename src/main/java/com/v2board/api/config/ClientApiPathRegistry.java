@@ -34,7 +34,7 @@ public class ClientApiPathRegistry {
             passportPrefix = paths.getOrDefault("passport_api_prefix", "");
             userPrefix = paths.getOrDefault("user_api_prefix", "");
             adminPrefix = paths.getOrDefault("admin_api_prefix", "");
-            publicConfigPath = paths.getOrDefault("public_config_path", "");
+            publicConfigPath = ConfigService.FIXED_PUBLIC_CONFIG_PATH;
             logger.info("Client API paths active: passport={}, user={}, admin={}, public={}",
                     passportPrefix, userPrefix, adminPrefix, publicConfigPath);
         } catch (Exception e) {

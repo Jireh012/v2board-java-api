@@ -12,15 +12,15 @@
 - Trigger: Login/register need `app_name`, register gates, and **passport/user/admin API prefixes** without JWT.
 - Do **not** expose `/api/v1/admin/config/fetch` publicly — it returns full nested config including secrets.
 - Classic `GET /api/v1/passport/comm/config` is **removed** (hard cutover with other passport routes).
-- Bootstrap path: `site.public_config_path` (auto `/c/`+8); frontend `VITE_PUBLIC_CONFIG_PATH` must match.
+- Bootstrap path: **fixed** `GET /config` (`ConfigService.FIXED_PUBLIC_CONFIG_PATH`); not admin-configurable; frontend hardcodes the same path (no env).
 
 ### 2. Signatures
 
-- `GET {public_config_path}` — `CommController#config` (registered by `PublicConfigRouteRegistrar`)
+- `GET /config` — `CommController#config` (registered by `PublicConfigRouteRegistrar`)
 - `ConfigService.getAppName()` / `getStopRegister()` / `getInviteForce()` / `getEmailVerify()` / `getSafeModeEnable()` / `getSecurePath()` / `getRecaptchaEnable()` / `getRecaptchaSiteKey()`
 - `ConfigService.getFrontendThemeSidebar()` / `getFrontendThemeHeader()` / `getFrontendThemeColor()` / `getFrontendBackgroundUrl()`
 - `ConfigService.getTelegramDiscussLink()`
-- `ConfigService.ensureClientApiPaths()` → `passport_api_prefix` / `user_api_prefix` / `admin_api_prefix` / `public_config_path`
+- `ConfigService.ensureClientApiPaths()` → `passport_api_prefix` / `user_api_prefix` / `admin_api_prefix`
 - Outer encrypt: `PanelSm4Filter` + `Sm4Util.encryptToEnvelope` / `parseKey(SM4_KEY)`
 - Env: `SM4_KEY` → `v2board.sm4-key` (required)
 
@@ -45,13 +45,13 @@
 | `passport_api_prefix` | string | replaces `/api/v1/passport` |
 | `user_api_prefix` | string | replaces `/api/v1/user` |
 | `admin_api_prefix` | string | replaces `/api/v1/admin` |
-| `public_config_path` | string | this bootstrap path |
+| `public_config_path` | string | always `"/config"` (informational) |
 
 Never expose `telegram_bot_token` / `frontend_theme` package name here.
 
 **Wire response**: entire body is `{iv,payload}` whose plaintext is `ApiResponse` JSON (`code`/`message`/`data`). No inner envelope in `data`.
 
-Frontend: `VITE_SM4_KEY` + `VITE_PUBLIC_CONFIG_PATH`; decrypt once → parse ApiResponse → use `data` (`site.ts`).
+Frontend: `VITE_SM4_KEY` only; GET `/config`; decrypt once → parse ApiResponse → use `data` (`site.ts`).
 
 ### 4. Validation & Error Matrix
 
@@ -64,8 +64,8 @@ Frontend: `VITE_SM4_KEY` + `VITE_PUBLIC_CONFIG_PATH`; decrypt once → parse Api
 
 ### 5. Good/Base/Bad Cases
 
-- Good: GET public path → outer envelope; decrypt → ApiResponse with prefixes in `data`.
-- Base: Dev key `0123456789abcdef`; align `VITE_PUBLIC_CONFIG_PATH` with admin site field.
+- Good: GET `/config` → outer envelope; decrypt → ApiResponse with prefixes in `data`.
+- Base: Dev key `0123456789abcdef`.
 - Bad: Double SM4 (controller encrypts `data` again); classic passport config path still live.
 
 ### 6. Tests Required
@@ -90,11 +90,11 @@ return ApiResponse.success(plainMap); // PanelSm4Filter wraps whole ApiResponse
 
 ---
 
-## Design Decision: Neutral public_config_path bootstrap
+## Design Decision: Fixed `/config` bootstrap
 
 **Context**: Public config must reveal passport/user/admin prefixes, but those prefixes cannot be known before config load.
 
-**Decision**: Dedicated `site.public_config_path` + matching `VITE_PUBLIC_CONFIG_PATH`; not under passport prefix.
+**Decision**: Hardcode `GET /config` on panel and UI (no admin field, no `VITE_PUBLIC_CONFIG_PATH`). Reverse proxy must forward `/config` to the API.
 
 ---
 

@@ -15,7 +15,7 @@ import java.util.Map;
 
 /**
  * 对齐 PHP V1\Passport\CommController。
- * 公开配置 {@link #config()} 由 {@code PublicConfigRouteRegistrar} 挂到 {@code site.public_config_path}；
+ * 公开配置 {@link #config()} 由 {@code PublicConfigRouteRegistrar} 挂到固定路径 {@code /config}；
  * 整包响应由 {@code PanelSm4Filter} 外层 SM4 加密（data 内为明文公开字段，避免双重 SM4）。
  */
 @RestController
@@ -54,12 +54,12 @@ public class CommController {
             plain.put("passport_api_prefix", paths.get("passport_api_prefix"));
             plain.put("user_api_prefix", paths.get("user_api_prefix"));
             plain.put("admin_api_prefix", paths.get("admin_api_prefix"));
-            plain.put("public_config_path", paths.get("public_config_path"));
+            plain.put("public_config_path", ConfigService.FIXED_PUBLIC_CONFIG_PATH);
         } catch (Exception e) {
             plain.put("passport_api_prefix", configService.getPassportApiPrefix());
             plain.put("user_api_prefix", configService.getUserApiPrefix());
             plain.put("admin_api_prefix", configService.getAdminApiPrefix());
-            plain.put("public_config_path", configService.getPublicConfigPath());
+            plain.put("public_config_path", ConfigService.FIXED_PUBLIC_CONFIG_PATH);
         }
         return ApiResponse.success(plain);
     }

@@ -22,7 +22,7 @@ class ConfigServiceClientApiPrefixTest {
         assertTrue(ConfigService.generatePassportApiPrefix().matches("^/p/[a-z0-9]{12}$"));
         assertTrue(ConfigService.generateUserApiPrefix().matches("^/u/[a-z0-9]{12}$"));
         assertTrue(ConfigService.generateAdminApiPrefix().matches("^/a/[a-z0-9]{12}$"));
-        assertTrue(ConfigService.generatePublicConfigPath().matches("^/c/[a-z0-9]{8}$"));
+        assertEquals("/config", ConfigService.FIXED_PUBLIC_CONFIG_PATH);
     }
 
     @Test
@@ -30,6 +30,7 @@ class ConfigServiceClientApiPrefixTest {
         assertFalse(ConfigService.isValidClientApiPrefix("/api/v1/user"));
         assertFalse(ConfigService.isValidClientApiPrefix("/api/v1/passport"));
         assertFalse(ConfigService.isValidClientApiPrefix("/api/v1/admin"));
+        assertFalse(ConfigService.isValidClientApiPrefix("/config"));
         assertTrue(ConfigService.isValidClientApiPrefix("/p/abcdefghijkl"));
         assertTrue(ConfigService.isValidClientApiPrefix("/a/abcdefghijkl"));
     }
@@ -41,14 +42,16 @@ class ConfigServiceClientApiPrefixTest {
     }
 
     @Test
-    void ensureClientApiPathsInPlace_autoGenerates() {
+    void ensureClientApiPathsInPlace_autoGeneratesAndStripsLegacyPublicPath() {
+        Map<String, Object> site = new HashMap<>();
+        site.put("public_config_path", "/c/oldpath");
         Map<String, Object> full = new HashMap<>();
-        full.put("site", new HashMap<String, Object>());
+        full.put("site", site);
         assertTrue(ConfigService.ensureClientApiPathsInPlace(full));
         assertTrue(ConfigService.getSitePathFromMap(full, "passport_api_prefix").matches("^/p/[a-z0-9]{12}$"));
         assertTrue(ConfigService.getSitePathFromMap(full, "user_api_prefix").matches("^/u/[a-z0-9]{12}$"));
         assertTrue(ConfigService.getSitePathFromMap(full, "admin_api_prefix").matches("^/a/[a-z0-9]{12}$"));
-        assertTrue(ConfigService.getSitePathFromMap(full, "public_config_path").matches("^/c/[a-z0-9]{8}$"));
+        assertFalse(((Map<?, ?>) full.get("site")).containsKey("public_config_path"));
         assertFalse(ConfigService.ensureClientApiPathsInPlace(full));
     }
 
@@ -70,7 +73,6 @@ class ConfigServiceClientApiPrefixTest {
         site.put("passport_api_prefix", "/p/mycustompath");
         site.put("user_api_prefix", "/u/mycustompath");
         site.put("admin_api_prefix", "/a/mycustompath");
-        site.put("public_config_path", "/c/mycfg01");
         Map<String, Object> body = new HashMap<>();
         body.put("site", site);
         assertDoesNotThrow(() -> configService.save(body));
@@ -82,6 +84,14 @@ class ConfigServiceClientApiPrefixTest {
         BusinessException ex = assertThrows(BusinessException.class,
                 () -> configService.save(siteBody("admin_api_prefix", "/api/v1/admin")));
         assertTrue(ex.getMessage().contains("管理 API 前缀"));
+    }
+
+    @Test
+    void save_rejectsPrefixConflictingWithFixedPublicConfig() {
+        ConfigService configService = newConfigService(mock(SystemConfigMapper.class));
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> configService.save(siteBody("user_api_prefix", "/config")));
+        assertTrue(ex.getMessage().contains("/config") || ex.getMessage().contains("不合法"));
     }
 
     private static Map<String, Object> siteBody(String key, Object value) {

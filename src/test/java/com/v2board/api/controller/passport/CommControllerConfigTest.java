@@ -35,7 +35,7 @@ class CommControllerConfigTest {
                 "passport_api_prefix", "/p/abcdefghijkl",
                 "user_api_prefix", "/u/mnopqrstuvwx",
                 "admin_api_prefix", "/a/zyxwvutsrqpo",
-                "public_config_path", "/c/cfgpath1"
+                "public_config_path", ConfigService.FIXED_PUBLIC_CONFIG_PATH
         ));
 
         CommController controller = new CommController();
@@ -63,7 +63,7 @@ class CommControllerConfigTest {
         assertEquals("/p/abcdefghijkl", data.get("passport_api_prefix"));
         assertEquals("/u/mnopqrstuvwx", data.get("user_api_prefix"));
         assertEquals("/a/zyxwvutsrqpo", data.get("admin_api_prefix"));
-        assertEquals("/c/cfgpath1", data.get("public_config_path"));
+        assertEquals("/config", data.get("public_config_path"));
         assertFalse(data.containsKey("recaptcha_key"));
         assertEquals(17, data.size());
     }
