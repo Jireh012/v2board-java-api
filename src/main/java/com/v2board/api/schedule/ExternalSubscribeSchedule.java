@@ -17,6 +17,9 @@ public class ExternalSubscribeSchedule {
         this.syncService = syncService;
     }
 
+    /**
+     * cron 配置为 {@code -} 时由 Spring 禁用（本地 dev 默认如此）。
+     */
     @Scheduled(cron = "${v2board.external-subscribe.cron:0 */30 * * * *}")
     public void syncExternalSubscriptions() {
         try {

@@ -52,6 +52,9 @@ public class ExternalSubscribeNodeService {
                         .orderByAsc(ExternalSubscribeNode::getId));
         List<Map<String, Object>> mapped = new ArrayList<>();
         for (ExternalSubscribeNode node : nodes) {
+            if (ExternalInfoNode.isInfoName(node.getName())) {
+                continue;
+            }
             Map<String, Object> map = toServerMap(node);
             if (map != null) {
                 mapped.add(map);
@@ -111,11 +114,14 @@ public class ExternalSubscribeNodeService {
     }
 
     public List<ExternalSubscribeNode> listBySourceId(Long sourceId) {
-        return nodeMapper.selectList(new LambdaQueryWrapper<ExternalSubscribeNode>()
+        List<ExternalSubscribeNode> nodes = nodeMapper.selectList(new LambdaQueryWrapper<ExternalSubscribeNode>()
                 .eq(ExternalSubscribeNode::getSourceId, sourceId)
                 .orderByDesc(ExternalSubscribeNode::getReachable)
                 .orderByAsc(ExternalSubscribeNode::getSort)
                 .orderByAsc(ExternalSubscribeNode::getId));
+        return nodes.stream()
+                .filter(n -> !ExternalInfoNode.isInfoName(n.getName()))
+                .collect(Collectors.toList());
     }
 
     public Map<Long, long[]> countBySourceIds(List<Long> sourceIds) {
@@ -129,6 +135,9 @@ public class ExternalSubscribeNodeService {
         List<ExternalSubscribeNode> nodes = nodeMapper.selectList(
                 new LambdaQueryWrapper<ExternalSubscribeNode>().in(ExternalSubscribeNode::getSourceId, sourceIds));
         for (ExternalSubscribeNode node : nodes) {
+            if (ExternalInfoNode.isInfoName(node.getName())) {
+                continue;
+            }
             long[] c = counts.computeIfAbsent(node.getSourceId(), k -> new long[]{0, 0});
             c[0]++;
             if (node.getReachable() != null && node.getReachable() == 1) {

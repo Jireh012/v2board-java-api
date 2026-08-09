@@ -14,6 +14,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -130,8 +131,12 @@ public class ExternalSubscribeSyncService {
             }
 
             String content = fetcher.fetch(source.getUrl());
-            List<CanonicalExternalNode> parsed = parser.parse(content);
+            List<CanonicalExternalNode> parsed = new ArrayList<>(parser.parse(content));
             ExternalNameFilter.applyFiltersToParsed(parsed, ExternalNameFilter.fromJson(source.getNameFilters()));
+            int droppedInfo = ExternalInfoNode.removeFrom(parsed);
+            if (droppedInfo > 0) {
+                logger.info("Dropped {} info pseudo-node(s) from source {}", droppedInfo, source.getId());
+            }
             if (parsed.isEmpty()) {
                 // 清空旧节点
                 nodeMapper.delete(new LambdaQueryWrapper<ExternalSubscribeNode>()

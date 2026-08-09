@@ -141,6 +141,35 @@ public void syncOne(Long id) {
 
 ---
 
+## Scenario: Drop upstream info pseudo-nodes
+
+### 1. Scope / Trigger
+
+- Upstream subscribe often injects fake proxies named like `剩余流量：…` / `套餐到期：…` for client UI.
+- Third-party ingest must **not** store or emit these into user subscribe.
+
+### 2. Contract
+
+- Detector: `ExternalInfoNode.isInfoName` / `removeFrom`
+- Sync: after name filters, drop info nodes before probe/upsert (next sync also deletes previously stored ones via `seen`)
+- Delivery: `listReachableAsServerMaps` and admin `listBySourceId` skip info names as a safety net
+
+### 3. Wrong vs Correct
+
+#### Wrong
+
+```java
+// Keep "剩余流量：58.73 GB" as a reachable trojan node in external list
+```
+
+#### Correct
+
+```java
+ExternalInfoNode.removeFrom(parsed); // before probeAll / upsert
+```
+
+---
+
 ## Scenario: Subscribe fetch User-Agent
 
 ### 1. Scope / Trigger
