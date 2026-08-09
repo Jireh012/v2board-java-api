@@ -52,6 +52,7 @@ public class AdminExternalSubscribeController {
             row.put("name", s.getName());
             row.put("url", s.getUrl());
             row.put("enable", s.getEnable());
+            row.put("pre_proxy_enable", s.getPreProxyEnable() != null ? s.getPreProxyEnable() : 0);
             row.put("remark", s.getRemark());
             row.put("name_filters", ExternalNameFilter.toApiList(s.getNameFilters()));
             row.put("last_sync_at", s.getLastSyncAt());
@@ -80,6 +81,10 @@ public class AdminExternalSubscribeController {
         long now = System.currentTimeMillis() / 1000;
         Long id = toLong(body.get("id"));
         Integer enable = toInt(body.get("enable"), 0);
+        Integer preProxyEnable = toInt(body.get("pre_proxy_enable"), 0);
+        if (preProxyEnable != 0 && preProxyEnable != 1) {
+            preProxyEnable = 0;
+        }
         String remark = body.get("remark") != null ? String.valueOf(body.get("remark")) : null;
         List<ExternalNameFilter.Rule> filters = ExternalNameFilter.parseAndValidateStrict(body.get("name_filters"));
         String nameFiltersJson = ExternalNameFilter.toJson(filters);
@@ -92,6 +97,7 @@ public class AdminExternalSubscribeController {
             existing.setName(name);
             existing.setUrl(url);
             existing.setEnable(enable);
+            existing.setPreProxyEnable(preProxyEnable);
             existing.setRemark(remark);
             existing.setNameFilters(nameFiltersJson);
             existing.setUpdatedAt(now);
@@ -103,6 +109,7 @@ public class AdminExternalSubscribeController {
             source.setName(name);
             source.setUrl(url);
             source.setEnable(enable);
+            source.setPreProxyEnable(preProxyEnable);
             source.setRemark(remark);
             source.setNameFilters(nameFiltersJson);
             source.setCreatedAt(now);

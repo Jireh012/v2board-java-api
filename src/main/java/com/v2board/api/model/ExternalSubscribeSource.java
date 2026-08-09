@@ -18,6 +18,12 @@ public class ExternalSubscribeSource {
 
     private Integer enable;
 
+    /**
+     * 0 = direct fetch; 1 = auto pick a reachable library node as HTTP pre-proxy.
+     */
+    @TableField("pre_proxy_enable")
+    private Integer preProxyEnable;
+
     private String remark;
 
     /**

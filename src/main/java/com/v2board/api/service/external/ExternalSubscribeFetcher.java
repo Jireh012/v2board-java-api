@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
+import java.net.Proxy;
 import java.net.URI;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -30,13 +31,20 @@ public class ExternalSubscribeFetcher {
     };
 
     public String fetch(String url) throws Exception {
+        return fetch(url, null);
+    }
+
+    /**
+     * @param proxy optional HTTP proxy (e.g. local sing-box mixed); null = direct
+     */
+    public String fetch(String url, Proxy proxy) throws Exception {
         if (url == null || url.isBlank()) {
             throw new IllegalArgumentException("订阅地址为空");
         }
         Exception last = null;
         for (String ua : USER_AGENTS) {
             try {
-                return fetchWithUserAgent(url.trim(), ua);
+                return fetchWithUserAgent(url.trim(), ua, proxy);
             } catch (IllegalStateException e) {
                 last = e;
                 String msg = e.getMessage() != null ? e.getMessage() : "";
@@ -50,10 +58,13 @@ public class ExternalSubscribeFetcher {
         throw last != null ? last : new IllegalStateException("拉取失败");
     }
 
-    private String fetchWithUserAgent(String url, String userAgent) throws Exception {
+    private String fetchWithUserAgent(String url, String userAgent, Proxy proxy) throws Exception {
         String current = url;
         for (int i = 0; i <= MAX_REDIRECTS; i++) {
-            HttpURLConnection conn = (HttpURLConnection) URI.create(current).toURL().openConnection();
+            URL target = URI.create(current).toURL();
+            HttpURLConnection conn = (HttpURLConnection) (proxy != null
+                    ? target.openConnection(proxy)
+                    : target.openConnection());
             conn.setInstanceFollowRedirects(false);
             conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
             conn.setReadTimeout(READ_TIMEOUT_MS);
@@ -80,8 +91,8 @@ public class ExternalSubscribeFetcher {
             try (InputStream in = conn.getInputStream()) {
                 byte[] body = readLimited(in, MAX_BYTES);
                 String contentType = conn.getContentType();
-                logger.debug("Fetched subscribe content, ua={}, type={}, bytes={}",
-                        userAgent, contentType, body.length);
+                logger.debug("Fetched subscribe content, ua={}, proxy={}, type={}, bytes={}",
+                        userAgent, proxy != null, contentType, body.length);
                 return new String(body, StandardCharsets.UTF_8);
             } finally {
                 conn.disconnect();

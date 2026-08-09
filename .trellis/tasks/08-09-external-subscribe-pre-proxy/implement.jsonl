@@ -1,0 +1,9 @@
+{"path":".trellis/spec/backend/external-subscribe.md","title":"External subscribe contracts"}
+{"path":"src/main/resources/db/v2_external_subscribe.sql","title":"DDL external subscribe"}
+{"path":"src/main/java/com/v2board/api/model/ExternalSubscribeSource.java","title":"Source model"}
+{"path":"src/main/java/com/v2board/api/service/external/ExternalSubscribeFetcher.java","title":"HTTP fetch"}
+{"path":"src/main/java/com/v2board/api/service/external/ExternalSubscribeSyncService.java","title":"Sync orchestration"}
+{"path":"src/main/java/com/v2board/api/service/external/SingBoxProbeService.java","title":"sing-box local proxy pattern"}
+{"path":"src/main/java/com/v2board/api/controller/admin/AdminExternalSubscribeController.java","title":"Admin API"}
+{"path":"../v2board-ui/src/views/admin/AdminExternalSubscribeView.vue","title":"Admin UI"}
+{"path":"../v2board-ui/src/api/admin/externalSubscribe.ts","title":"Admin API client"}

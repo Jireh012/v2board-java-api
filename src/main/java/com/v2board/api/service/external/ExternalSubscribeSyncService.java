@@ -130,7 +130,7 @@ public class ExternalSubscribeSyncService {
                 throw new IllegalStateException("本机 sing-box 不可用，请配置 v2board.external-subscribe.sing-box-path");
             }
 
-            String content = fetcher.fetch(source.getUrl());
+            String content = fetchSubscribeContent(source);
             List<CanonicalExternalNode> parsed = new ArrayList<>(parser.parse(content));
             ExternalNameFilter.applyFiltersToParsed(parsed, ExternalNameFilter.fromJson(source.getNameFilters()));
             int droppedInfo = ExternalInfoNode.removeFrom(parsed);
@@ -175,6 +175,56 @@ public class ExternalSubscribeSyncService {
             logger.error("Sync external source {} failed", source.getId(), e);
             finish(source, "failed", truncate(e.getMessage(), 1000), now);
         }
+    }
+
+    /**
+     * Direct fetch, or auto-pick a reachable node from another enabled source as HTTP pre-proxy.
+     */
+    String fetchSubscribeContent(ExternalSubscribeSource source) throws Exception {
+        boolean preProxy = source.getPreProxyEnable() != null && source.getPreProxyEnable() == 1;
+        if (!preProxy) {
+            return fetcher.fetch(source.getUrl());
+        }
+        ExternalSubscribeNode proxyNode = pickPreProxyNode(source.getId());
+        if (proxyNode == null) {
+            throw new IllegalStateException("前置代理已开启但无可用节点");
+        }
+        if (!StringUtils.hasText(proxyNode.getSingboxOutbound())) {
+            throw new IllegalStateException("前置代理节点缺少 sing-box outbound");
+        }
+        @SuppressWarnings("unchecked")
+        Map<String, Object> outbound = MAPPER.readValue(proxyNode.getSingboxOutbound(), Map.class);
+        logger.info("External source {} fetch via pre-proxy node id={} name={}",
+                source.getId(), proxyNode.getId(), proxyNode.getName());
+        try (SingBoxProbeService.LocalHttpProxySession session = probeService.openHttpProxy(outbound)) {
+            return fetcher.fetch(source.getUrl(), session.proxy());
+        }
+    }
+
+    /**
+     * Stable pick: other enabled sources' reachable nodes, order by sort ASC, id ASC.
+     */
+    ExternalSubscribeNode pickPreProxyNode(Long excludeSourceId) {
+        List<ExternalSubscribeSource> enabled = sourceMapper.selectList(
+                new LambdaQueryWrapper<ExternalSubscribeSource>().eq(ExternalSubscribeSource::getEnable, 1));
+        List<Long> sourceIds = new ArrayList<>();
+        for (ExternalSubscribeSource s : enabled) {
+            if (s.getId() != null && (excludeSourceId == null || !s.getId().equals(excludeSourceId))) {
+                sourceIds.add(s.getId());
+            }
+        }
+        if (sourceIds.isEmpty()) {
+            return null;
+        }
+        return nodeMapper.selectOne(
+                new LambdaQueryWrapper<ExternalSubscribeNode>()
+                        .in(ExternalSubscribeNode::getSourceId, sourceIds)
+                        .eq(ExternalSubscribeNode::getReachable, 1)
+                        .isNotNull(ExternalSubscribeNode::getSingboxOutbound)
+                        .ne(ExternalSubscribeNode::getSingboxOutbound, "")
+                        .orderByAsc(ExternalSubscribeNode::getSort)
+                        .orderByAsc(ExternalSubscribeNode::getId)
+                        .last("LIMIT 1"));
     }
 
     private void upsertNode(Long sourceId, CanonicalExternalNode canonical, boolean reachable,

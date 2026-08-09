@@ -285,6 +285,48 @@ fingerprint = SHA256(logicalKey(outbound)); // ignores tag / TLS client fingerpr
 
 ---
 
+## Scenario: Pre-proxy fetch (`pre_proxy_enable`)
+
+### 1. Scope / Trigger
+
+- Admin toggle on source: fetch remote subscribe URL via an auto-picked library node (HTTP proxy through temporary sing-box mixed).
+- UI exposes **only** the toggle — no manual node picker.
+
+### 2. Signatures
+
+```
+v2_external_subscribe_source.pre_proxy_enable  -- tinyint 0|1, default 0
+Admin save/fetch JSON field: pre_proxy_enable
+ExternalSubscribeSyncService.fetchSubscribeContent(source)
+SingBoxProbeService.openHttpProxy(outbound) -> LocalHttpProxySession (AutoCloseable)
+ExternalSubscribeFetcher.fetch(url, Proxy)   -- null Proxy = direct
+```
+
+### 3. Contracts
+
+| `pre_proxy_enable` | Behavior |
+|--------------------|----------|
+| `0` / null | Direct `fetcher.fetch(url)` |
+| `1` | Pick first reachable node from **other enabled sources** (`sort ASC`, `id ASC`); open local HTTP proxy; `fetch(url, proxy)` |
+
+- Empty candidate set → sync `failed`, message `前置代理已开启但无可用节点` (no silent direct fallback).
+- Exclude current `source_id` (anti-loop / cold-start via other sources).
+- Probe phase unchanged (still uses its own short-lived proxies).
+
+### 4. Wrong vs Correct
+
+#### Wrong
+```java
+if (preProxy && pick() == null) return fetcher.fetch(url); // silent direct
+```
+
+#### Correct
+```java
+if (preProxy && pick() == null) throw new IllegalStateException("前置代理已开启但无可用节点");
+```
+
+---
+
 ## Related: Client node naming
 
 Reachable external nodes enter subscribe output via `ExternalSubscribeNodeService.listReachableAsServerMaps()` (`type=external`).

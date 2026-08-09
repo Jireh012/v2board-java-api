@@ -102,45 +102,95 @@ public class SingBoxProbeService {
         if (outbound == null || outbound.isEmpty()) {
             return false;
         }
-        Path configFile = null;
-        Process process = null;
-        try {
-            int localPort = nextLocalPort();
-            Map<String, Object> config = buildProbeConfig(outbound, localPort);
-            configFile = Files.createTempFile("singbox-probe-", ".json");
-            Files.writeString(configFile, MAPPER.writeValueAsString(config), StandardCharsets.UTF_8);
-
-            ProcessBuilder pb = new ProcessBuilder(
-                    properties.getSingBoxPath(), "run", "-c", configFile.toAbsolutePath().toString());
-            pb.redirectErrorStream(true);
-            process = pb.start();
-
-            // wait for inbound to listen
-            if (!waitPortOpen(localPort, Math.min(5000, properties.getProbeTimeoutMs()))) {
-                return false;
-            }
-            return httpThroughProxy(localPort);
+        try (LocalHttpProxySession session = openHttpProxy(outbound)) {
+            return httpThroughProxy(session.localPort());
         } catch (Exception e) {
             logger.debug("probe failed: {}", e.getMessage());
             return false;
-        } finally {
-            if (process != null) {
-                process.destroy();
-                try {
-                    if (!process.waitFor(2, TimeUnit.SECONDS)) {
-                        process.destroyForcibly();
-                    }
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
-                    process.destroyForcibly();
-                }
+        }
+    }
+
+    /**
+     * Start a short-lived local sing-box mixed inbound whose final outbound is {@code outbound}.
+     * Caller must close the session (process + temp config).
+     */
+    public LocalHttpProxySession openHttpProxy(Map<String, Object> outbound) throws Exception {
+        if (outbound == null || outbound.isEmpty()) {
+            throw new IllegalArgumentException("前置代理 outbound 为空");
+        }
+        if (!isSingBoxAvailable()) {
+            throw new IllegalStateException("本机 sing-box 不可用，请配置 v2board.external-subscribe.sing-box-path");
+        }
+        int localPort = nextLocalPort();
+        Map<String, Object> config = buildProbeConfig(outbound, localPort);
+        Path configFile = Files.createTempFile("singbox-preproxy-", ".json");
+        Files.writeString(configFile, MAPPER.writeValueAsString(config), StandardCharsets.UTF_8);
+
+        ProcessBuilder pb = new ProcessBuilder(
+                properties.getSingBoxPath(), "run", "-c", configFile.toAbsolutePath().toString());
+        pb.redirectErrorStream(true);
+        Process process = pb.start();
+        try {
+            if (!waitPortOpen(localPort, Math.min(8000, Math.max(3000, properties.getProbeTimeoutMs())))) {
+                destroyQuietly(process);
+                Files.deleteIfExists(configFile);
+                throw new IllegalStateException("前置代理本地端口未就绪");
             }
-            if (configFile != null) {
-                try {
-                    Files.deleteIfExists(configFile);
-                } catch (IOException ignored) {
-                }
+            Proxy proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress("127.0.0.1", localPort));
+            return new LocalHttpProxySession(process, configFile, proxy, localPort);
+        } catch (Exception e) {
+            destroyQuietly(process);
+            try {
+                Files.deleteIfExists(configFile);
+            } catch (IOException ignored) {
             }
+            throw e;
+        }
+    }
+
+    public static class LocalHttpProxySession implements AutoCloseable {
+        private final Process process;
+        private final Path configFile;
+        private final Proxy proxy;
+        private final int localPort;
+
+        private LocalHttpProxySession(Process process, Path configFile, Proxy proxy, int localPort) {
+            this.process = process;
+            this.configFile = configFile;
+            this.proxy = proxy;
+            this.localPort = localPort;
+        }
+
+        public Proxy proxy() {
+            return proxy;
+        }
+
+        public int localPort() {
+            return localPort;
+        }
+
+        @Override
+        public void close() {
+            destroyQuietly(process);
+            try {
+                Files.deleteIfExists(configFile);
+            } catch (IOException ignored) {
+            }
+        }
+    }
+
+    private static void destroyQuietly(Process process) {
+        if (process == null) {
+            return;
+        }
+        process.destroy();
+        try {
+            if (!process.waitFor(2, TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+            }
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            process.destroyForcibly();
         }
     }
 

@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS `v2_external_subscribe_source` (
   `name` varchar(128) NOT NULL COMMENT '源名称',
   `url` varchar(2048) NOT NULL COMMENT '订阅地址',
   `enable` tinyint NOT NULL DEFAULT 0 COMMENT '0禁用 1启用',
+  `pre_proxy_enable` tinyint NOT NULL DEFAULT 0 COMMENT '0直连 1自动前置代理(节点库可达节点)',
   `remark` varchar(512) DEFAULT NULL COMMENT '备注',
   `name_filters` json DEFAULT NULL COMMENT '名称过滤规则 [{pattern,replacement,regex}]',
   `last_sync_at` bigint DEFAULT NULL COMMENT '上次同步时间(秒)',
@@ -35,3 +36,5 @@ CREATE TABLE IF NOT EXISTS `v2_external_subscribe_node` (
 -- 已有库升级：
 -- ALTER TABLE `v2_external_subscribe_source`
 --   ADD COLUMN `name_filters` json DEFAULT NULL COMMENT '名称过滤规则 [{pattern,replacement,regex}]' AFTER `remark`;
+-- ALTER TABLE `v2_external_subscribe_source`
+--   ADD COLUMN `pre_proxy_enable` tinyint NOT NULL DEFAULT 0 COMMENT '0直连 1自动前置代理' AFTER `enable`;

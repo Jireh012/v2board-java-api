@@ -1,0 +1,6 @@
+{"path":".trellis/tasks/08-09-external-subscribe-pre-proxy/prd.md","title":"PRD"}
+{"path":".trellis/tasks/08-09-external-subscribe-pre-proxy/design.md","title":"Design"}
+{"path":".trellis/spec/backend/external-subscribe.md","title":"Spec"}
+{"path":"src/main/java/com/v2board/api/service/external/ExternalSubscribeSyncService.java","title":"Sync"}
+{"path":"src/main/java/com/v2board/api/service/external/ExternalSubscribeFetcher.java","title":"Fetcher"}
+{"path":"../v2board-ui/src/views/admin/AdminExternalSubscribeView.vue","title":"UI"}
