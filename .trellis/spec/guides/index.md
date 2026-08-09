@@ -25,6 +25,8 @@ These guides help you **ask the right questions before coding**.
 | [Code Reuse Thinking Guide](./code-reuse-thinking-guide.md) | Identify patterns and reduce duplication | When you notice repeated patterns |
 | [Cross-Layer Thinking Guide](./cross-layer-thinking-guide.md) | Think through data flow across layers | Features spanning multiple layers |
 
+PHP 对照源码（code-spec）：[php-upstream.md](../backend/php-upstream.md) → **https://github.com/wyx2685/v2board**
+
 ---
 
 ## Quick Reference: Thinking Triggers
@@ -33,6 +35,11 @@ These guides help you **ask the right questions before coding**.
 
 - [ ] Message = `type(scope): 中文摘要` + 空行 + 中文正文 → [commit-message.md](./commit-message.md)
 - [ ] 勿用纯中文无前缀，或英文摘要覆盖本仓库约定
+
+### When Aligning with PHP (“对照原版”)
+
+- [ ] Use **only** [wyx2685/v2board](https://github.com/wyx2685/v2board) `master` as the PHP reference → [php-upstream.md](../backend/php-upstream.md)
+- [ ] Do **not** default to `v2board/v2board` or other forks unless the user explicitly changes Trellis
 
 ### When to Think About Cross-Layer Issues
 

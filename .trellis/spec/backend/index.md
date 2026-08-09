@@ -8,12 +8,15 @@
 
 Code-specs for the Spring Boot / MyBatis-Plus API that shares MySQL + Redis with PHP V2Board.
 
+**PHP upstream (canonical)**: [wyx2685/v2board](https://github.com/wyx2685/v2board) `master` — see [php-upstream.md](./php-upstream.md).
+
 ---
 
 ## Guidelines Index
 
 | Guide | Description | Status |
 |-------|-------------|--------|
+| [PHP Upstream](./php-upstream.md) | Canonical PHP repo for align/compare work | Active |
 | [Directory Structure](./directory-structure.md) | Module organization and file layout | To fill |
 | [Database Guidelines](./database-guidelines.md) | ORM, `v2_*` schema, PHP JSON field types | Active |
 | [Admin Commerce](./admin-commerce.md) | Orders / coupons / giftcards / plan units & filters | Active |
@@ -37,6 +40,7 @@ Code-specs for the Spring Boot / MyBatis-Plus API that shares MySQL + Redis with
 
 When changing admin servers, JSON columns, or external subscribe:
 
+- [ ] Aligning with PHP / “对照原版” → [php-upstream.md](./php-upstream.md) ([wyx2685/v2board](https://github.com/wyx2685/v2board))
 - [ ] Read [database-guidelines.md](./database-guidelines.md) if touching PHP-written JSON (`group_id`, etc.)
 - [ ] Read [admin-commerce.md](./admin-commerce.md) if touching orders, coupons, giftcards, plan prices/traffic
 - [ ] Read [invite-commission.md](./invite-commission.md) if changing invite/commission/withdraw runtime readers

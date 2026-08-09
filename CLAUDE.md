@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Java reimplementation of V2Board (originally PHP/Laravel VPN subscription panel). Designed to coexist with the PHP version, sharing the same MySQL database and Redis instance. The project provides subscription link generation, user/server management, order/payment processing, and a UniProxy node API.
 
+**PHP upstream (canonical for align/compare)**: [wyx2685/v2board](https://github.com/wyx2685/v2board) (`master`). Trellis: `.trellis/spec/backend/php-upstream.md`.
+
 **Tech stack**: Spring Boot 3.1.5, Java 17, MyBatis-Plus 3.5.4.1, MySQL 8.0+, Redis (Lettuce)
 
 ## Build & Run Commands
