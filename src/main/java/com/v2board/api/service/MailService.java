@@ -3,13 +3,13 @@ package com.v2board.api.service;
 import com.v2board.api.mapper.MailLogMapper;
 import com.v2board.api.model.MailLog;
 import com.v2board.api.model.User;
+import com.v2board.api.queue.JobDispatcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.mail.javamail.MimeMessageHelper;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.thymeleaf.TemplateEngine;
@@ -39,18 +39,28 @@ public class MailService {
     @Autowired
     private ConfigService configService;
 
+    @Autowired
+    private JobDispatcher jobDispatcher;
+
     /**
-     * 异步发送邮件 — 对齐 PHP SendEmailJob
+     * 入队发送邮件 — 对齐 PHP SendEmailJob
      */
-    @Async("emailExecutor")
     public void sendEmail(String email, String subject, String templateName, Map<String, Object> templateValues) {
+        jobDispatcher.dispatchSendEmail(email, subject, templateName, templateValues);
+    }
+
+    /** Worker entry — may throw for retry / failed job. */
+    public void processEmail(String email, String subject, String templateName, Map<String, Object> templateValues)
+            throws Exception {
         try {
             sendEmailInternal(email, subject, templateName, templateValues, true);
         } catch (InterruptedException ie) {
             Thread.currentThread().interrupt();
+            throw ie;
         } catch (Exception e) {
             logger.error("Failed to send email to {}: {}", email, e.getMessage(), e);
             logMail(email, subject, templateName, e.getMessage());
+            throw e;
         }
     }
 

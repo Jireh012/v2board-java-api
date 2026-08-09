@@ -12,6 +12,7 @@ import com.v2board.api.model.ServerV2node;
 import com.v2board.api.model.ServerVless;
 import com.v2board.api.model.ServerVmess;
 import com.v2board.api.model.User;
+import com.v2board.api.queue.JobDispatcher;
 import com.v2board.api.service.ConfigService;
 import com.v2board.api.service.NodeCacheService;
 import com.v2board.api.service.ServerService;
@@ -48,6 +49,9 @@ public class UniProxyController {
 
     @Autowired
     private UserService userService;
+
+    @Autowired
+    private JobDispatcher jobDispatcher;
 
     @Autowired
     private ConfigService configService;
@@ -98,9 +102,9 @@ public class UniProxyController {
         nodeCacheService.set(lastPushKey, now, Duration.ofHours(1));
 
         double rate = ctx.rate;
-        userService.trafficFetch(rate, data);
-        userService.recordStatUserAsync(data, rate);
-        userService.recordStatServerAsync(data, ctx.nodeId, ctx.nodeType, rate);
+        jobDispatcher.dispatchTrafficFetch(rate, data);
+        jobDispatcher.dispatchStatUser(rate, data);
+        jobDispatcher.dispatchStatServer(rate, ctx.nodeId, ctx.nodeType, data);
 
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_JSON)

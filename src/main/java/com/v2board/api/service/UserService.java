@@ -14,7 +14,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -169,12 +168,11 @@ public class UserService {
     }
 
     /**
-     * 异步记录用户流量统计 — 对齐 PHP StatUserJob
+     * 记录用户流量统计 — 对齐 PHP StatUserJob（由 queue worker 调用）
      * 含死锁重试逻辑（最多 3 次，指数退避）
      */
-    @Async("trafficExecutor")
     @Transactional
-    public void recordStatUserAsync(Map<String, List<Long>> data, double rate) {
+    public void recordStatUser(Map<String, List<Long>> data, double rate) {
         if (data == null || data.isEmpty()) {
             return;
         }
@@ -233,19 +231,23 @@ public class UserService {
                         return;
                     }
                 } else {
-                    logger.error("recordStatUserAsync failed", e);
+                    logger.error("recordStatUser failed", e);
                     throw e;
                 }
             }
         }
     }
 
+    /** @deprecated use {@link #recordStatUser} via queue */
+    public void recordStatUserAsync(Map<String, List<Long>> data, double rate) {
+        recordStatUser(data, rate);
+    }
+
     /**
-     * 异步记录服务器流量统计 — 对齐 PHP StatServerJob
+     * 记录服务器流量统计 — 对齐 PHP StatServerJob（由 queue worker 调用）
      */
-    @Async("trafficExecutor")
     @Transactional
-    public void recordStatServerAsync(Map<String, List<Long>> data, Long serverId, String serverType, double rate) {
+    public void recordStatServer(Map<String, List<Long>> data, Long serverId, String serverType, double rate) {
         if (data == null || data.isEmpty() || serverId == null || serverType == null) {
             return;
         }
@@ -289,6 +291,11 @@ public class UserService {
             statServer.setUpdatedAt(nowTs);
             statServerMapper.updateById(statServer);
         }
+    }
+
+    /** @deprecated use {@link #recordStatServer} via queue */
+    public void recordStatServerAsync(Map<String, List<Long>> data, Long serverId, String serverType, double rate) {
+        recordStatServer(data, serverId, serverType, rate);
     }
 
     /**

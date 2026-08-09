@@ -6,13 +6,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.v2board.api.common.BusinessException;
 import com.v2board.api.mapper.UserMapper;
 import com.v2board.api.model.User;
+import com.v2board.api.queue.JobDispatcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestTemplate;
@@ -37,6 +37,9 @@ public class TelegramService {
 
     @Autowired
     private ConfigService configService;
+
+    @Autowired
+    private JobDispatcher jobDispatcher;
 
     @Autowired
     private UserMapper userMapper;
@@ -142,9 +145,11 @@ public class TelegramService {
         }
     }
 
-    @Async("telegramExecutor")
     public void sendMessageAsync(Long chatId, String text) {
-        sendMessage(chatId, text);
+        if (chatId == null) {
+            return;
+        }
+        jobDispatcher.dispatchSendTelegram(chatId, text);
     }
 
     /**

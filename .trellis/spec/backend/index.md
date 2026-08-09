@@ -35,6 +35,7 @@ Code-specs for the Spring Boot / MyBatis-Plus API that shares MySQL + Redis with
 | [Passport Email](./passport-email.md) | sendEmailVerify / register code / forget; nested SMTP | Active |
 | [System Config](./system-config.md) | Admin save/fetch deepMerge; nested readers; no MAIL_* env | Active |
 | [Server Node](./server-node.md) | Obfuscated node API/SM4, `base_config`, install_command + Jireh012 Release | Active |
+| [Job Queue](./job-queue.md) | Redis persistent queues + admin workload/failed (non-Horizon) | Active |
 | [Error Handling](./error-handling.md) | `BusinessException`, silent-catch bans | Active |
 | [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | To fill |
 | [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels | To fill |
@@ -66,6 +67,7 @@ When changing admin servers, JSON columns, or external subscribe:
 - [ ] Read [system-config.md](./system-config.md) if changing `ConfigService` defaults, save/merge, nested readers, or admin config groups
 - [ ] Read [server-node.md](./server-node.md) if changing obfuscated node paths, `server_token`, node intervals/thresholds, or v2node `install_command`
 - [ ] v2node install: script **and** Release assets from `Jireh012/v2node` (never `wyx2685` binaries); `--api-host` = API origin not Vite
+- [ ] Background jobs / queue monitor → [job-queue.md](./job-queue.md); apply `v2_job_failed.sql`; do not claim Horizon
 - [ ] Nested config: read via `getStringFromGroup` / section getters — never top-level flat keys
 - [ ] Read [error-handling.md](./error-handling.md) — do not swallow conversion errors in list aggregators
 - [ ] Nested config defaults: **no** `Map.of` for merge targets

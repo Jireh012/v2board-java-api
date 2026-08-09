@@ -10,8 +10,8 @@ import com.v2board.api.model.Plan;
 import com.v2board.api.model.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.v2board.api.queue.JobDispatcher;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -55,6 +55,9 @@ public class OrderService {
 
     @Autowired
     private UserService userService;
+
+    @Autowired
+    private JobDispatcher jobDispatcher;
 
     /**
      * VIP 折扣 — 对齐 PHP setVipDiscount（在优惠券之后一次性从 total 扣减 discount_amount）。
@@ -300,9 +303,9 @@ public class OrderService {
             return false;
         }
         try {
-            handleOrderAsync(order.getTradeNo());
+            jobDispatcher.dispatchOrderHandle(order.getTradeNo());
         } catch (Exception e) {
-            logger.error("paid: failed to dispatch handleOrderAsync for {}", order.getTradeNo(), e);
+            logger.error("paid: failed to enqueue order_handle for {}", order.getTradeNo(), e);
             return false;
         }
         return true;
@@ -357,33 +360,34 @@ public class OrderService {
         return orderMapper.selectCount(wrapper) > 0;
     }
 
-    /**
-     * 异步处理订单 — 对齐 PHP OrderHandleJob
-     */
-    @Async("orderExecutor")
+    /** Enqueue order handle (schedules / callers that previously used @Async). */
     public void handleOrderAsync(String tradeNo) {
         if (tradeNo == null || tradeNo.isEmpty()) {
             return;
         }
-        try {
-            LambdaQueryWrapper<Order> wrapper = new LambdaQueryWrapper<>();
-            wrapper.eq(Order::getTradeNo, tradeNo);
-            Order order = orderMapper.selectOne(wrapper);
-            if (order == null) {
-                return;
+        jobDispatcher.dispatchOrderHandle(tradeNo);
+    }
+
+    /**
+     * Process order — 对齐 PHP OrderHandleJob（由 queue worker 调用）
+     */
+    public void handleOrder(String tradeNo) {
+        if (tradeNo == null || tradeNo.isEmpty()) {
+            return;
+        }
+        LambdaQueryWrapper<Order> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Order::getTradeNo, tradeNo);
+        Order order = orderMapper.selectOne(wrapper);
+        if (order == null) {
+            return;
+        }
+        long now = System.currentTimeMillis() / 1000;
+        if (order.getStatus() == 0) {
+            if (order.getCreatedAt() != null && (now - order.getCreatedAt()) > 7200) {
+                cancel(order);
             }
-            long now = System.currentTimeMillis() / 1000;
-            if (order.getStatus() == 0) {
-                // 未支付且超过 2 小时 → 取消
-                if (order.getCreatedAt() != null && (now - order.getCreatedAt()) > 7200) {
-                    cancel(order);
-                }
-            } else if (order.getStatus() == 1) {
-                // 已支付 → 开通
-                open(order);
-            }
-        } catch (Exception e) {
-            logger.error("handleOrderAsync failed for tradeNo={}", tradeNo, e);
+        } else if (order.getStatus() == 1) {
+            open(order);
         }
     }
 

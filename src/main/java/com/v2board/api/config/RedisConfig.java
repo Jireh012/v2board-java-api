@@ -103,4 +103,20 @@ public class RedisConfig {
         template.afterPropertiesSet();
         return template;
     }
+
+    /**
+     * String-only template on primary Redis (DB0) for reliable job lists / processing zsets.
+     */
+    @Bean("queueRedisTemplate")
+    public RedisTemplate<String, String> queueRedisTemplate(RedisConnectionFactory connectionFactory) {
+        RedisTemplate<String, String> template = new RedisTemplate<>();
+        template.setConnectionFactory(connectionFactory);
+        StringRedisSerializer s = new StringRedisSerializer();
+        template.setKeySerializer(s);
+        template.setValueSerializer(s);
+        template.setHashKeySerializer(s);
+        template.setHashValueSerializer(s);
+        template.afterPropertiesSet();
+        return template;
+    }
 }
