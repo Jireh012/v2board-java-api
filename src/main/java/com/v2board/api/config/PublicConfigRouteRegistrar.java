@@ -17,7 +17,7 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
 import java.lang.reflect.Method;
 
 /**
- * Registers public site config at fixed {@link ConfigService#FIXED_PUBLIC_CONFIG_PATH} ({@code /config}).
+ * Registers public site config at fixed {@link ConfigService#FIXED_PUBLIC_CONFIG_PATH} ({@code /api/config}).
  */
 @Component
 @Order(105)

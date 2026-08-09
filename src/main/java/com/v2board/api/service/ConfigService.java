@@ -98,7 +98,11 @@ public class ConfigService {
      * Fixed unauthenticated bootstrap path for public site config (SM4 envelope).
      * Not configurable; frontend always GETs this path.
      */
-    public static final String FIXED_PUBLIC_CONFIG_PATH = "/config";
+    /**
+     * Fixed public bootstrap path under {@code /api/} so reverse proxies (Docker web nginx)
+     * only need to forward {@code /api/} — no per-prefix location rebuilds.
+     */
+    public static final String FIXED_PUBLIC_CONFIG_PATH = "/api/config";
 
     /** UI route segments that must not be used as custom admin path. */
     private static final Set<String> SECURE_PATH_RESERVED = Set.of(
@@ -346,7 +350,7 @@ public class ConfigService {
             if (full.get("server") instanceof Map<?, ?> server) {
                 String path = str(server.get("server_api_prefix"));
                 if (StringUtils.hasText(path)) {
-                    return normalizeServerApiPrefix(path);
+                    return ensureUnderApiMount(normalizeServerApiPrefix(path));
                 }
             }
         } catch (Exception ignored) {
@@ -367,22 +371,22 @@ public class ConfigService {
 
     /** {@code site.passport_api_prefix}; empty when unset. */
     public String getPassportApiPrefix() {
-        return normalizeServerApiPrefix(getStringFromGroup("site", "passport_api_prefix"));
+        return ensureUnderApiMount(normalizeServerApiPrefix(getStringFromGroup("site", "passport_api_prefix")));
     }
 
     /** {@code site.user_api_prefix}; empty when unset. */
     public String getUserApiPrefix() {
-        return normalizeServerApiPrefix(getStringFromGroup("site", "user_api_prefix"));
+        return ensureUnderApiMount(normalizeServerApiPrefix(getStringFromGroup("site", "user_api_prefix")));
     }
 
     /** {@code site.admin_api_prefix}; empty when unset. */
     public String getAdminApiPrefix() {
-        return normalizeServerApiPrefix(getStringFromGroup("site", "admin_api_prefix"));
+        return ensureUnderApiMount(normalizeServerApiPrefix(getStringFromGroup("site", "admin_api_prefix")));
     }
 
     /** {@code site.payment_notify_prefix}; empty when unset. */
     public String getPaymentNotifyPrefix() {
-        return normalizeServerApiPrefix(getStringFromGroup("site", "payment_notify_prefix"));
+        return ensureUnderApiMount(normalizeServerApiPrefix(getStringFromGroup("site", "payment_notify_prefix")));
     }
 
     /** Fixed public config bootstrap path {@link #FIXED_PUBLIC_CONFIG_PATH}. */
@@ -1030,13 +1034,14 @@ public class ConfigService {
 
         if (server.containsKey("server_api_prefix")) {
             Object raw = server.get("server_api_prefix");
-            String normalized = normalizeServerApiPrefix(raw == null ? "" : String.valueOf(raw));
+            String normalized = ensureUnderApiMount(
+                    normalizeServerApiPrefix(raw == null ? "" : String.valueOf(raw)));
             if (!StringUtils.hasText(normalized)) {
                 // Empty → auto-gen after merge via ensureServerApiPrefixInPlace.
                 server.put("server_api_prefix", "");
             } else if (!isValidServerApiPrefix(normalized)) {
                 throw new BusinessException(500,
-                        "节点 API 前缀不合法：须以 / 开头，仅含字母数字与 ._~/ -，长度≤64，且不能与保留 API 前缀冲突");
+                        "节点 API 前缀不合法：须以 /api/ 开头，仅含字母数字与 ._~/ -，长度≤64，且不能与保留 API 前缀冲突");
             } else {
                 server.put("server_api_prefix", normalized);
             }
@@ -1044,9 +1049,10 @@ public class ConfigService {
     }
 
     /**
-     * If {@code server.server_api_prefix} is blank, generate {@code /n/}+12 alnum and write into map.
+     * If {@code server.server_api_prefix} is blank, generate {@code /api/n/}+12 alnum and write into map.
+     * Legacy root prefixes ({@code /n/...}) are migrated under {@code /api/}.
      *
-     * @return true if a new prefix was generated
+     * @return true if a new prefix was generated or migrated
      */
     @SuppressWarnings("unchecked")
     static boolean ensureServerApiPrefixInPlace(Map<String, Object> full) {
@@ -1067,10 +1073,11 @@ public class ConfigService {
             server = new LinkedHashMap<>();
             full.put("server", server);
         }
-        String current = normalizeServerApiPrefix(str(server.get("server_api_prefix")));
+        String current = ensureUnderApiMount(normalizeServerApiPrefix(str(server.get("server_api_prefix"))));
         if (StringUtils.hasText(current)) {
+            boolean changed = !current.equals(str(server.get("server_api_prefix")));
             server.put("server_api_prefix", current);
-            return false;
+            return changed;
         }
         String generated = generateServerApiPrefix();
         server.put("server_api_prefix", generated);
@@ -1079,7 +1086,7 @@ public class ConfigService {
 
     static String getServerApiPrefixFromMap(Map<String, Object> full) {
         if (full != null && full.get("server") instanceof Map<?, ?> server) {
-            return normalizeServerApiPrefix(str(server.get("server_api_prefix")));
+            return ensureUnderApiMount(normalizeServerApiPrefix(str(server.get("server_api_prefix"))));
         }
         return "";
     }
@@ -1102,8 +1109,25 @@ public class ConfigService {
         return t;
     }
 
+    /**
+     * Mount panel/node prefixes under {@code /api/} so edge proxies only forward {@code /api/}.
+     * Legacy values like {@code /u/xxx} become {@code /api/u/xxx}.
+     */
+    public static String ensureUnderApiMount(String normalized) {
+        if (!StringUtils.hasText(normalized)) {
+            return "";
+        }
+        if ("/api".equals(normalized) || normalized.startsWith("/api/")) {
+            return normalized;
+        }
+        return "/api" + normalized;
+    }
+
     static boolean isValidServerApiPrefix(String normalized) {
         if (normalized == null || normalized.isEmpty() || "/".equals(normalized)) {
+            return false;
+        }
+        if (!normalized.startsWith("/api/")) {
             return false;
         }
         if (normalized.length() > SERVER_API_PREFIX_MAX_LEN) {
@@ -1124,25 +1148,25 @@ public class ConfigService {
         return true;
     }
 
-    /** Auto-gen {@code /n/} + 12 lowercase alphanumeric chars. */
+    /** Auto-gen {@code /api/n/} + 12 lowercase alphanumeric chars. */
     static String generateServerApiPrefix() {
-        return generatePrefixedPath("/n/", SERVER_API_PREFIX_RANDOM_LEN);
+        return generatePrefixedPath("/api/n/", SERVER_API_PREFIX_RANDOM_LEN);
     }
 
     static String generatePassportApiPrefix() {
-        return generatePrefixedPath("/p/", SERVER_API_PREFIX_RANDOM_LEN);
+        return generatePrefixedPath("/api/p/", SERVER_API_PREFIX_RANDOM_LEN);
     }
 
     static String generateUserApiPrefix() {
-        return generatePrefixedPath("/u/", SERVER_API_PREFIX_RANDOM_LEN);
+        return generatePrefixedPath("/api/u/", SERVER_API_PREFIX_RANDOM_LEN);
     }
 
     static String generateAdminApiPrefix() {
-        return generatePrefixedPath("/a/", SERVER_API_PREFIX_RANDOM_LEN);
+        return generatePrefixedPath("/api/a/", SERVER_API_PREFIX_RANDOM_LEN);
     }
 
     static String generatePaymentNotifyPrefix() {
-        return generatePrefixedPath("/g/", SERVER_API_PREFIX_RANDOM_LEN);
+        return generatePrefixedPath("/api/g/", SERVER_API_PREFIX_RANDOM_LEN);
     }
 
     private static String generatePrefixedPath(String prefix, int randomLen) {
@@ -1214,16 +1238,16 @@ public class ConfigService {
             throw new BusinessException(500, "管理 API 前缀与支付回调前缀不能冲突");
         }
         if (StringUtils.hasText(passport) && pathsConflict(passport, FIXED_PUBLIC_CONFIG_PATH)) {
-            throw new BusinessException(500, "Passport API 前缀不能与固定公开配置路径 /config 冲突");
+            throw new BusinessException(500, "Passport API 前缀不能与固定公开配置路径 /api/config 冲突");
         }
         if (StringUtils.hasText(user) && pathsConflict(user, FIXED_PUBLIC_CONFIG_PATH)) {
-            throw new BusinessException(500, "用户 API 前缀不能与固定公开配置路径 /config 冲突");
+            throw new BusinessException(500, "用户 API 前缀不能与固定公开配置路径 /api/config 冲突");
         }
         if (StringUtils.hasText(admin) && pathsConflict(admin, FIXED_PUBLIC_CONFIG_PATH)) {
-            throw new BusinessException(500, "管理 API 前缀不能与固定公开配置路径 /config 冲突");
+            throw new BusinessException(500, "管理 API 前缀不能与固定公开配置路径 /api/config 冲突");
         }
         if (StringUtils.hasText(paymentNotify) && pathsConflict(paymentNotify, FIXED_PUBLIC_CONFIG_PATH)) {
-            throw new BusinessException(500, "支付回调前缀不能与固定公开配置路径 /config 冲突");
+            throw new BusinessException(500, "支付回调前缀不能与固定公开配置路径 /api/config 冲突");
         }
     }
 
@@ -1251,14 +1275,15 @@ public class ConfigService {
             return;
         }
         Object raw = site.get(key);
-        String normalized = normalizeServerApiPrefix(raw == null ? "" : String.valueOf(raw));
+        String normalized = ensureUnderApiMount(
+                normalizeServerApiPrefix(raw == null ? "" : String.valueOf(raw)));
         if (!StringUtils.hasText(normalized)) {
             site.put(key, "");
             return;
         }
         if (!isValidClientApiPrefix(normalized)) {
             throw new BusinessException(500,
-                    label + "不合法：须以 / 开头，仅含字母数字与 ._~/ -，长度≤64，且不能与保留 API 前缀冲突");
+                    label + "不合法：须以 /api/ 开头，仅含字母数字与 ._~/ -，长度≤64，且不能与保留 API 前缀冲突");
         }
         site.put(key, normalized);
     }
@@ -1315,11 +1340,16 @@ public class ConfigService {
         changed = ensureSitePathKey(site, "admin_api_prefix", ConfigService::generateAdminApiPrefix) || changed;
         changed = ensureSitePathKey(site, "payment_notify_prefix", ConfigService::generatePaymentNotifyPrefix) || changed;
 
-        String passport = normalizeServerApiPrefix(str(site.get("passport_api_prefix")));
-        String user = normalizeServerApiPrefix(str(site.get("user_api_prefix")));
-        String admin = normalizeServerApiPrefix(str(site.get("admin_api_prefix")));
-        String paymentNotify = normalizeServerApiPrefix(str(site.get("payment_notify_prefix")));
-        // Avoid rare auto-gen collisions (incl. fixed /config).
+        String passport = ensureUnderApiMount(normalizeServerApiPrefix(str(site.get("passport_api_prefix"))));
+        String user = ensureUnderApiMount(normalizeServerApiPrefix(str(site.get("user_api_prefix"))));
+        String admin = ensureUnderApiMount(normalizeServerApiPrefix(str(site.get("admin_api_prefix"))));
+        String paymentNotify = ensureUnderApiMount(normalizeServerApiPrefix(str(site.get("payment_notify_prefix"))));
+        // Persist legacy → /api/* migration when ensureSitePathKey saw already-filled values.
+        changed = writeMountedIfChanged(site, "passport_api_prefix", passport) || changed;
+        changed = writeMountedIfChanged(site, "user_api_prefix", user) || changed;
+        changed = writeMountedIfChanged(site, "admin_api_prefix", admin) || changed;
+        changed = writeMountedIfChanged(site, "payment_notify_prefix", paymentNotify) || changed;
+        // Avoid rare auto-gen collisions (incl. fixed /api/config).
         if (clientPathsHaveConflict(passport, user, admin, paymentNotify)) {
             site.put("passport_api_prefix", generatePassportApiPrefix());
             site.put("user_api_prefix", generateUserApiPrefix());
@@ -1328,6 +1358,17 @@ public class ConfigService {
             changed = true;
         }
         return changed;
+    }
+
+    private static boolean writeMountedIfChanged(Map<String, Object> site, String key, String mounted) {
+        if (!StringUtils.hasText(mounted)) {
+            return false;
+        }
+        if (mounted.equals(str(site.get(key)))) {
+            return false;
+        }
+        site.put(key, mounted);
+        return true;
     }
 
     private static boolean clientPathsHaveConflict(String passport, String user, String admin, String paymentNotify) {
@@ -1345,7 +1386,7 @@ public class ConfigService {
 
     private static boolean ensureSitePathKey(Map<String, Object> site, String key,
                                             java.util.function.Supplier<String> generator) {
-        String current = normalizeServerApiPrefix(str(site.get(key)));
+        String current = ensureUnderApiMount(normalizeServerApiPrefix(str(site.get(key))));
         if (StringUtils.hasText(current)) {
             if (!current.equals(str(site.get(key)))) {
                 site.put(key, current);
@@ -1359,13 +1400,16 @@ public class ConfigService {
 
     static String getSitePathFromMap(Map<String, Object> full, String key) {
         if (full != null && full.get("site") instanceof Map<?, ?> site) {
-            return normalizeServerApiPrefix(str(site.get(key)));
+            return ensureUnderApiMount(normalizeServerApiPrefix(str(site.get(key))));
         }
         return "";
     }
 
     static boolean isValidClientApiPrefix(String normalized) {
         if (normalized == null || normalized.isEmpty() || "/".equals(normalized)) {
+            return false;
+        }
+        if (!normalized.startsWith("/api/")) {
             return false;
         }
         if (normalized.length() > SERVER_API_PREFIX_MAX_LEN) {

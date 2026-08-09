@@ -20,7 +20,7 @@ class ConfigServiceServerApiPrefixTest {
     @Test
     void generateServerApiPrefix_matchesPattern() {
         String p = ConfigService.generateServerApiPrefix();
-        assertTrue(p.matches("^/n/[a-z0-9]{12}$"), p);
+        assertTrue(p.matches("^/api/n/[a-z0-9]{12}$"), p);
         assertTrue(ConfigService.isValidServerApiPrefix(p));
     }
 
@@ -34,7 +34,8 @@ class ConfigServiceServerApiPrefixTest {
     void isValidServerApiPrefix_rejectsReserved() {
         assertFalse(ConfigService.isValidServerApiPrefix("/api/v1/server"));
         assertFalse(ConfigService.isValidServerApiPrefix("/api/v2"));
-        assertTrue(ConfigService.isValidServerApiPrefix("/n/abcdefghijkl"));
+        assertFalse(ConfigService.isValidServerApiPrefix("/n/abcdefghijkl"));
+        assertTrue(ConfigService.isValidServerApiPrefix("/api/n/abcdefghijkl"));
     }
 
     @Test
@@ -58,7 +59,7 @@ class ConfigServiceServerApiPrefixTest {
         Map<String, Object> probe = new HashMap<>();
         probe.put("server", new HashMap<>(Map.of("server_api_prefix", "")));
         assertTrue(ConfigService.ensureServerApiPrefixInPlace(probe));
-        assertTrue(ConfigService.getServerApiPrefixFromMap(probe).matches("^/n/[a-z0-9]{12}$"));
+        assertTrue(ConfigService.getServerApiPrefixFromMap(probe).matches("^/api/n/[a-z0-9]{12}$"));
     }
 
     @Test
@@ -76,6 +77,16 @@ class ConfigServiceServerApiPrefixTest {
         ConfigService configService = newConfigService(mapper);
 
         assertDoesNotThrow(() -> configService.save(serverBody("server_api_prefix", "/n/mycustompath")));
+        // legacy root prefix is mounted under /api/ on save
+    }
+
+    @Test
+    void ensureServerApiPrefixInPlace_migratesLegacyRootPrefix() {
+        Map<String, Object> probe = new HashMap<>();
+        probe.put("server", new HashMap<>(Map.of("server_api_prefix", "/n/abcdefghijkl")));
+        assertTrue(ConfigService.ensureServerApiPrefixInPlace(probe));
+        assertEquals("/api/n/abcdefghijkl", ConfigService.getServerApiPrefixFromMap(probe));
+        assertFalse(ConfigService.ensureServerApiPrefixInPlace(probe));
     }
 
     private static Map<String, Object> serverBody(String key, Object value) {

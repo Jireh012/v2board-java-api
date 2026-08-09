@@ -19,11 +19,18 @@ class ConfigServiceClientApiPrefixTest {
 
     @Test
     void generatePrefixes_matchPatterns() {
-        assertTrue(ConfigService.generatePassportApiPrefix().matches("^/p/[a-z0-9]{12}$"));
-        assertTrue(ConfigService.generateUserApiPrefix().matches("^/u/[a-z0-9]{12}$"));
-        assertTrue(ConfigService.generateAdminApiPrefix().matches("^/a/[a-z0-9]{12}$"));
-        assertTrue(ConfigService.generatePaymentNotifyPrefix().matches("^/g/[a-z0-9]{12}$"));
-        assertEquals("/config", ConfigService.FIXED_PUBLIC_CONFIG_PATH);
+        assertTrue(ConfigService.generatePassportApiPrefix().matches("^/api/p/[a-z0-9]{12}$"));
+        assertTrue(ConfigService.generateUserApiPrefix().matches("^/api/u/[a-z0-9]{12}$"));
+        assertTrue(ConfigService.generateAdminApiPrefix().matches("^/api/a/[a-z0-9]{12}$"));
+        assertTrue(ConfigService.generatePaymentNotifyPrefix().matches("^/api/g/[a-z0-9]{12}$"));
+        assertEquals("/api/config", ConfigService.FIXED_PUBLIC_CONFIG_PATH);
+    }
+
+    @Test
+    void ensureUnderApiMount_prefixesLegacyRootPaths() {
+        assertEquals("/api/u/wax865a2wao7", ConfigService.ensureUnderApiMount("/u/wax865a2wao7"));
+        assertEquals("/api/p/abc", ConfigService.ensureUnderApiMount("/api/p/abc"));
+        assertEquals("", ConfigService.ensureUnderApiMount(""));
     }
 
     @Test
@@ -31,15 +38,16 @@ class ConfigServiceClientApiPrefixTest {
         assertFalse(ConfigService.isValidClientApiPrefix("/api/v1/user"));
         assertFalse(ConfigService.isValidClientApiPrefix("/api/v1/passport"));
         assertFalse(ConfigService.isValidClientApiPrefix("/api/v1/admin"));
-        assertFalse(ConfigService.isValidClientApiPrefix("/config"));
-        assertTrue(ConfigService.isValidClientApiPrefix("/p/abcdefghijkl"));
-        assertTrue(ConfigService.isValidClientApiPrefix("/a/abcdefghijkl"));
+        assertFalse(ConfigService.isValidClientApiPrefix("/api/config"));
+        assertFalse(ConfigService.isValidClientApiPrefix("/u/abcdefghijkl"));
+        assertTrue(ConfigService.isValidClientApiPrefix("/api/p/abcdefghijkl"));
+        assertTrue(ConfigService.isValidClientApiPrefix("/api/a/abcdefghijkl"));
     }
 
     @Test
     void pathsConflict_detectsOverlap() {
-        assertTrue(ConfigService.pathsConflict("/p/abc", "/p/abc/x"));
-        assertFalse(ConfigService.pathsConflict("/p/abc", "/u/abc"));
+        assertTrue(ConfigService.pathsConflict("/api/p/abc", "/api/p/abc/x"));
+        assertFalse(ConfigService.pathsConflict("/api/p/abc", "/api/u/abc"));
     }
 
     @Test
@@ -49,11 +57,28 @@ class ConfigServiceClientApiPrefixTest {
         Map<String, Object> full = new HashMap<>();
         full.put("site", site);
         assertTrue(ConfigService.ensureClientApiPathsInPlace(full));
-        assertTrue(ConfigService.getSitePathFromMap(full, "passport_api_prefix").matches("^/p/[a-z0-9]{12}$"));
-        assertTrue(ConfigService.getSitePathFromMap(full, "user_api_prefix").matches("^/u/[a-z0-9]{12}$"));
-        assertTrue(ConfigService.getSitePathFromMap(full, "admin_api_prefix").matches("^/a/[a-z0-9]{12}$"));
-        assertTrue(ConfigService.getSitePathFromMap(full, "payment_notify_prefix").matches("^/g/[a-z0-9]{12}$"));
+        assertTrue(ConfigService.getSitePathFromMap(full, "passport_api_prefix").matches("^/api/p/[a-z0-9]{12}$"));
+        assertTrue(ConfigService.getSitePathFromMap(full, "user_api_prefix").matches("^/api/u/[a-z0-9]{12}$"));
+        assertTrue(ConfigService.getSitePathFromMap(full, "admin_api_prefix").matches("^/api/a/[a-z0-9]{12}$"));
+        assertTrue(ConfigService.getSitePathFromMap(full, "payment_notify_prefix").matches("^/api/g/[a-z0-9]{12}$"));
         assertFalse(((Map<?, ?>) full.get("site")).containsKey("public_config_path"));
+        assertFalse(ConfigService.ensureClientApiPathsInPlace(full));
+    }
+
+    @Test
+    void ensureClientApiPathsInPlace_migratesLegacyRootPrefixes() {
+        Map<String, Object> site = new HashMap<>();
+        site.put("passport_api_prefix", "/p/abcdefghijkl");
+        site.put("user_api_prefix", "/u/wax865a2wao7");
+        site.put("admin_api_prefix", "/a/zyxwvutsrqpo");
+        site.put("payment_notify_prefix", "/g/paymentprefix");
+        Map<String, Object> full = new HashMap<>();
+        full.put("site", site);
+        assertTrue(ConfigService.ensureClientApiPathsInPlace(full));
+        assertEquals("/api/p/abcdefghijkl", site.get("passport_api_prefix"));
+        assertEquals("/api/u/wax865a2wao7", site.get("user_api_prefix"));
+        assertEquals("/api/a/zyxwvutsrqpo", site.get("admin_api_prefix"));
+        assertEquals("/api/g/paymentprefix", site.get("payment_notify_prefix"));
         assertFalse(ConfigService.ensureClientApiPathsInPlace(full));
     }
 
@@ -79,6 +104,8 @@ class ConfigServiceClientApiPrefixTest {
         Map<String, Object> body = new HashMap<>();
         body.put("site", site);
         assertDoesNotThrow(() -> configService.save(body));
+        assertEquals("/api/p/mycustompath", site.get("passport_api_prefix"));
+        assertEquals("/api/u/mycustompath", site.get("user_api_prefix"));
     }
 
     @Test
@@ -93,8 +120,8 @@ class ConfigServiceClientApiPrefixTest {
     void save_rejectsPrefixConflictingWithFixedPublicConfig() {
         ConfigService configService = newConfigService(mock(SystemConfigMapper.class));
         BusinessException ex = assertThrows(BusinessException.class,
-                () -> configService.save(siteBody("user_api_prefix", "/config")));
-        assertTrue(ex.getMessage().contains("/config") || ex.getMessage().contains("不合法"));
+                () -> configService.save(siteBody("user_api_prefix", "/api/config")));
+        assertTrue(ex.getMessage().contains("/api/config") || ex.getMessage().contains("不合法"));
     }
 
     private static Map<String, Object> siteBody(String key, Object value) {

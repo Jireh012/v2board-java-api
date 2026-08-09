@@ -17,7 +17,7 @@
 
 ```java
 // ConfigService
-String ensureServerApiPrefix(); // auto-gen /n/+12 alnum when empty; persist
+String ensureServerApiPrefix(); // auto-gen /api/n/+12 alnum when empty; persist
 void save(...); // validate server_api_prefix; refresh NodeApiRouteRegistrar
 
 // NodeSm4Codec
@@ -39,7 +39,7 @@ Paths (registered by `NodeApiRouteRegistrar`):
 
 ### 3. Contracts
 
-- **Prefix**: `server.server_api_prefix`; empty on admin fetch/save → auto-gen `/n/`+12 `[a-z0-9]`; hot-refresh on change. No classic `/api/v1/server/UniProxy/**` or `/api/v2/server/**` mappings.
+- **Prefix**: `server.server_api_prefix`; empty on admin fetch/save → auto-gen `/api/n/`+12 `[a-z0-9]` (legacy `/n/...` migrates under `/api/`); hot-refresh on change. No classic `/api/v1/server/UniProxy/**` or `/api/v2/server/**` mappings.
 - **Working key**: `SHA-256(UTF-8(server_token))[0:16]` — same string as 通讯密钥 / v2node `ApiKey`. **Not** public `SM4_KEY` / `VITE_SM4_KEY`. No separate `server_node_sm4_key`.
 - **Query**: only `e` = `base64url(iv).base64url(ciphertext)` of `{"k":"<server_token>","i":<nodeId>,"t":"<code>"}` (`vn`=v2node). Reject plaintext `token`/`node_id`/`node_type`/`k`/`i`/`t`.
 - **Body**: SM4 JSON envelope `{iv,payload}` for POST bodies and all success responses. No msgpack on new paths.

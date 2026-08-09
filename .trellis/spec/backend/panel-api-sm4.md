@@ -3,7 +3,7 @@
 > Passport / user / admin: configurable prefixes + action aliases + panel `SM4_KEY`.
 > Payment notify: separate plaintext prefix (not SM4).
 > Distinct from node SM4 (`server_token` derive) in [server-node.md](./server-node.md).
-> Public bootstrap `GET /config`: [public-site-config.md](./public-site-config.md).
+> Public bootstrap `GET /api/config`: [public-site-config.md](./public-site-config.md).
 
 ---
 
@@ -12,7 +12,7 @@
 ### 1. Scope / Trigger
 
 - Trigger: Replace classic `/api/v1/{passport|user|admin}` with `site.*_api_prefix` to cut V2Board path fingerprints.
-- Symptom if broken: classic paths still 200; rewritten paths 404; prefixes collide with `/config` or subscribe/node/payment-notify prefixes.
+- Symptom if broken: classic paths still 200; rewritten paths 404; prefixes collide with `/api/config` or subscribe/node/payment-notify prefixes.
 
 ### 2. Signatures
 
@@ -20,9 +20,9 @@
 // ConfigService
 Map<String,String> ensureClientApiPaths(); // auto-gen empty prefixes; persist
 // keys: passport_api_prefix, user_api_prefix, admin_api_prefix,
-//       payment_notify_prefix, public_config_path(="/config")
+//       payment_notify_prefix, public_config_path(="/api/config")
 
-static final String FIXED_PUBLIC_CONFIG_PATH = "/config";
+static final String FIXED_PUBLIC_CONFIG_PATH = "/api/config";
 
 // ClientApiPathRegistry — hot cache; refresh on save / ensure
 // ClientApiPathFilter — order HIGHEST_PRECEDENCE+20
@@ -38,12 +38,12 @@ Internal controllers keep `@RequestMapping("/api/v1/...")`; filter rewrites befo
 | `{user_api_prefix}/{alias}` | `/api/v1/user/{classicRel}` | same |
 | `{admin_api_prefix}/{alias}` | `/api/v1/admin/{classicRel}` | same |
 | `{payment_notify_prefix}/{method}/{uuid}` | `/api/v1/guest/payment/notify/...` | Plaintext; no SM4 |
-| `GET /config` | public config handler | Panel SM4 response only |
+| `GET /api/config` | public config handler | Panel SM4 response only |
 | `/api/v1/passport\|user\|admin/**` | — | **404** |
 | `/api/v1/guest/payment/**` | — | **404** |
 | `{panelPrefix}/{classicRel}` e.g. `…/getSubscribe` | — | **404** |
 
-Auto-gen when empty: `/p|u|a|g/` + 12 `[a-z0-9]`. Must not mutually conflict, nor with `FIXED_PUBLIC_CONFIG_PATH`, `subscribe_path`, `server_api_prefix`.
+Auto-gen when empty: `/api/{p|u|a|g}/` + 12 `[a-z0-9]`. Legacy root prefixes (`/u/...`) migrate to `/api/u/...` on ensure. Must not mutually conflict, nor with `FIXED_PUBLIC_CONFIG_PATH`, `subscribe_path`, `server_api_prefix`. Docker web nginx only needs `location /api/`.
 
 **Still classic plaintext (until follow-up)**: `/api/v1/guest/telegram/**`, subscribe path.
 
@@ -52,7 +52,7 @@ Auto-gen when empty: `/p|u|a|g/` + 12 `[a-z0-9]`. Must not mutually conflict, no
 | Condition | Result |
 |-----------|--------|
 | Classic panel or guest-payment path | HTTP 404 |
-| Prefix conflicts `/config` / subscribe / server / sibling prefixes | `BusinessException` |
+| Prefix conflicts `/api/config` / subscribe / server / sibling prefixes | `BusinessException` |
 | Invalid prefix charset/shape | `BusinessException` 前缀不合法 |
 
 ### 5. Good/Base/Bad Cases
@@ -78,7 +78,7 @@ Auto-gen when empty: `/p|u|a|g/` + 12 `[a-z0-9]`. Must not mutually conflict, no
 #### Correct
 
 ```java
-// PublicConfigRouteRegistrar → GET /config only; classic passport paths 404 via filter
+// PublicConfigRouteRegistrar → GET /api/config only; classic passport paths 404 via filter
 ```
 
 ---
@@ -111,7 +111,7 @@ String resolveClassicRel(String zone, String aliasSegment); // null if unknown
 | External | `{prefix}/{alias}` — **one** opaque segment |
 | Internal | `/api/v1/{zone}/{classicRel}` (controllers unchanged; not publicly reachable) |
 | Catalog | Every panel handler; add entry when adding endpoints |
-| `/config` | Not aliased |
+| `/api/config` | Not aliased |
 | Key | Panel `SM4_KEY` / `VITE_SM4_KEY` — not `server_token` |
 
 Locked vector (dev key `0123456789abcdef`): `user` + `getSubscribe` → `59327a5e63c5`.
@@ -163,7 +163,7 @@ return classicBase + path.substring(prefix.length()); // leaks getSubscribe
 
 ```java
 // ConfigService
-String ensurePaymentNotifyPrefix(); // site.payment_notify_prefix; empty → /g/+12
+String ensurePaymentNotifyPrefix(); // site.payment_notify_prefix; empty → /api/g/+12
 String buildPaymentNotifyPath(method, uuid); // {prefix}/{method}/{uuid}
 
 // ClientApiPathFilter (no ATTR_PANEL_SM4)
@@ -184,27 +184,27 @@ AdminPaymentController.fetch → same for notify_url field
 | Classic | `/api/v1/guest/payment/**` → **404** |
 | Body / auth | Plaintext; no `X-A`; no Panel SM4 |
 | Admin UI | `site.payment_notify_prefix` in system config; copy `notify_url` from payments list |
-| Vite / reverse proxy | Forward `/g/` (or custom prefix) to API |
+| Vite / reverse proxy | Forward `/api/` (covers `/api/g/…`) to API |
 
 ### 4. Validation & Error Matrix
 
 | Condition | Result |
 |-----------|--------|
-| Prefix conflicts panel/subscribe/server/`/config` | `BusinessException` |
+| Prefix conflicts panel/subscribe/server/`/api/config` | `BusinessException` |
 | Wrong segment count under prefix | 404 |
 | Classic guest payment path | 404 |
-| Prefix empty on ensure | Auto-gen `/g/`+12 and persist |
+| Prefix empty on ensure | Auto-gen `/api/g/`+12 and persist |
 
 ### 5. Good/Base/Bad Cases
 
 - Good: `POST {prefix}/AlipayF2F/{uuid}` → controller plaintext (`gate is not enable` if unknown).
-- Base: Auto-gen `/g/`+12 on first `ensureClientApiPaths`.
+- Base: Auto-gen `/api/g/`+12 on first `ensureClientApiPaths`.
 - Bad: SM4-wrap notify; leave classic path open; hard-code `/api/v1/guest/payment/notify` in `buildNotifyUrl`.
 
 ### 6. Tests Required
 
 - `ClientApiPathFilterTest#rewritePaymentNotify_*` / `isClassicGuestPayment_*`
-- `ConfigServiceClientApiPrefixTest` — `payment_notify_prefix` auto-gen pattern `^/g/[a-z0-9]{12}$`
+- `ConfigServiceClientApiPrefixTest` — `payment_notify_prefix` auto-gen pattern `^/api/g/[a-z0-9]{12}$`
 - Manual/ops: after prefix change, re-check gateway callback URLs
 
 ### 7. Wrong vs Correct

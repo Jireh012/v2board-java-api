@@ -19,23 +19,24 @@ class ClientApiPathFilterTest {
         assertTrue(ClientApiPathFilter.isClassicPanelApi("/api/v1/user"));
         assertTrue(ClientApiPathFilter.isClassicPanelApi("/api/v1/admin/config/fetch"));
         assertTrue(ClientApiPathFilter.isClassicPanelApi("/api/v1/admin"));
-        assertFalse(ClientApiPathFilter.isClassicPanelApi("/u/abcdefghijkl/info"));
-        assertFalse(ClientApiPathFilter.isClassicPanelApi("/a/abcdefghijkl/config/fetch"));
+        assertFalse(ClientApiPathFilter.isClassicPanelApi("/api/u/abcdefghijkl/info"));
+        assertFalse(ClientApiPathFilter.isClassicPanelApi("/api/a/abcdefghijkl/config/fetch"));
         assertFalse(ClientApiPathFilter.isClassicPanelApi("/api/v1/guest/payment/notify/x"));
         assertFalse(ClientApiPathFilter.isClassicPanelApi("/api/v1/guest/telegram/webhook"));
         assertTrue(ClientApiPathFilter.isClassicGuestPayment("/api/v1/guest/payment/notify/x"));
         assertTrue(ClientApiPathFilter.isClassicGuestPayment("/api/v1/guest/payment"));
         assertFalse(ClientApiPathFilter.isClassicGuestPayment("/api/v1/guest/telegram/webhook"));
-        assertFalse(ClientApiPathFilter.isClassicGuestPayment("/g/abcdefghijkl/alipay/uuid"));
+        assertFalse(ClientApiPathFilter.isClassicGuestPayment("/api/g/abcdefghijkl/alipay/uuid"));
     }
 
     @Test
     void rewritePaymentNotify_mapsPrefixMethodUuid() {
         assertEquals(
                 "/api/v1/guest/payment/notify/AlipayF2F/abc-uuid",
-                ClientApiPathFilter.rewritePaymentNotify("/g/abcdefghijkl/AlipayF2F/abc-uuid", "/g/abcdefghijkl"));
-        assertNull(ClientApiPathFilter.rewritePaymentNotify("/g/abcdefghijkl/onlyone", "/g/abcdefghijkl"));
-        assertNull(ClientApiPathFilter.rewritePaymentNotify("/g/abcdefghijkl", "/g/abcdefghijkl"));
+                ClientApiPathFilter.rewritePaymentNotify(
+                        "/api/g/abcdefghijkl/AlipayF2F/abc-uuid", "/api/g/abcdefghijkl"));
+        assertNull(ClientApiPathFilter.rewritePaymentNotify("/api/g/abcdefghijkl/onlyone", "/api/g/abcdefghijkl"));
+        assertNull(ClientApiPathFilter.rewritePaymentNotify("/api/g/abcdefghijkl", "/api/g/abcdefghijkl"));
     }
 
     @Test
@@ -44,30 +45,30 @@ class ClientApiPathFilterTest {
         assertEquals(
                 "/api/v1/user/order/fetch",
                 ClientApiPathFilter.rewriteAliased(
-                        "/u/abcdefghijkl/" + userAlias, "/u/abcdefghijkl", "user", "/api/v1/user", aliases));
+                        "/api/u/abcdefghijkl/" + userAlias, "/api/u/abcdefghijkl", "user", "/api/v1/user", aliases));
 
         String passportAlias = aliases.aliasFor("passport", "auth/login");
         assertEquals(
                 "/api/v1/passport/auth/login",
                 ClientApiPathFilter.rewriteAliased(
-                        "/p/abcdefghijkl/" + passportAlias, "/p/abcdefghijkl", "passport", "/api/v1/passport", aliases));
+                        "/api/p/abcdefghijkl/" + passportAlias, "/api/p/abcdefghijkl", "passport", "/api/v1/passport", aliases));
 
         String adminAlias = aliases.aliasFor("admin", "config/fetch");
         assertEquals(
                 "/api/v1/admin/config/fetch",
                 ClientApiPathFilter.rewriteAliased(
-                        "/a/abcdefghijkl/" + adminAlias, "/a/abcdefghijkl", "admin", "/api/v1/admin", aliases));
+                        "/api/a/abcdefghijkl/" + adminAlias, "/api/a/abcdefghijkl", "admin", "/api/v1/admin", aliases));
     }
 
     @Test
     void rewriteAliased_rejectsClassicActionNamesAndUnknown() {
         assertNull(ClientApiPathFilter.rewriteAliased(
-                "/u/abcdefghijkl/getSubscribe", "/u/abcdefghijkl", "user", "/api/v1/user", aliases));
+                "/api/u/abcdefghijkl/getSubscribe", "/api/u/abcdefghijkl", "user", "/api/v1/user", aliases));
         assertNull(ClientApiPathFilter.rewriteAliased(
-                "/u/abcdefghijkl/order/fetch", "/u/abcdefghijkl", "user", "/api/v1/user", aliases));
+                "/api/u/abcdefghijkl/order/fetch", "/api/u/abcdefghijkl", "user", "/api/v1/user", aliases));
         assertNull(ClientApiPathFilter.rewriteAliased(
-                "/u/abcdefghijkl", "/u/abcdefghijkl", "user", "/api/v1/user", aliases));
+                "/api/u/abcdefghijkl", "/api/u/abcdefghijkl", "user", "/api/v1/user", aliases));
         assertNull(ClientApiPathFilter.rewriteAliased(
-                "/u/other/" + aliases.aliasFor("user", "info"), "/u/abcdefghijkl", "user", "/api/v1/user", aliases));
+                "/api/u/other/" + aliases.aliasFor("user", "info"), "/api/u/abcdefghijkl", "user", "/api/v1/user", aliases));
     }
 }

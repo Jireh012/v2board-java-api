@@ -12,7 +12,7 @@
 - Trigger: Login/register need `app_name`, register gates, and **passport/user/admin API prefixes** without JWT.
 - Do **not** expose `/api/v1/admin/config/fetch` publicly — it returns full nested config including secrets.
 - Classic `GET /api/v1/passport/comm/config` is **removed** (hard cutover with other passport routes).
-- Bootstrap path: **fixed** `GET /config` (`ConfigService.FIXED_PUBLIC_CONFIG_PATH`); not admin-configurable; frontend hardcodes the same path (no env).
+- Bootstrap path: **fixed** `GET /api/config` (`ConfigService.FIXED_PUBLIC_CONFIG_PATH`); not admin-configurable; frontend hardcodes the same path (no env).
 
 ### 2. Signatures
 
@@ -45,7 +45,7 @@
 | `passport_api_prefix` | string | replaces `/api/v1/passport` |
 | `user_api_prefix` | string | replaces `/api/v1/user` |
 | `admin_api_prefix` | string | replaces `/api/v1/admin` |
-| `public_config_path` | string | always `"/config"` (informational) |
+| `public_config_path` | string | always `"/api/config"` (informational) |
 
 Never expose `telegram_bot_token` / `frontend_theme` package name here.
 

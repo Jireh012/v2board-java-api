@@ -32,9 +32,9 @@ class CommControllerConfigTest {
         when(configService.getFrontendBackgroundUrl()).thenReturn("https://cdn.example/bg.jpg");
         when(configService.getTelegramDiscussLink()).thenReturn("https://t.me/example");
         when(configService.ensureClientApiPaths()).thenReturn(Map.of(
-                "passport_api_prefix", "/p/abcdefghijkl",
-                "user_api_prefix", "/u/mnopqrstuvwx",
-                "admin_api_prefix", "/a/zyxwvutsrqpo",
+                "passport_api_prefix", "/api/p/abcdefghijkl",
+                "user_api_prefix", "/api/u/mnopqrstuvwx",
+                "admin_api_prefix", "/api/a/zyxwvutsrqpo",
                 "public_config_path", ConfigService.FIXED_PUBLIC_CONFIG_PATH
         ));
 
@@ -60,10 +60,10 @@ class CommControllerConfigTest {
         assertEquals("green", data.get("frontend_theme_color"));
         assertEquals("https://cdn.example/bg.jpg", data.get("frontend_background_url"));
         assertEquals("https://t.me/example", data.get("telegram_discuss_link"));
-        assertEquals("/p/abcdefghijkl", data.get("passport_api_prefix"));
-        assertEquals("/u/mnopqrstuvwx", data.get("user_api_prefix"));
-        assertEquals("/a/zyxwvutsrqpo", data.get("admin_api_prefix"));
-        assertEquals("/config", data.get("public_config_path"));
+        assertEquals("/api/p/abcdefghijkl", data.get("passport_api_prefix"));
+        assertEquals("/api/u/mnopqrstuvwx", data.get("user_api_prefix"));
+        assertEquals("/api/a/zyxwvutsrqpo", data.get("admin_api_prefix"));
+        assertEquals("/api/config", data.get("public_config_path"));
         assertFalse(data.containsKey("recaptcha_key"));
         assertEquals(17, data.size());
     }
