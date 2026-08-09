@@ -7,10 +7,8 @@ import org.springframework.stereotype.Component;
 import org.yaml.snakeyaml.Yaml;
 
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Base64;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -115,7 +113,7 @@ public class ExternalSubscribeParser {
                 node.setProtocol(str(outbound.get("type")));
                 node.setSingboxOutbound(outbound);
                 node.setShareUri(ShareUriConverter.singboxToUri(outbound));
-                node.setFingerprint(fingerprint(outbound));
+                node.setFingerprint(ExternalNodeIdentity.fingerprint(outbound));
                 result.add(node);
             }
             return result;
@@ -164,7 +162,7 @@ public class ExternalSubscribeParser {
                 node.setProtocol(str(outbound.get("type")));
                 node.setShareUri(part);
                 node.setSingboxOutbound(outbound);
-                node.setFingerprint(fingerprint(outbound));
+                node.setFingerprint(ExternalNodeIdentity.fingerprint(outbound));
                 result.add(node);
             }
         }
@@ -191,7 +189,7 @@ public class ExternalSubscribeParser {
         node.setProtocol(type);
         node.setSingboxOutbound(copy);
         node.setShareUri(ShareUriConverter.singboxToUri(copy));
-        node.setFingerprint(fingerprint(copy));
+        node.setFingerprint(ExternalNodeIdentity.fingerprint(copy));
         return node;
     }
 
@@ -204,19 +202,6 @@ public class ExternalSubscribeParser {
             map.putIfAbsent(node.getFingerprint(), node);
         }
         return new ArrayList<>(map.values());
-    }
-
-    private String fingerprint(Map<String, Object> outbound) {
-        try {
-            // normalize: ignore tag for fingerprint stability across renames? keep tag for distinct display nodes
-            Map<String, Object> norm = new LinkedHashMap<>(outbound);
-            String json = MAPPER.writeValueAsString(norm);
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] digest = md.digest(json.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(digest).substring(0, 32);
-        } catch (Exception e) {
-            return Integer.toHexString(outbound.hashCode());
-        }
     }
 
     private static String tryDecodeBase64(String raw) {

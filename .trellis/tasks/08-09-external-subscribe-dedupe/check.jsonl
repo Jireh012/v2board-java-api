@@ -1,0 +1,4 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/backend/external-subscribe.md", "reason": "Verify sync fingerprint lifecycle still holds"}
+{"file": ".trellis/spec/backend/subscribe-delivery.md", "reason": "Verify markers after rename still sync to clash/uri"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Quality bar for check"}

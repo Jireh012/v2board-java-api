@@ -35,7 +35,7 @@ public class ExternalSubscribeNodeService {
     }
 
     /**
-     * 订阅合并用：所有启用源下 reachable=1 的节点，转为 server map。
+     * 订阅合并用：所有启用源下 reachable=1 的节点，跨源按逻辑键去重后转为 server map。
      */
     public List<Map<String, Object>> listReachableAsServerMaps() {
         List<ExternalSubscribeSource> enabled = sourceMapper.selectList(
@@ -50,14 +50,64 @@ public class ExternalSubscribeNodeService {
                         .eq(ExternalSubscribeNode::getReachable, 1)
                         .orderByAsc(ExternalSubscribeNode::getSort)
                         .orderByAsc(ExternalSubscribeNode::getId));
-        List<Map<String, Object>> result = new ArrayList<>();
+        List<Map<String, Object>> mapped = new ArrayList<>();
         for (ExternalSubscribeNode node : nodes) {
             Map<String, Object> map = toServerMap(node);
             if (map != null) {
-                result.add(map);
+                mapped.add(map);
             }
         }
-        return result;
+        return dedupeAndNumberNames(mapped);
+    }
+
+    /**
+     * Cross-source logical-key dedupe (first wins) then colliding display-name numbering.
+     * Package-visible for unit tests.
+     */
+    @SuppressWarnings("unchecked")
+    static List<Map<String, Object>> dedupeAndNumberNames(List<Map<String, Object>> servers) {
+        if (servers == null || servers.isEmpty()) {
+            return List.of();
+        }
+        Map<String, Map<String, Object>> byKey = new LinkedHashMap<>();
+        for (Map<String, Object> server : servers) {
+            Object outboundObj = server.get("singbox_outbound");
+            if (!(outboundObj instanceof Map<?, ?>)) {
+                continue;
+            }
+            String key = ExternalNodeIdentity.logicalKey((Map<String, Object>) outboundObj);
+            if (key.isBlank()) {
+                continue;
+            }
+            byKey.putIfAbsent(key, server);
+        }
+        List<Map<String, Object>> deduped = new ArrayList<>(byKey.values());
+
+        Map<String, Integer> nameCounts = new HashMap<>();
+        for (Map<String, Object> server : deduped) {
+            String name = displayName(server);
+            if (!name.isEmpty()) {
+                nameCounts.merge(name, 1, Integer::sum);
+            }
+        }
+        Map<String, Integer> nameSeq = new HashMap<>();
+        for (Map<String, Object> server : deduped) {
+            String name = displayName(server);
+            if (name.isEmpty()) {
+                continue;
+            }
+            if (nameCounts.getOrDefault(name, 0) <= 1) {
+                continue;
+            }
+            int n = nameSeq.merge(name, 1, Integer::sum);
+            ExternalNodeIdentity.applyDisplayName(server, name + n);
+        }
+        return deduped;
+    }
+
+    private static String displayName(Map<String, Object> server) {
+        Object raw = server.get("name");
+        return raw == null ? "" : String.valueOf(raw);
     }
 
     public List<ExternalSubscribeNode> listBySourceId(Long sourceId) {

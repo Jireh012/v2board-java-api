@@ -141,6 +141,57 @@ public void syncOne(Long id) {
 
 ---
 
+## Scenario: Logical-key fingerprint and subscribe dedupe
+
+### 1. Scope / Trigger
+
+- Sync parse stores `fingerprint` from **logical identity**, not full outbound JSON.
+- Subscribe merge must not emit duplicate third-party nodes across enabled sources.
+
+### 2. Signatures
+
+`ExternalNodeIdentity`:
+
+```java
+String logicalKey(Map<String, Object> outbound);
+// type.lower|server.lower|port|uuid-or-password
+String fingerprint(Map<String, Object> outbound); // SHA-256 hex[:32] of logicalKey
+void applyDisplayName(Map<String, Object> server, String name);
+```
+
+`ExternalSubscribeNodeService.listReachableAsServerMaps()`:
+
+1. Load reachable nodes for enabled sources (`sort ASC`, `id ASC`)
+2. Dedupe by `logicalKey` — **first wins**
+3. If display names collide after dedupe, rename to `name1`, `name2`, … and sync clash/tag/share_uri
+4. Return list (Controller then applies `⚠️ ` markers)
+
+### 3. Contracts
+
+| Piece | Behavior |
+|-------|----------|
+| Credential | Prefer `uuid`; else `password`; else empty |
+| Within-source sync | Same logical key → one row (`uk_source_fingerprint` + parser `dedupe`) |
+| Cross-source | Delivery-time dedupe only; admin per-source list stays raw DB rows |
+| Name numbering | Only when ≥2 remaining nodes share exact `name`; unique names unchanged |
+| Markers | Numbering **before** `applyNodeSecurityMarkers` |
+
+### 4. Wrong vs Correct
+
+#### Wrong
+
+```java
+// fingerprint = SHA256(full outbound JSON including tag/tls utls)
+```
+
+#### Correct
+
+```java
+fingerprint = SHA256(logicalKey(outbound)); // ignores tag / TLS client fingerprint variants
+```
+
+---
+
 ## Related: Client node naming
 
 Reachable external nodes enter subscribe output via `ExternalSubscribeNodeService.listReachableAsServerMaps()` (`type=external`).

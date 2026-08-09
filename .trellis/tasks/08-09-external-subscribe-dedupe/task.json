@@ -1,0 +1,28 @@
+{
+  "id": "external-subscribe-dedupe",
+  "name": "external-subscribe-dedupe",
+  "title": "第三方订阅跨源去重与同名编号",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "Jireh",
+  "assignee": "Jireh",
+  "createdAt": "2026-08-09",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "description": "跨源逻辑键去重 + 同名编号；同步 fingerprint 改逻辑键"
+  }
+}
