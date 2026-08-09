@@ -131,6 +131,7 @@ public class ExternalSubscribeSyncService {
 
             String content = fetcher.fetch(source.getUrl());
             List<CanonicalExternalNode> parsed = parser.parse(content);
+            ExternalNameFilter.applyFiltersToParsed(parsed, ExternalNameFilter.fromJson(source.getNameFilters()));
             if (parsed.isEmpty()) {
                 // 清空旧节点
                 nodeMapper.delete(new LambdaQueryWrapper<ExternalSubscribeNode>()

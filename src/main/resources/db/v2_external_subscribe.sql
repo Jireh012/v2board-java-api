@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS `v2_external_subscribe_source` (
   `url` varchar(2048) NOT NULL COMMENT '订阅地址',
   `enable` tinyint NOT NULL DEFAULT 0 COMMENT '0禁用 1启用',
   `remark` varchar(512) DEFAULT NULL COMMENT '备注',
+  `name_filters` json DEFAULT NULL COMMENT '名称过滤规则 [{pattern,replacement,regex}]',
   `last_sync_at` bigint DEFAULT NULL COMMENT '上次同步时间(秒)',
   `last_sync_status` varchar(32) DEFAULT NULL COMMENT 'success/failed/running',
   `last_sync_message` varchar(1024) DEFAULT NULL COMMENT '同步摘要或错误信息',
@@ -30,3 +31,7 @@ CREATE TABLE IF NOT EXISTS `v2_external_subscribe_node` (
   UNIQUE KEY `uk_source_fingerprint` (`source_id`, `fingerprint`),
   KEY `idx_source_reachable` (`source_id`, `reachable`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='第三方订阅可达节点缓存';
+
+-- 已有库升级：
+-- ALTER TABLE `v2_external_subscribe_source`
+--   ADD COLUMN `name_filters` json DEFAULT NULL COMMENT '名称过滤规则 [{pattern,replacement,regex}]' AFTER `remark`;

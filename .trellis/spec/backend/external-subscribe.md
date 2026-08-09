@@ -141,6 +141,43 @@ public void syncOne(Long id) {
 
 ---
 
+## Scenario: Per-source display-name filters (`name_filters`)
+
+### 1. Scope / Trigger
+
+- Admin edits source → saves `name_filters` JSON → next sync rewrites node display names.
+
+### 2. Storage / API
+
+- Column: `v2_external_subscribe_source.name_filters` (`json`, nullable / `[]`)
+- Wire: `name_filters: [{ pattern, replacement, regex }]`
+- `replacement` may be `""` (delete match)
+- `regex=true` → Java `Matcher.replaceAll` (supports `$1`); invalid pattern → **reject on save**
+
+### 3. Apply
+
+- After parse, before probe/upsert: `ExternalNameFilter.applyFiltersToParsed`
+- Updates `name`, outbound `tag`, `share_uri` fragment
+- Blank result after filters → keep original name
+- Does **not** change logical-key fingerprint
+
+### 4. Wrong vs Correct
+
+#### Wrong
+
+```java
+// Apply filters only in listReachableAsServerMaps — admin node list stays unfiltered
+```
+
+#### Correct
+
+```java
+ExternalNameFilter.applyFiltersToParsed(parsed, ExternalNameFilter.fromJson(source.getNameFilters()));
+// then probe + upsert
+```
+
+---
+
 ## Scenario: Logical-key fingerprint and subscribe dedupe
 
 ### 1. Scope / Trigger

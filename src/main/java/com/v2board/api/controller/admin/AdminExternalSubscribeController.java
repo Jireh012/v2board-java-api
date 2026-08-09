@@ -6,6 +6,7 @@ import com.v2board.api.common.BusinessException;
 import com.v2board.api.mapper.ExternalSubscribeSourceMapper;
 import com.v2board.api.model.ExternalSubscribeNode;
 import com.v2board.api.model.ExternalSubscribeSource;
+import com.v2board.api.service.external.ExternalNameFilter;
 import com.v2board.api.service.external.ExternalSubscribeNodeService;
 import com.v2board.api.service.external.ExternalSubscribeSyncService;
 import org.springframework.util.StringUtils;
@@ -52,6 +53,7 @@ public class AdminExternalSubscribeController {
             row.put("url", s.getUrl());
             row.put("enable", s.getEnable());
             row.put("remark", s.getRemark());
+            row.put("name_filters", ExternalNameFilter.toApiList(s.getNameFilters()));
             row.put("last_sync_at", s.getLastSyncAt());
             row.put("last_sync_status", s.getLastSyncStatus());
             row.put("last_sync_message", s.getLastSyncMessage());
@@ -79,6 +81,8 @@ public class AdminExternalSubscribeController {
         Long id = toLong(body.get("id"));
         Integer enable = toInt(body.get("enable"), 0);
         String remark = body.get("remark") != null ? String.valueOf(body.get("remark")) : null;
+        List<ExternalNameFilter.Rule> filters = ExternalNameFilter.parseAndValidateStrict(body.get("name_filters"));
+        String nameFiltersJson = ExternalNameFilter.toJson(filters);
 
         if (id != null) {
             ExternalSubscribeSource existing = sourceMapper.selectById(id);
@@ -89,6 +93,7 @@ public class AdminExternalSubscribeController {
             existing.setUrl(url);
             existing.setEnable(enable);
             existing.setRemark(remark);
+            existing.setNameFilters(nameFiltersJson);
             existing.setUpdatedAt(now);
             if (sourceMapper.updateById(existing) <= 0) {
                 throw new BusinessException(500, "保存失败");
@@ -99,6 +104,7 @@ public class AdminExternalSubscribeController {
             source.setUrl(url);
             source.setEnable(enable);
             source.setRemark(remark);
+            source.setNameFilters(nameFiltersJson);
             source.setCreatedAt(now);
             source.setUpdatedAt(now);
             if (sourceMapper.insert(source) <= 0) {

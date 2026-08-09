@@ -20,6 +20,12 @@ public class ExternalSubscribeSource {
 
     private String remark;
 
+    /**
+     * JSON array: [{pattern, replacement, regex}] — display-name filters applied on sync.
+     */
+    @TableField("name_filters")
+    private String nameFilters;
+
     @TableField("last_sync_at")
     private Long lastSyncAt;
 
