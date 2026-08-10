@@ -164,7 +164,7 @@ public class RuleTemplateService {
         }
         String stashSeed = readClasspath("rules/default.stash.yaml");
         if (stashSeed != null) {
-            cacheService.set(cacheKey("stash"), stashSeed, CACHE_TTL_HOURS, TimeUnit.HOURS);
+            // classpath 种子不写 Redis，避免发版后仍命中旧默认缓存
             return stashSeed;
         }
         return resolveDirect("clash");
@@ -184,7 +184,7 @@ public class RuleTemplateService {
         if (seed == null || seed.isBlank()) {
             throw new BusinessException(500, "未找到格式 " + fmt + " 的默认规则模板");
         }
-        cacheService.set(cacheKey(fmt), seed, CACHE_TTL_HOURS, TimeUnit.HOURS);
+        // 仅缓存 DB 自定义模板；默认种子随 jar 更新，勿缓存 24h
         return seed;
     }
 

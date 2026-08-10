@@ -65,7 +65,9 @@ class RuleTemplateServiceTest {
 
         String content = service.resolve("clash");
         assertTrue(content.contains("proxy-groups") || content.contains("rules"));
-        verify(cacheService).set(eq("v2board_subscribe:rule:clash"), anyString(), eq(24L), eq(TimeUnit.HOURS));
+        assertFalse(content.contains("GEOSITE,category-ad,"));
+        // classpath 默认种子不写 Redis，避免发版后命中旧缓存
+        verify(cacheService, never()).set(eq("v2board_subscribe:rule:clash"), anyString(), eq(24L), eq(TimeUnit.HOURS));
     }
 
     @Test
