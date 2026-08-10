@@ -1,5 +1,6 @@
 package com.v2board.api.protocol;
 
+import com.v2board.api.service.RuleTemplateSanitizer;
 import com.v2board.api.util.Helper;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
@@ -91,12 +92,13 @@ public final class ClashMetaBuilder {
         });
         ensureMainProxyGroup(groups, mainGroupName, proxies);
         config.put("proxy-groups", groups);
+        RuleTemplateSanitizer.normalizeHealthCheckUrls(config);
 
         DumperOptions options = new DumperOptions();
         options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
         options.setIndent(2);
         options.setPrettyFlow(true);
-        String yaml = new Yaml(options).dump(config);
+        String yaml = RuleTemplateSanitizer.rewriteHealthCheckToHttps(new Yaml(options).dump(config));
         return yaml.replace("$app_name", mainGroupName);
     }
 

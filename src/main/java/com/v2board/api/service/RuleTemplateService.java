@@ -5,6 +5,7 @@ import com.v2board.api.config.V2boardRedisProperties;
 import com.v2board.api.mapper.SubscribeRuleTemplateMapper;
 import com.v2board.api.model.SubscribeRuleTemplate;
 import com.v2board.api.service.external.ExternalSubscribeFetcher;
+import com.v2board.api.service.external.ExternalSubscribeSyncService;
 import com.v2board.api.service.rules.Acl4ssrIniParser;
 import com.v2board.api.service.rules.Acl4ssrTemplateMaterializer;
 import com.v2board.api.service.rules.ClashRuleProviderExpander;
@@ -46,15 +47,18 @@ public class RuleTemplateService {
     private final SubscribeRuleTemplateMapper mapper;
     private final CacheService cacheService;
     private final ExternalSubscribeFetcher fetcher;
+    private final ExternalSubscribeSyncService externalSyncService;
     private final String redisPrefix;
 
     public RuleTemplateService(SubscribeRuleTemplateMapper mapper,
                                CacheService cacheService,
                                ExternalSubscribeFetcher fetcher,
+                               ExternalSubscribeSyncService externalSyncService,
                                V2boardRedisProperties redisProperties) {
         this.mapper = mapper;
         this.cacheService = cacheService;
         this.fetcher = fetcher;
+        this.externalSyncService = externalSyncService;
         String p = redisProperties != null ? redisProperties.getPrefix() : "";
         this.redisPrefix = p != null ? p : "";
     }
@@ -90,13 +94,16 @@ public class RuleTemplateService {
     public String resolve(String format) {
         String fmt = normalizeFormat(format);
         String profile = currentRequestProfile();
+        String content;
         if (!PROFILE_FULL.equals(profile)) {
-            return resolveProfileSeed(fmt, profile);
+            content = resolveProfileSeed(fmt, profile);
+        } else if ("stash".equals(fmt)) {
+            content = resolveStash();
+        } else {
+            content = resolveDirect(fmt);
         }
-        if ("stash".equals(fmt)) {
-            return resolveStash();
-        }
-        return resolveDirect(fmt);
+        // Fix legacy HTTP health-check URLs even when Redis/DB still hold old templates.
+        return RuleTemplateSanitizer.rewriteHealthCheckToHttps(content);
     }
 
     /**
@@ -170,7 +177,7 @@ public class RuleTemplateService {
         String resolvedUrl = resolveSyncUrl(fmt, url);
         String raw;
         try {
-            raw = fetcher.fetch(resolvedUrl);
+            raw = fetchUpstream(resolvedUrl);
         } catch (Exception e) {
             logger.warn("Subscribe rule sync fetch failed format={} url={}: {}", fmt, resolvedUrl, e.getMessage());
             throw new BusinessException(500, "拉取上游规则失败：" + e.getMessage());
@@ -184,8 +191,18 @@ public class RuleTemplateService {
         persist(fmt, sanitized.content(), resolvedUrl, "sync");
         Map<String, Object> data = fetch(fmt);
         applySanitizeMeta(data, sanitized);
-        data.put("sync_hint", "已从 Online/raw 内联本地化（服务端展开规则列表，客户端无远程规则依赖）");
+        data.put("sync_hint", "已从 Online/raw 内联本地化（服务端展开规则列表；直连失败时自动经可用第三方节点前置代理拉取）");
         return data;
+    }
+
+    /**
+     * Direct fetch first; on failure auto-try reachable external subscribe nodes as pre-proxy.
+     */
+    String fetchUpstream(String url) throws Exception {
+        if (externalSyncService != null) {
+            return externalSyncService.fetchWithDirectThenPreProxy(url);
+        }
+        return fetcher.fetch(url);
     }
 
     /**
@@ -212,7 +229,13 @@ public class RuleTemplateService {
             return Acl4ssrTemplateMaterializer.materialize(fmt, seed, model, lists);
         }
         if (("clash".equals(fmt) || "stash".equals(fmt)) && ClashRuleProviderExpander.hasHttpProviders(raw)) {
-            String expanded = ClashRuleProviderExpander.expand(raw, fetcher);
+            String expanded = ClashRuleProviderExpander.expand(raw, u -> {
+                try {
+                    return fetchUpstream(u);
+                } catch (Exception e) {
+                    throw new BusinessException(500, "拉取规则列表失败：" + u + ": " + e.getMessage());
+                }
+            });
             if (StringUtils.hasText(seed)) {
                 return Acl4ssrTemplateMaterializer.mergeClashShell(seed, expanded);
             }
@@ -231,7 +254,7 @@ public class RuleTemplateService {
         Map<String, String> out = new LinkedHashMap<>();
         for (String listUrl : urls) {
             try {
-                String body = fetcher.fetch(listUrl);
+                String body = fetchUpstream(listUrl);
                 if (!StringUtils.hasText(body)) {
                     throw new BusinessException(500, "拉取规则列表失败：" + listUrl + ": 内容为空");
                 }

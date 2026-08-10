@@ -4,6 +4,7 @@ import com.v2board.api.config.V2boardRedisProperties;
 import com.v2board.api.mapper.SubscribeRuleTemplateMapper;
 import com.v2board.api.model.SubscribeRuleTemplate;
 import com.v2board.api.service.external.ExternalSubscribeFetcher;
+import com.v2board.api.service.external.ExternalSubscribeSyncService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -30,16 +31,22 @@ class RuleTemplateServiceTest {
     private SubscribeRuleTemplateMapper mapper;
     private CacheService cacheService;
     private ExternalSubscribeFetcher fetcher;
+    private ExternalSubscribeSyncService externalSync;
     private RuleTemplateService service;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         mapper = mock(SubscribeRuleTemplateMapper.class);
         cacheService = mock(CacheService.class);
         fetcher = mock(ExternalSubscribeFetcher.class);
+        externalSync = mock(ExternalSubscribeSyncService.class);
+        when(externalSync.fetchWithDirectThenPreProxy(anyString())).thenAnswer(inv -> {
+            String url = inv.getArgument(0);
+            return fetcher.fetch(url);
+        });
         V2boardRedisProperties props = new V2boardRedisProperties();
         props.setPrefix("v2board_");
-        service = new RuleTemplateService(mapper, cacheService, fetcher, props);
+        service = new RuleTemplateService(mapper, cacheService, fetcher, externalSync, props);
     }
 
     @Test
@@ -47,6 +54,15 @@ class RuleTemplateServiceTest {
         when(cacheService.get("v2board_subscribe:rule:clash")).thenReturn("cached-yaml");
         assertEquals("cached-yaml", service.resolve("clash"));
         verify(mapper, never()).selectById(anyString());
+    }
+
+    @Test
+    void resolve_rewritesHttpHealthCheckInCachedTemplate() {
+        when(cacheService.get("v2board_subscribe:rule:clash"))
+                .thenReturn("url: http://www.gstatic.com/generate_204\n");
+        String out = service.resolve("clash");
+        assertTrue(out.contains("https://www.gstatic.com/generate_204"));
+        assertFalse(out.contains("http://www.gstatic.com/generate_204"));
     }
 
     @Test

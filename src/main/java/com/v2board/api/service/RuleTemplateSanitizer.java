@@ -109,12 +109,13 @@ public final class RuleTemplateSanitizer {
         options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
         options.setIndent(2);
         options.setPrettyFlow(true);
-        String out = new Yaml(options).dump(config);
+        normalizeHealthCheckUrls(config);
+        String out = rewriteHealthCheckToHttps(new Yaml(options).dump(config));
 
         if (containsRemoteRuleDependency(out)) {
             // 整份回退种子后再验一次
             if (seedContent != null && !seedContent.isBlank() && !containsRemoteRuleDependency(seedContent)) {
-                return new Result(seedContent,
+                return new Result(rewriteHealthCheckToHttps(seedContent),
                         "上游含无法清除的远程规则依赖，已用本地默认模板替换（请用「同步」内联 Online INI，或粘贴已内联的完整模板）",
                         true, true);
             }
@@ -129,6 +130,60 @@ public final class RuleTemplateSanitizer {
             warning = "已剥离远程规则依赖（rule-providers / RULE-SET / GitHub raw）；请确认分流段仍完整，或改用「同步」内联";
         }
         return new Result(out, warning, stripped || filledFromSeed, filledFromSeed);
+    }
+
+    /**
+     * Mihomo recommends HTTPS for proxy-groups[].url / provider health-check.url.
+     * Rewrite common HTTP gstatic probe so old DB templates stop warning on subscribe.
+     */
+    public static String rewriteHealthCheckToHttps(String content) {
+        if (content == null || content.isEmpty()) {
+            return content;
+        }
+        return content
+                .replace("http://www.gstatic.com/generate_204", "https://www.gstatic.com/generate_204")
+                .replace("http://gstatic.com/generate_204", "https://www.gstatic.com/generate_204");
+    }
+
+    @SuppressWarnings("unchecked")
+    public static void normalizeHealthCheckUrls(Map<String, Object> config) {
+        if (config == null) {
+            return;
+        }
+        Object groups = config.get("proxy-groups");
+        if (groups instanceof List<?> list) {
+            for (Object g : list) {
+                if (g instanceof Map<?, ?> gm) {
+                    upgradeUrlField((Map<String, Object>) gm, "url");
+                }
+            }
+        }
+        Object providers = config.get("proxy-providers");
+        if (providers instanceof Map<?, ?> pm) {
+            for (Object v : pm.values()) {
+                if (!(v instanceof Map<?, ?> provider)) {
+                    continue;
+                }
+                Map<String, Object> p = (Map<String, Object>) provider;
+                upgradeUrlField(p, "url");
+                Object hc = p.get("health-check");
+                if (hc instanceof Map<?, ?> hcm) {
+                    upgradeUrlField((Map<String, Object>) hcm, "url");
+                }
+            }
+        }
+    }
+
+    private static void upgradeUrlField(Map<String, Object> map, String key) {
+        Object url = map.get(key);
+        if (url == null) {
+            return;
+        }
+        String s = String.valueOf(url);
+        String fixed = rewriteHealthCheckToHttps(s);
+        if (!fixed.equals(s)) {
+            map.put(key, fixed);
+        }
     }
 
     static Result sanitizeGeneric(String content, String seedContent, String format) {
@@ -167,6 +222,7 @@ public final class RuleTemplateSanitizer {
             }
             throw new BusinessException(500, "规则仍含远程规则 URL，拒绝保存");
         }
+        out = rewriteHealthCheckToHttps(out);
         String warning = stripped
                 ? "已剥离远程规则 URL；请确认分流段仍完整，或改用「同步」从 Online INI 内联本地化"
                 : null;

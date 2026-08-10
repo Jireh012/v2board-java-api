@@ -232,7 +232,9 @@ Default sync URL: `https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clas
 
 **Allowed remote URLs in seeds** (not rule lists): url-test / DoH / connectivity check / Surge `geoip-maxmind-url` (client geo DB). These are not remote *rule* dependencies.
 
-**Health-check URL**: Clash Meta / Mihomo recommends **HTTPS** for `proxy-groups[].url` and provider `health-check.url`. Seeds and `Acl4ssrTemplateMaterializer` must use `https://www.gstatic.com/generate_204` (not `http://`), or the kernel logs a warning and HTTP probes may fail under some providers.
+**Health-check URL**: Clash Meta / Mihomo recommends **HTTPS** for `proxy-groups[].url` and provider `health-check.url`. Seeds and `Acl4ssrTemplateMaterializer` must use `https://www.gstatic.com/generate_204` (not `http://`). `RuleTemplateSanitizer.rewriteHealthCheckToHttps` / `normalizeHealthCheckUrls` also rewrite on sanitize, and `RuleTemplateService.resolve` rewrites again so legacy Redis/DB templates stop emitting HTTP without requiring admin restore.
+
+**Sync fetch**: `RuleTemplateService.fetchUpstream` → `ExternalSubscribeSyncService.fetchWithDirectThenPreProxy`: try direct first; on failure auto-try up to 8 reachable third-party subscribe nodes via local sing-box HTTP pre-proxy (no manual node picker). Requires `sing-box` on the API host and at least one `reachable=1` external node.
 
 **Product**: Online INI / GitHub raw lists are **allowed as sync sources**; the server must expand them into fully inlined templates before persist. Sanitize remains the final gate so subscribe output never requires clients to fetch remote rule lists. Manual paste that still has remote deps after strip may seed-fallback or reject.
 

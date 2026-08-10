@@ -20,6 +20,20 @@ class RuleTemplateSanitizerTest {
             """;
 
     @Test
+    void rewriteHealthCheckToHttps_upgradesGstaticProbe() {
+        String in = """
+                proxy-groups:
+                  - name: auto
+                    type: url-test
+                    url: http://www.gstatic.com/generate_204
+                    proxies: [a]
+                """;
+        String out = RuleTemplateSanitizer.rewriteHealthCheckToHttps(in);
+        assertTrue(out.contains("https://www.gstatic.com/generate_204"));
+        assertFalse(out.contains("http://www.gstatic.com/generate_204"));
+    }
+
+    @Test
     void sanitizeClash_stripsRuleProvidersAndGithubUrls() {
         String upstream = """
                 rule-providers:
