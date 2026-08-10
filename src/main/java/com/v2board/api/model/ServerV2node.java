@@ -5,6 +5,8 @@ import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
 import java.util.List;
@@ -82,7 +84,13 @@ public class ServerV2node {
     @TableField(value = "network_settings")
     private String networkSettings;
 
-    /** 信任的 X-Forwarded-For 头（JSON 数组），对齐 PHP trusted_x_forwarded_for */
+    /**
+     * 信任的 X-Forwarded-For 头（JSON 数组），对齐 PHP {@code trusted_x_forwarded_for}。
+     * <p>Must pin wire name: Jackson SNAKE_CASE maps {@code trustedXForwardedFor}
+     * → {@code trusted_xforwarded_for} (XF treated as acronym), which breaks admin save.
+     */
+    @JsonProperty("trusted_x_forwarded_for")
+    @JsonAlias({"trusted_xforwarded_for"})
     @TableField(value = "trusted_x_forwarded_for", typeHandler = JacksonTypeHandler.class)
     private List<String> trustedXForwardedFor;
 
