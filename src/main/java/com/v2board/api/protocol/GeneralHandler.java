@@ -1,6 +1,7 @@
 package com.v2board.api.protocol;
 
 import com.v2board.api.model.User;
+import com.v2board.api.service.external.ExternalNodeIdentity;
 import com.v2board.api.util.Helper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -77,10 +78,8 @@ public class GeneralHandler implements ProtocolHandler {
             String share = String.valueOf(uri).trim();
             Object nameObj = server.get("name");
             if (nameObj != null && !String.valueOf(nameObj).isBlank()) {
-                String marked = String.valueOf(nameObj).trim();
-                int hash = share.indexOf('#');
-                String base = hash >= 0 ? share.substring(0, hash) : share;
-                share = base + "#" + Helper.encodeURIComponent(marked);
+                // Also rewrites vmess base64 `ps` — fragment-only updates leave clients showing old names.
+                share = ExternalNodeIdentity.rewriteShareUriName(share, String.valueOf(nameObj).trim());
             }
             return share.endsWith("\r\n") || share.endsWith("\n") ? share : share + "\r\n";
         }

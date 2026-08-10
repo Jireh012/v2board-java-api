@@ -1,12 +1,17 @@
 package com.v2board.api.service.external;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ExternalNodeIdentityTest {
 
@@ -67,6 +72,35 @@ class ExternalNodeIdentityTest {
         assertEquals("node1", clash.get("name"));
         assertEquals("node1", outbound.get("tag"));
         assertEquals("trojan://pw@h.example:443#node1", server.get("share_uri"));
+    }
+
+    @Test
+    void rewriteShareUriName_updatesVmessPsAndFragment() throws Exception {
+        Map<String, Object> cfg = new LinkedHashMap<>();
+        cfg.put("v", "2");
+        cfg.put("ps", "极限白嫖🇭🇰香港vmess未检测");
+        cfg.put("add", "v9.example.com");
+        cfg.put("port", 30809);
+        cfg.put("id", "cbb3f877-d1fb-344c-87a9-d153bffd5484");
+        cfg.put("aid", 2);
+        cfg.put("scy", "auto");
+        cfg.put("net", "tcp");
+        cfg.put("tls", "");
+        String json = new ObjectMapper().writeValueAsString(cfg);
+        String uri = "vmess://" + Base64.getEncoder().encodeToString(json.getBytes(StandardCharsets.UTF_8))
+                + "#%E6%9E%81%E9%99%90%E7%99%BD%E5%AB%96";
+
+        String rewritten = ExternalNodeIdentity.rewriteShareUriName(uri, "🇭🇰香港vmess未检测");
+        assertTrue(rewritten.startsWith("vmess://"));
+        assertTrue(rewritten.contains("#"));
+        String payload = rewritten.substring("vmess://".length(), rewritten.indexOf('#'));
+        String pad = "=".repeat((4 - payload.length() % 4) % 4);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> out = new ObjectMapper().readValue(
+                Base64.getDecoder().decode(payload + pad), Map.class);
+        assertEquals("🇭🇰香港vmess未检测", out.get("ps"));
+        assertFalse(String.valueOf(out.get("ps")).contains("极限白嫖"));
+        assertEquals("v9.example.com", out.get("add"));
     }
 
     private static Map<String, Object> outbound(String type, String server, Object port,

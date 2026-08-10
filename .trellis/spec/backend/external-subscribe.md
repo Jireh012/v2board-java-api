@@ -213,7 +213,9 @@ conn.setRequestProperty("User-Agent", "v2board-java-api/external-subscribe");
 ### 3. Apply
 
 - After parse, before probe/upsert: `ExternalNameFilter.applyFiltersToParsed`
-- Updates `name`, outbound `tag`, `share_uri` fragment
+- Updates `name`, outbound `tag`, and `share_uri` via `ExternalNodeIdentity.rewriteShareUriName`
+- `rewriteShareUriName` updates `#fragment` **and** `vmess://` base64 JSON `ps` (many clients read `ps`, not the fragment)
+- Delivery (`GeneralHandler` external path) must call the same helper — fragment-only rewrite leaves old `ps`
 - Blank result after filters → keep original name
 - Does **not** change logical-key fingerprint
 
@@ -223,6 +225,9 @@ conn.setRequestProperty("User-Agent", "v2board-java-api/external-subscribe");
 
 ```java
 // Apply filters only in listReachableAsServerMaps — admin node list stays unfiltered
+// Or rewrite only share_uri #fragment for vmess — clients still show old ps
+int hash = share.indexOf('#');
+share = base + "#" + encode(name);
 ```
 
 #### Correct
@@ -230,6 +235,7 @@ conn.setRequestProperty("User-Agent", "v2board-java-api/external-subscribe");
 ```java
 ExternalNameFilter.applyFiltersToParsed(parsed, ExternalNameFilter.fromJson(source.getNameFilters()));
 // then probe + upsert
+// share_uri / GeneralHandler: ExternalNodeIdentity.rewriteShareUriName(share, name)
 ```
 
 ---

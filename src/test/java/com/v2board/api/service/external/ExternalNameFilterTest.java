@@ -88,4 +88,38 @@ class ExternalNameFilterTest {
         assertEquals("xxxxxxname", outbound.get("tag"));
         assertEquals("vless://u@h:443#xxxxxxname", node.getShareUri());
     }
+
+    @Test
+    void applyFiltersToParsed_rewritesVmessPs() throws Exception {
+        Map<String, Object> cfg = new LinkedHashMap<>();
+        cfg.put("v", "2");
+        cfg.put("ps", "极限白嫖🇭🇰香港vmess");
+        cfg.put("add", "h.example");
+        cfg.put("port", 443);
+        cfg.put("id", "u-1");
+        cfg.put("aid", 0);
+        String json = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(cfg);
+        String uri = "vmess://" + java.util.Base64.getEncoder()
+                .encodeToString(json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+        CanonicalExternalNode node = new CanonicalExternalNode();
+        node.setName("极限白嫖🇭🇰香港vmess");
+        Map<String, Object> outbound = new LinkedHashMap<>();
+        outbound.put("tag", "极限白嫖🇭🇰香港vmess");
+        outbound.put("type", "vmess");
+        node.setSingboxOutbound(outbound);
+        node.setShareUri(uri);
+
+        ExternalNameFilter.applyFiltersToParsed(List.of(node),
+                List.of(new ExternalNameFilter.Rule("极限白嫖", "", false)));
+
+        assertEquals("🇭🇰香港vmess", node.getName());
+        String share = node.getShareUri();
+        String payload = share.substring("vmess://".length(), share.indexOf('#'));
+        String pad = "=".repeat((4 - payload.length() % 4) % 4);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> out = new com.fasterxml.jackson.databind.ObjectMapper().readValue(
+                java.util.Base64.getDecoder().decode(payload + pad), Map.class);
+        assertEquals("🇭🇰香港vmess", out.get("ps"));
+    }
 }

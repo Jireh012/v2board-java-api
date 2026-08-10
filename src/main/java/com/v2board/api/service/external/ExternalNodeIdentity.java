@@ -1,10 +1,14 @@
 package com.v2board.api.service.external;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.v2board.api.util.Helper;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.Base64;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 
@@ -12,6 +16,8 @@ import java.util.Map;
  * Logical identity for third-party subscribe nodes: type|server|port|uuid-or-password.
  */
 public final class ExternalNodeIdentity {
+
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private ExternalNodeIdentity() {
     }
@@ -70,7 +76,11 @@ public final class ExternalNodeIdentity {
         }
     }
 
-    static String rewriteShareUriName(String shareUri, String newName) {
+    /**
+     * Rewrite display name for share URI: updates {@code #fragment}, and for {@code vmess://}
+     * also rewrites the base64 JSON {@code ps} field (clients often ignore the fragment).
+     */
+    public static String rewriteShareUriName(String shareUri, String newName) {
         if (shareUri == null || shareUri.isBlank() || newName == null) {
             return shareUri;
         }
@@ -84,6 +94,16 @@ public final class ExternalNodeIdentity {
         }
         int hash = uri.indexOf('#');
         String base = hash >= 0 ? uri.substring(0, hash) : uri;
+        int schemeIdx = base.indexOf("://");
+        if (schemeIdx > 0) {
+            String scheme = base.substring(0, schemeIdx).toLowerCase(Locale.ROOT);
+            if ("vmess".equals(scheme)) {
+                String rewritten = rewriteVmessPs(base, newName);
+                if (rewritten != null) {
+                    base = rewritten;
+                }
+            }
+        }
         String encoded = Helper.encodeURIComponent(newName);
         String result = base + "#" + encoded;
         if (crlf) {
@@ -93,6 +113,38 @@ public final class ExternalNodeIdentity {
             return result + "\n";
         }
         return result;
+    }
+
+    private static String rewriteVmessPs(String vmessUri, String newName) {
+        try {
+            String payload = vmessUri.substring("vmess://".length()).trim();
+            if (payload.isEmpty()) {
+                return null;
+            }
+            String json = decodeBase64Flexible(payload);
+            if (json == null || json.isBlank()) {
+                return null;
+            }
+            Map<String, Object> cfg = MAPPER.readValue(json, new TypeReference<LinkedHashMap<String, Object>>() {});
+            cfg.put("ps", newName);
+            String out = MAPPER.writeValueAsString(cfg);
+            return "vmess://" + Base64.getEncoder().encodeToString(out.getBytes(StandardCharsets.UTF_8));
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static String decodeBase64Flexible(String raw) {
+        try {
+            String s = raw.replace('-', '+').replace('_', '/');
+            int mod = s.length() % 4;
+            if (mod > 0) {
+                s = s + "====".substring(mod);
+            }
+            return new String(Base64.getDecoder().decode(s), StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private static String normalizePort(Object port) {
