@@ -10,7 +10,6 @@ import com.v2board.api.model.Payment;
 import com.v2board.api.service.ConfigService;
 import com.v2board.api.service.PaymentService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -40,9 +39,6 @@ public class AdminPaymentController {
 
     @Autowired
     private ObjectMapper objectMapper;
-
-    @Value("${v2board.app-url:}")
-    private String appUrl;
 
     /**
      * 返回可用的支付驱动名称列表。对齐 PHP getPaymentMethods()。
@@ -75,7 +71,8 @@ public class AdminPaymentController {
             row.put("uuid", p.getUuid());
             String base = p.getNotifyDomain();
             if (!StringUtils.hasText(base)) {
-                base = appUrl;
+                // site.app_url (DB) → yml fallback — not boot-only @Value
+                base = configService.getAppUrl();
             }
             String path;
             try {
@@ -121,16 +118,18 @@ public class AdminPaymentController {
      */
     @PostMapping("/save")
     public ApiResponse<Boolean> save(@RequestBody Map<String, Object> body) {
-        if (!StringUtils.hasText(appUrl)) {
-            throw new BusinessException(500, "请在站点配置中配置站点地址");
-        }
         String name = (String) body.get("name");
         String paymentCode = (String) body.get("payment");
         Object configObj = body.get("config");
         String icon = (String) body.getOrDefault("icon", "");
-        String notifyDomain = (String) body.getOrDefault("notify_domain", "");
+        String notifyDomain = body.get("notify_domain") != null
+                ? String.valueOf(body.get("notify_domain")).trim() : "";
         Number fixed = (Number) body.getOrDefault("handling_fee_fixed", 0);
         Number percent = (Number) body.getOrDefault("handling_fee_percent", 0);
+        // 自定义通知域名可独立作为回调基址；否则必须有站点 app_url
+        if (!StringUtils.hasText(notifyDomain) && !StringUtils.hasText(configService.getAppUrl())) {
+            throw new BusinessException(500, "请在站点配置中配置站点地址");
+        }
         if (!StringUtils.hasText(name) || !StringUtils.hasText(paymentCode) || configObj == null) {
             throw new BusinessException(500, "参数有误");
         }

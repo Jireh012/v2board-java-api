@@ -171,9 +171,10 @@ isClassicGuestPayment(path) → 404
 rewritePaymentNotify(path, prefix) → /api/v1/guest/payment/notify/{method}/{uuid}
 
 // Consumers
-PaymentService.buildNotifyUrl → buildPaymentNotifyPath + notify_domain / app_url
-AdminPaymentController.fetch → same for notify_url field
+PaymentService.buildNotifyUrl → buildPaymentNotifyPath + notify_domain / ConfigService.getAppUrl()
+AdminPaymentController.fetch/save → same base (DB site.app_url, not boot-only @Value v2board.app-url)
 ```
+
 
 ### 3. Contracts
 

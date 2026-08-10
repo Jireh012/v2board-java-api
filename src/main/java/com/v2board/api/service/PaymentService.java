@@ -6,8 +6,8 @@ import com.v2board.api.common.BusinessException;
 import com.v2board.api.mapper.PaymentMapper;
 import com.v2board.api.model.Payment;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import com.v2board.api.payment.PaymentDriver;
 import com.v2board.api.payment.PaymentDriverFactory;
@@ -55,9 +55,6 @@ public class PaymentService {
 
     @Autowired
     private ConfigService configService;
-
-    @Value("${v2board.app-url:}")
-    private String appUrl;
 
     static {
         if (Security.getProvider("BC") == null) {
@@ -284,11 +281,11 @@ public class PaymentService {
         } catch (Exception e) {
             throw new BusinessException(500, "支付回调路径未就绪");
         }
-        String base = appUrl;
-        if (notifyDomain != null && !notifyDomain.isEmpty()) {
-            base = notifyDomain;
+        String base = configService.getAppUrl();
+        if (StringUtils.hasText(notifyDomain)) {
+            base = notifyDomain.trim();
         }
-        if (base == null || base.isEmpty()) {
+        if (!StringUtils.hasText(base)) {
             return path;
         }
         try {
@@ -300,7 +297,8 @@ public class PaymentService {
     }
 
     private String buildReturnUrl(String tradeNo) {
-        if (appUrl == null || appUrl.isEmpty()) {
+        String appUrl = configService.getAppUrl();
+        if (!StringUtils.hasText(appUrl)) {
             return "/#/order/" + tradeNo;
         }
         try {
