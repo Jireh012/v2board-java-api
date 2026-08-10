@@ -56,6 +56,14 @@ DB: `v2_user.remarks` TEXT NULL; `v2_user.is_staff` TINYINT.
 
 List row also exposes `plan_name`, `total_used` (= u+d bytes).
 
+`fetch` also returns `stats` (same filter scope as `total`, not limited to the current page):
+
+| Field | Meaning |
+|-------|---------|
+| `stats.banned` | `banned=1` count |
+| `stats.with_plan` | `plan_id IS NOT NULL` count |
+| `stats.expired` | `expired_at IS NOT NULL AND expired_at < now` count |
+
 ### 4. Validation & Error Matrix
 
 | Condition | Error |

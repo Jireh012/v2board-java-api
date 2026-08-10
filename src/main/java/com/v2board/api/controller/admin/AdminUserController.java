@@ -92,9 +92,32 @@ public class AdminUserController {
             data.add(map);
         }
 
+        // 统计卡片：与当前筛选相同范围，跨全部分页（非仅当前页）
+        long nowSec = System.currentTimeMillis() / 1000;
+        QueryWrapper<User> bannedWrapper = new QueryWrapper<>();
+        applyFilters(request, bannedWrapper);
+        bannedWrapper.eq("banned", 1);
+        long bannedCount = userMapper.selectCount(bannedWrapper);
+
+        QueryWrapper<User> withPlanWrapper = new QueryWrapper<>();
+        applyFilters(request, withPlanWrapper);
+        withPlanWrapper.isNotNull("plan_id");
+        long withPlanCount = userMapper.selectCount(withPlanWrapper);
+
+        QueryWrapper<User> expiredWrapper = new QueryWrapper<>();
+        applyFilters(request, expiredWrapper);
+        expiredWrapper.isNotNull("expired_at").lt("expired_at", nowSec);
+        long expiredCount = userMapper.selectCount(expiredWrapper);
+
+        Map<String, Object> stats = new LinkedHashMap<>();
+        stats.put("banned", bannedCount);
+        stats.put("with_plan", withPlanCount);
+        stats.put("expired", expiredCount);
+
         Map<String, Object> result = new HashMap<>();
         result.put("data", data);
         result.put("total", total);
+        result.put("stats", stats);
         return ApiResponse.success(result);
     }
 
