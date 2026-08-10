@@ -209,6 +209,10 @@
     {
       "type": "block",
       "tag": "REJECT"
+    },
+    {
+      "type": "dns",
+      "tag": "dns-out"
     }
   ],
   "route": {
@@ -216,11 +220,8 @@
     "final": "🐟 漏网之鱼",
     "rules": [
       {
-        "action": "sniff"
-      },
-      {
         "protocol": "dns",
-        "action": "hijack-dns"
+        "outbound": "dns-out"
       },
       {
         "clash_mode": "关闭代理",
@@ -255,7 +256,7 @@
         "outbound": "📲 电报消息"
       },
       {
-        "geosite": ["openai", "category-ai-chat-!cn"],
+        "geosite": ["openai", "category-ai-!cn"],
         "outbound": "💬 Ai平台"
       },
       {
@@ -263,11 +264,11 @@
         "outbound": "Ⓜ️ 微软服务"
       },
       {
-        "geosite": ["category-media"],
+        "geosite": ["disney", "hbo", "primevideo", "spotify"],
         "outbound": "🌍 国外媒体"
       },
       {
-        "geosite": ["category-media-cn", "bilibili"],
+        "geosite": ["bilibili", "iqiyi", "youku"],
         "outbound": "🌏 国内媒体"
       },
       {

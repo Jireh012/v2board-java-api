@@ -209,31 +209,42 @@ public class ClientController {
             return null;
         }
         
-        // 比较版本，>= 1.12.0 使用新版本，否则使用旧版本
-        try {
-            double versionNum = Double.parseDouble(version);
-            if (versionNum >= 1.12) {
-                // 查找新版本Singbox处理器
-                for (ProtocolHandler handler : protocolHandlers) {
-                    if (handler.getFlag().contains("sing") && 
-                        !handler.getClass().getSimpleName().contains("Old")) {
-                        return handler;
-                    }
-                }
-            } else {
-                // 查找旧版本SingboxOld处理器
-                for (ProtocolHandler handler : protocolHandlers) {
-                    if (handler.getFlag().contains("sing") && 
-                        handler.getClass().getSimpleName().contains("Old")) {
-                        return handler;
-                    }
+        // 比较版本，>= 1.12.0 使用新版本，否则使用旧版本（支持 1.12.0 三段式，不能用 Double.parseDouble）
+        if (isSingBoxVersionAtLeast(version, 1, 12)) {
+            for (ProtocolHandler handler : protocolHandlers) {
+                if (handler.getFlag().contains("sing")
+                        && !handler.getClass().getSimpleName().contains("Old")) {
+                    return handler;
                 }
             }
-        } catch (NumberFormatException e) {
-            logger.warn("Invalid sing-box version format: {}", version);
+        } else {
+            for (ProtocolHandler handler : protocolHandlers) {
+                if (handler.getFlag().contains("sing")
+                        && handler.getClass().getSimpleName().contains("Old")) {
+                    return handler;
+                }
+            }
         }
-        
+
         return null;
+    }
+
+    /** 解析 sing-box 版本号 major.minor[.patch]，与门槛比较。 */
+    static boolean isSingBoxVersionAtLeast(String version, int major, int minor) {
+        if (version == null || version.isBlank()) {
+            return false;
+        }
+        String[] parts = version.trim().split("\\.");
+        try {
+            int vMajor = parts.length > 0 ? Integer.parseInt(parts[0]) : 0;
+            int vMinor = parts.length > 1 ? Integer.parseInt(parts[1]) : 0;
+            if (vMajor != major) {
+                return vMajor > major;
+            }
+            return vMinor >= minor;
+        } catch (NumberFormatException e) {
+            return false;
+        }
     }
     
     /**

@@ -189,6 +189,62 @@ Same for Sing-box: always set `outbound.tag` from `server.get("name")` when pres
 
 ---
 
+## Scenario: External nodes in Surge / Surfboard / QX / Loon
+
+### 1. Scope / Trigger
+
+- Trigger: Subscribe builders for conf-style clients must emit **usable proxy lines** for `type=external` nodes (majority of inventory is third-party).
+- Clash / Sing-box already consume `clash_proxy` / `singbox_outbound` wholesale; conf builders previously skipped `external` and only emitted panel protocols.
+
+### 2. Signatures
+
+**ExternalServerAdapter** (`com.v2board.api.service.external.ExternalServerAdapter`):
+
+```java
+boolean isExternal(Map server);
+Resolved resolve(Map item); // from item.singbox_outbound + display name
+record Resolved(Map<String, Object> server, String credential) {}
+```
+
+Flatten maps sing-box outbound → panel-shaped fields (`type`/`host`/`port`/`cipher`/`network`/`tls`/`tls_settings`/…) and extracts **node** password/uuid (never the panel user uuid).
+
+### 3. Contracts
+
+| Client | External protocols emitted | Notes |
+|--------|---------------------------|--------|
+| Surge | ss / vmess / trojan / hysteria2 / anytls | No native VLESS |
+| Surfboard | ss (whitelist ciphers) / vmess / trojan / anytls | No hy2 / vless |
+| Quantumult X | ss / vmess / vless / trojan / anytls | Skip grpc / httpupgrade / xhttp |
+| Loon | ss / vmess / vless(tcp\|ws) / trojan / hysteria2 / anytls | Reality → `tls=2` + pubkey/short_id |
+
+Panel `type=hysteria2` (and `hysteria`+`version=2`) must also emit hy2 lines on Surge / Loon.
+
+### 4. Wrong vs Correct
+
+#### Wrong
+
+```java
+// skip external; use user.getUuid() for all lines
+case "external" -> "";
+```
+
+#### Correct
+
+```java
+Resolved ext = ExternalServerAdapter.resolve(item);
+if (ext != null) {
+    server = ext.server();
+    credential = ext.credential();
+}
+```
+
+### 5. Tests Required
+
+- Unit: `ExternalServerAdapterTest` — vless reality → tls=2; hy2/ss flatten; ws transport.
+- Unit: `SurgeBuilderTest` / `QuantumultXBuilderTest` — external password ≠ user uuid; panel hy2 present.
+
+---
+
 ## Scenario: Hot-reload subscribe HTTP path
 
 ### 1. Scope / Trigger

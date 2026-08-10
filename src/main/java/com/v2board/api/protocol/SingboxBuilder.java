@@ -65,6 +65,13 @@ public final class SingboxBuilder {
                     } else if (outbound.get("tag") == null || str(outbound.get("tag")).isEmpty()) {
                         outbound.put("tag", server.get("name"));
                     }
+                    // 旧版 sing-box 不支持 anytls
+                    if (!includeAnytls && "anytls".equals(str(outbound.get("type")))) {
+                        continue;
+                    }
+                    if (!includeAnytls) {
+                        outbound.remove("domain_resolver");
+                    }
                     proxies.add(outbound);
                 }
                 continue;
@@ -84,7 +91,16 @@ public final class SingboxBuilder {
                 default -> null;
             };
             if (node != null) {
+                if (!includeAnytls) {
+                    // sing-box <1.12 不认识 domain_resolver
+                    node.remove("domain_resolver");
+                }
                 proxies.add(node);
+            }
+        }
+        if (!includeAnytls) {
+            for (Map<String, Object> outbound : proxies) {
+                outbound.remove("domain_resolver");
             }
         }
         return proxies;

@@ -1,6 +1,7 @@
 package com.v2board.api.protocol;
 
 import com.v2board.api.model.User;
+import com.v2board.api.service.external.ExternalServerAdapter;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -42,18 +43,23 @@ public final class SurfboardBuilder {
         List<String> proxyNames = new ArrayList<>();
 
         for (Map<String, Object> item : servers) {
+            String credential = user.getUuid();
             Map<String, Object> server = item;
-            if ("v2node".equals(str(server.get("type"))) && server.get("protocol") != null) {
+            ExternalServerAdapter.Resolved external = ExternalServerAdapter.resolve(item);
+            if (external != null) {
+                server = external.server();
+                credential = external.credential();
+            } else if ("v2node".equals(str(server.get("type"))) && server.get("protocol") != null) {
                 server = new LinkedHashMap<>(item);
                 server.put("type", str(server.get("protocol")));
             }
             String type = str(server.get("type"));
             String line = switch (type) {
                 case "shadowsocks" -> SS_CIPHERS.contains(str(server.get("cipher")))
-                        ? buildShadowsocks(user.getUuid(), server) : "";
-                case "vmess" -> buildVmess(user.getUuid(), server);
-                case "trojan" -> buildTrojan(user.getUuid(), server);
-                case "anytls" -> buildAnyTls(user.getUuid(), server);
+                        ? buildShadowsocks(credential, server) : "";
+                case "vmess" -> buildVmess(credential, server);
+                case "trojan" -> buildTrojan(credential, server);
+                case "anytls" -> buildAnyTls(credential, server);
                 default -> "";
             };
             if (!line.isEmpty()) {

@@ -69,6 +69,32 @@ class QuantumultXBuilderTest {
         assertTrue(conf.contains("static=Proxy, node-a"));
     }
 
+    @Test
+    void build_externalVless_emitsServerLocalWithNodeUuid() {
+        Map<String, Object> outbound = new java.util.LinkedHashMap<>();
+        outbound.put("type", "vless");
+        outbound.put("server", "1.2.3.4");
+        outbound.put("server_port", 443);
+        outbound.put("uuid", "node-vless-uuid");
+        outbound.put("tls", Map.of(
+                "enabled", true,
+                "server_name", "www.example.com",
+                "reality", Map.of("enabled", true, "public_key", "pk", "short_id", "abcd")
+        ));
+        Map<String, Object> external = Map.of(
+                "type", "external",
+                "external", true,
+                "name", "⚠️ 香港VLESS",
+                "singbox_outbound", outbound
+        );
+        String conf = QuantumultXBuilder.build(List.of(external), "user-uuid", "example.com");
+        assertTrue(conf.contains("vless=1.2.3.4:443"));
+        assertTrue(conf.contains("password=node-vless-uuid"));
+        assertTrue(conf.contains("tag=⚠️ 香港VLESS"));
+        assertTrue(conf.contains("reality-base64-pubkey=pk"));
+        assertFalse(conf.contains("password=user-uuid"));
+    }
+
     private static Map<String, Object> ss(String name) {
         return Map.of(
                 "type", "shadowsocks",

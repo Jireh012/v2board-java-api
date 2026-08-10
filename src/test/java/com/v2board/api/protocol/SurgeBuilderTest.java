@@ -79,6 +79,39 @@ class SurgeBuilderTest {
         assertTrue(conf.contains("Proxy = select, node-a"));
     }
 
+    @Test
+    void build_externalAndHysteria2_emitsProxyLinesWithNodePassword() {
+        User user = sampleUser();
+        Map<String, Object> outbound = Map.of(
+                "type", "shadowsocks",
+                "tag", "old",
+                "server", "8.8.8.8",
+                "server_port", 10086,
+                "method", "aes-256-gcm",
+                "password", "node-ss-pw"
+        );
+        Map<String, Object> external = Map.of(
+                "type", "external",
+                "external", true,
+                "name", "⚠️ 香港外链",
+                "singbox_outbound", outbound
+        );
+        Map<String, Object> hy2 = Map.of(
+                "type", "hysteria2",
+                "name", "面板HY2",
+                "host", "9.9.9.9",
+                "port", 8443,
+                "server_name", "hy.example.com",
+                "insecure", 1
+        );
+        String conf = SurgeBuilder.build(List.of(external, hy2), user, "App", "https://x/s", "x.com");
+        assertTrue(conf.lines().anyMatch(l -> l.contains("⚠️ 香港外链=ss") && l.contains("password=node-ss-pw")),
+                "external ss must use node password");
+        assertTrue(conf.lines().anyMatch(l -> l.contains("面板HY2=hysteria2") && l.contains("password=uuid-1")),
+                "panel hy2 uses user uuid");
+        assertTrue(conf.contains("9.9.9.9"));
+    }
+
     private static User sampleUser() {
         User user = new User();
         user.setUuid("uuid-1");

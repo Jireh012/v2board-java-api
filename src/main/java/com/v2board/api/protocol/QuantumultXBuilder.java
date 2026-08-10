@@ -1,5 +1,6 @@
 package com.v2board.api.protocol;
 
+import com.v2board.api.service.external.ExternalServerAdapter;
 import com.v2board.api.util.Helper;
 
 import java.io.InputStream;
@@ -57,8 +58,13 @@ public final class QuantumultXBuilder {
             return;
         }
         for (Map<String, Object> item : servers) {
+            String credential = uuid;
             Map<String, Object> server = item;
-            if ("v2node".equals(str(server.get("type"))) && server.get("protocol") != null) {
+            ExternalServerAdapter.Resolved external = ExternalServerAdapter.resolve(item);
+            if (external != null) {
+                server = external.server();
+                credential = external.credential();
+            } else if ("v2node".equals(str(server.get("type"))) && server.get("protocol") != null) {
                 server = new LinkedHashMap<>(item);
                 server.put("type", str(server.get("protocol")));
             }
@@ -68,11 +74,11 @@ public final class QuantumultXBuilder {
             }
             String type = str(server.get("type"));
             String line = switch (type) {
-                case "shadowsocks" -> buildShadowsocks(uuid, server);
-                case "vmess" -> buildVmess(uuid, server);
-                case "vless" -> buildVless(uuid, server);
-                case "trojan" -> buildTrojan(uuid, server);
-                case "anytls" -> buildAnyTls(uuid, server);
+                case "shadowsocks" -> buildShadowsocks(credential, server);
+                case "vmess" -> buildVmess(credential, server);
+                case "vless" -> buildVless(credential, server);
+                case "trojan" -> buildTrojan(credential, server);
+                case "anytls" -> buildAnyTls(credential, server);
                 default -> "";
             };
             if (!line.isEmpty()) {
