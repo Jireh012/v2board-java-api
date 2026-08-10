@@ -63,14 +63,10 @@ public class ClientController {
      */
     public String subscribe(
             @RequestParam(required = false) String flag,
-            @RequestParam(required = false) String rule,
             HttpServletRequest request,
             HttpServletResponse response) {
-        
-        String ruleParam = rule;
-        if (ruleParam == null || ruleParam.isBlank()) {
-            ruleParam = request.getParameter("rule");
-        }
+        // rule 仅从 query 读取，保持动态路由反射签名 (flag, request, response)
+        String ruleParam = request.getParameter("rule");
         String profile = (ruleParam != null && !ruleParam.isBlank())
                 ? ruleParam
                 : configService.getSubscribeRuleProfile();
