@@ -96,6 +96,8 @@ Paths (registered by `NodeApiRouteRegistrar`):
 
 Also returns `online`, `last_check_at`, `last_push_at`.
 
+Admin `save` must **not** persist these: `AdminNodeController.applyFields` strips them and uses lenient Jackson (`FAIL_ON_UNKNOWN_PROPERTIES=false`). UI `doSave` also deletes them after `openEdit` spreads the list row.
+
 ### 4. Tests Required
 
 - `ServerServiceAvailableStatusTest` — three-state threshold.

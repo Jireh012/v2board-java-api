@@ -6,11 +6,13 @@ import com.v2board.api.common.BusinessException;
 import com.v2board.api.mapper.*;
 import com.v2board.api.model.*;
 import com.v2board.api.util.Helper;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
+import java.util.Set;
 
 /**
  * 对齐 PHP Admin\Server 下各协议 Controller (Vmess/Vless/Trojan/Shadowsocks/Hysteria/Tuic/AnyTLS/V2node)
@@ -27,6 +29,17 @@ import java.util.*;
 @RestController
 @RequestMapping("/api/v1/admin/server")
 public class AdminNodeController {
+
+    /** Admin list attaches these; edit form may echo them back on save. */
+    private static final Set<String> NON_PERSISTED_BODY_KEYS = Set.of(
+            "type",
+            "online",
+            "is_online",
+            "last_check_at",
+            "last_push_at",
+            "available_status",
+            "install_command"
+    );
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -395,11 +408,12 @@ public class AdminNodeController {
      * 使用 ObjectMapper 来处理 JSON 数据和类型转换
      */
     private void applyFields(Object entity, Map<String, Object> body, Class<?> modelClass) {
-        // 不拷贝 id、created_at、updated_at
+        // 不拷贝 id、created_at、updated_at 与管理端运行时字段
         Map<String, Object> filtered = new HashMap<>(body);
         filtered.remove("id");
         filtered.remove("created_at");
         filtered.remove("updated_at");
+        NON_PERSISTED_BODY_KEYS.forEach(filtered::remove);
 
         try {
             // 先将现有 entity 序列化为 map，再合并新值
@@ -407,10 +421,12 @@ public class AdminNodeController {
             Map<String, Object> existingMap = objectMapper.readValue(existingJson,
                     objectMapper.getTypeFactory().constructMapType(Map.class, String.class, Object.class));
             existingMap.putAll(filtered);
-            // 不覆盖 id
-            existingMap.remove("type"); // 前端可能附加 type 字段
+            NON_PERSISTED_BODY_KEYS.forEach(existingMap::remove);
 
-            Object merged = objectMapper.convertValue(existingMap, modelClass);
+            // Lenient: UI may still send display-only keys after getNodes runtime attach
+            ObjectMapper lenient = objectMapper.copy()
+                    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+            Object merged = lenient.convertValue(existingMap, modelClass);
             // 将 merged 的所有字段拷贝回 entity
             for (java.lang.reflect.Field f : modelClass.getDeclaredFields()) {
                 f.setAccessible(true);
