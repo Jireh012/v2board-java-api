@@ -36,7 +36,8 @@ class ClashMetaBuilderTest {
         assertTrue(yaml.contains("📹 油管视频"), "youtube group missing");
         assertTrue(yaml.contains("🌍 国外媒体"), "foreign media missing");
         assertTrue(yaml.contains("🐟 漏网之鱼"), "final group missing");
-        assertTrue(yaml.contains("GEOSITE"), "local geosite rules missing");
+        assertTrue(yaml.contains("GEOSITE,category-ads-all"), "ads geosite missing");
+        assertFalse(yaml.contains("GEOSITE,category-ad,"), "category-ad is not in Loyalsoldier GeoSite.dat");
         assertFalse(yaml.toLowerCase().contains("rule-providers"), "must not use rule-providers");
         assertFalse(yaml.contains("raw.githubusercontent.com"), "must not depend on GitHub raw");
         assertTrue(yaml.contains("香港01"), "hk node missing");
