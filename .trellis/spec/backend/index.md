@@ -56,8 +56,8 @@ When changing admin servers, JSON columns, or external subscribe:
 - [ ] Read [admin-user.md](./admin-user.md) if touching admin user fields (`remarks`, traffic bytes) or ticket reply
 - [ ] Read [admin-content.md](./admin-content.md) if touching admin notice/knowledge APIs or sort payload
 - [ ] Read [external-subscribe.md](./external-subscribe.md) if changing sync status, locks, or admin sync APIs
-- [ ] Read [subscribe-delivery.md](./subscribe-delivery.md) if changing `getSubscribe`, subscribe path/URL, or client node naming
-- [ ] Read [subscribe-rules.md](./subscribe-rules.md) if changing rule templates, sanitize pipeline, or subscribe builders' template resolve
+- [ ] Read [subscribe-delivery.md](./subscribe-delivery.md) if changing `getSubscribe`, subscribe path/URL, client node naming, or `ClientController.subscribe` **method signature** (dynamic route reflection)
+- [ ] Read [subscribe-rules.md](./subscribe-rules.md) if changing rule templates, `?rule=` / `subscribe.rule_profile`, sanitize pipeline, bake scripts, or builders' template resolve
 - [ ] Read [public-site-config.md](./public-site-config.md) if changing fixed `/config`, public flags, or bootstrap envelope fields
 - [ ] Read [panel-api-sm4.md](./panel-api-sm4.md) if changing client API prefixes, action aliases, payment notify prefix, `PanelSm4Filter`, or `X-A`
 - [ ] New panel endpoint → add classicRel to `PanelApiActionCatalog` (wire is `{prefix}/{alias}` only)

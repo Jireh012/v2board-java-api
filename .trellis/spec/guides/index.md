@@ -59,6 +59,9 @@ v2node 对照上游（code-spec）：[v2node-upstream.md](../backend/v2node-upst
 - [ ] Reading PHP-written JSON columns into typed Java lists (`group_id`, etc.) → [database-guidelines.md](../backend/database-guidelines.md)
 - [ ] Persisting job status in DB while locking in memory → [external-subscribe.md](../backend/external-subscribe.md)
 - [ ] Building user `subscribe_url` or marking panel/external node names → [subscribe-delivery.md](../backend/subscribe-delivery.md)
+- [ ] Changing `ClientController.subscribe` parameters → keep reflection signature `(flag, request, response)`; optional query via `request.getParameter` → [subscribe-delivery.md](../backend/subscribe-delivery.md) Hot-reload scenario
+- [ ] Subscribe rule templates / `?rule=` profiles / sanitize sync → [subscribe-rules.md](../backend/subscribe-rules.md)
+
 - [ ] Panel anti-probe / domain switch ops → repo [`docs/ops-panel-anti-block.md`](../../../docs/ops-panel-anti-block.md) + save-time `subscribe_path` rules in subscribe-delivery
 - [ ] Public passport flags (`email_verify` / `safe_mode_enable`) or SMTP from admin config → [public-site-config.md](../backend/public-site-config.md) + [passport-email.md](../backend/passport-email.md) (UI: sibling `v2board-ui` `site-brand.md`)
 - [ ] Telegram webhook / bind / ticket notify → [telegram.md](../backend/telegram.md); public `telegram_discuss_link` stays on SM4 public config (never bot token)

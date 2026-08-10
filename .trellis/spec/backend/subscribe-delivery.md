@@ -219,6 +219,8 @@ Flatten maps sing-box outbound → panel-shaped fields (`type`/`host`/`port`/`ci
 
 Panel `type=hysteria2` (and `hysteria`+`version=2`) must also emit hy2 lines on Surge / Loon.
 
+> **Gotcha**: Most nodes may be `type=external` with only `singbox_outbound` / `clash_proxy`. Conf builders that ignore `ExternalServerAdapter` will appear to “only show 1 panel anytls” while Clash looks full.
+
 ### 4. Wrong vs Correct
 
 #### Wrong
@@ -251,13 +253,26 @@ if (ext != null) {
 
 - Trigger: Admin changes `site.subscribe_path` and expects the new path to accept GET subscribe **without process restart**.
 - Cross-layer: `ConfigService.save` → `SubscribeRouteRegistrar.refresh` + `ClientTokenInterceptor` path match.
+- Also: any change to `ClientController.subscribe` method **Java signature** (extra `@RequestParam` counts).
 
 ### 2. Signatures
 
 ```java
-// SubscribeRouteRegistrar
+// SubscribeRouteRegistrar — reflection MUST match exactly
+ClientController.class.getMethod(
+    "subscribe",
+    String.class,                          // flag
+    HttpServletRequest.class,
+    HttpServletResponse.class);
+
 void refresh(); // unregister old RequestMappingInfo, register GET path from ConfigService.getSubscribePath()
 static String normalizePath(String path);
+
+// ClientController — keep this arity; optional query params via request.getParameter(...)
+public String subscribe(
+    @RequestParam(required = false) String flag,
+    HttpServletRequest request,
+    HttpServletResponse response);
 
 // ConfigService.save — when body contains "site"
 subscribeRouteRegistrar.refresh();
@@ -273,6 +288,7 @@ Token gate: `ClientTokenInterceptor` registered on `/**`, early-returns unless U
 | Storage | DB `site.subscribe_url` may be comma **or** newline separated; `normalizeSubscribeBases` splits `[,\\n\\r]+`, persists normalized comma list for bases |
 | Path change | Old path → 404; new path → token interceptor + `ClientController.subscribe` |
 | Boot | `ApplicationRunner` registers path from DB/yml once |
+| Method signature | Extra method parameters break `getMethod` → log `Failed to refresh subscribe route` → custom path **404** until fixed |
 
 ### 4. Validation & Error Matrix
 
@@ -285,39 +301,48 @@ Token gate: `ClientTokenInterceptor` registered on `/**`, early-returns unless U
 | Save `site.subscribe_path` empty/blank | Allowed; runtime `getSubscribePath()` → default |
 | Save non-empty path | `ConfigService.validateSubscribePathInSaveBody`：trim、补前导 `/`、去尾 `/`；须匹配 `^/[A-Za-z0-9._~/-]+$`，无 `..`，长度 ≤128；不得与 `/api/v1/user|admin|passport|guest|server` 前缀或当前 `secure_path` 段冲突 |
 | Illegal / conflicting path on save | `BusinessException(500, "订阅路径不合法：…")`，拒绝写入 |
+| `subscribe` signature ≠ registrar reflection | Boot/refresh throws `NoSuchMethodException`; route not registered |
 
 运维藏源站 / 域名切换基线见仓库 [`docs/ops-panel-anti-block.md`](../../../docs/ops-panel-anti-block.md)。
 
 ### 5. Good/Base/Bad Cases
 
 - Good: Save path `/s` → `GET /s?token=…` works; old `/api/v1/client/subscribe` 404.
-- Base: Default path after boot.
-- Bad: Register route from `@Value` only at startup; interceptor still bound to old path.
+- Base: Default path after boot; log `Subscribe route active at GET …`.
+- Bad: Add `@RequestParam String rule` to `subscribe` method → registrar fails → `/api/rss_subscribe` 404.
 
 ### 6. Tests Required
 
 - Unit: `SubscribeRouteRegistrarTest.normalizePath_*` + refresh unregisters previous mapping
 - Unit: `ConfigServiceSubscribePathValidationTest` — empty OK; illegal/`..`/reserved prefix/`secure_path` collision rejected; valid custom normalized
 - Manual/integration: save custom path in admin → curl new path 403 without token, 200 with valid token; default path 404
+- Smoke after editing `ClientController.subscribe`: boot log contains `Subscribe route active`, not `Failed to refresh`
 
 ### 7. Wrong vs Correct
 
 #### Wrong
 
 ```java
-@Value("${v2board.subscribe-path:}")
-private String subscribePath;
-// register once in ContextRefreshedEvent — DB edits ignored until restart
-registry.addInterceptor(token).addPathPatterns(subscribePath);
+public String subscribe(
+    @RequestParam(required = false) String flag,
+    @RequestParam(required = false) String rule, // breaks getMethod(String, Request, Response)
+    HttpServletRequest request,
+    HttpServletResponse response) { ... }
 ```
 
 #### Correct
 
 ```java
+public String subscribe(
+    @RequestParam(required = false) String flag,
+    HttpServletRequest request,
+    HttpServletResponse response) {
+    String rule = request.getParameter("rule"); // optional query, not a method param
+    ...
+}
 // Route: ConfigService.getSubscribePath() + registerMapping / unregisterMapping
 // Interceptor: match request URI to getSubscribePath() at runtime
 ```
-
 ---
 
 ## Design Decision: Request-origin fallback
