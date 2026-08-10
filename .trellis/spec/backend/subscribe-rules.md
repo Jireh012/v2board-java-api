@@ -300,6 +300,7 @@ rules:
 |------------|----------|
 | Empty proxies / outbounds (or tag `#…` in sing-box) | Fill with **all** node names |
 | Contains regex filter (region / Netflix name patterns) | Fill matches only; empty region groups may be removed |
+| After empty-group removal | Strip dangling member refs from remaining groups (Mihomo fails on `'🇨🇳 台湾节点' not found`) |
 | Policy-only (references other groups / DIRECT / REJECT) | **Do not** append all nodes |
 
 Shared helpers: `ClashMetaBuilder.mergeProxyGroup`, `SingboxBuilder.addProxies`, `ConfTemplatePlaceholders.applyProxyGroups` (Surge/Surfboard/QX/Loon placeholders `$proxy_group` / `$proxy_group_{hk,tw,…}`).

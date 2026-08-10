@@ -116,6 +116,58 @@ class ClashMetaBuilderTest {
     }
 
     @Test
+    void danglingRefs_prunedWhenRegionGroupRemoved() {
+        List<Map<String, Object>> servers = List.of(Map.of(
+                "type", "shadowsocks",
+                "name", "⚠️ 🇭🇰【亚洲】香港01丨直连1",
+                "host", "1.2.3.4",
+                "port", 443,
+                "cipher", "aes-256-gcm",
+                "created_at", 0L
+        ));
+        String template = """
+                proxies: []
+                proxy-groups:
+                  - name: "🚀 节点选择"
+                    type: select
+                    proxies:
+                      - "🇭🇰 香港节点"
+                      - "🇨🇳 台湾节点"
+                      - "🚀 手动切换"
+                      - DIRECT
+                  - name: "🚀 手动切换"
+                    type: select
+                    proxies: []
+                  - name: "🇭🇰 香港节点"
+                    type: select
+                    proxies:
+                      - "(港|HK|hk|Hong Kong|HongKong|hongkong)"
+                  - name: "🇨🇳 台湾节点"
+                    type: select
+                    proxies:
+                      - "(台|新北|彰化|TW|Taiwan)"
+                  - name: "🎥 奈飞视频"
+                    type: select
+                    proxies:
+                      - "🎥 奈飞节点"
+                      - "🚀 节点选择"
+                      - DIRECT
+                  - name: "🎥 奈飞节点"
+                    type: select
+                    proxies:
+                      - "(NF|奈飞|Netflix|NETFLIX)"
+                rules:
+                  - MATCH,🚀 节点选择
+                """;
+        String yaml = ClashMetaBuilder.buildFromContent(servers, "uuid", "App", template);
+        assertTrue(yaml.contains("🇭🇰 香港节点"));
+        assertFalse(yaml.contains("🇨🇳 台湾节点"), "empty TW group and dangling refs must be gone");
+        assertFalse(yaml.contains("🎥 奈飞节点"), "empty Netflix filter group must be gone");
+        assertTrue(yaml.contains("🎥 奈飞视频"));
+        assertTrue(yaml.contains("香港01") || yaml.contains("香港节点"));
+    }
+
+    @Test
     void emptyProxies_filledWithAllNodes() {
         List<Map<String, Object>> servers = List.of(Map.of(
                 "type", "shadowsocks",

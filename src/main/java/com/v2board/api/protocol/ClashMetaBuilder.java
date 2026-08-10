@@ -82,14 +82,8 @@ public final class ClashMetaBuilder {
         for (Map<String, Object> group : groups) {
             mergeProxyGroup(group, proxies);
         }
-        groups.removeIf(g -> {
-            String name = String.valueOf(g.get("name"));
-            if (mainGroupName.equals(name) || "$app_name".equals(name) || MAIN_SELECT_GROUP.equals(name)) {
-                return false;
-            }
-            Object p = g.get("proxies");
-            return !(p instanceof List<?> list) || list.isEmpty();
-        });
+        // 空地区组删除后，其它组 / rules 里可能仍引用已删除组名 → Mihomo: "'🇨🇳 台湾节点' not found"
+        pruneEmptyGroupsAndDanglingRefs(groups, proxies, mainGroupName);
         ensureMainProxyGroup(groups, mainGroupName, proxies);
         config.put("proxy-groups", groups);
         RuleTemplateSanitizer.normalizeHealthCheckUrls(config);
@@ -141,6 +135,58 @@ public final class ClashMetaBuilder {
     }
 
     private static final String MAIN_SELECT_GROUP = "🚀 节点选择";
+
+    private static final Set<String> BUILTIN_PROXY_NAMES = Set.of(
+            "DIRECT", "REJECT", "REJECT-DROP", "PASS", "COMPATIBLE", "GLOBAL");
+
+    /**
+     * Remove empty non-main groups, then strip dangling member refs (and drop groups that become empty).
+     * Iterates until stable so chain-empty groups are cleaned.
+     */
+    private static void pruneEmptyGroupsAndDanglingRefs(List<Map<String, Object>> groups,
+                                                        List<String> proxyNames,
+                                                        String mainGroupName) {
+        boolean changed = true;
+        while (changed) {
+            changed = false;
+            int before = groups.size();
+            groups.removeIf(g -> {
+                String name = String.valueOf(g.get("name"));
+                if (mainGroupName.equals(name) || "$app_name".equals(name) || MAIN_SELECT_GROUP.equals(name)) {
+                    return false;
+                }
+                Object p = g.get("proxies");
+                return !(p instanceof List<?> list) || list.isEmpty();
+            });
+            if (groups.size() != before) {
+                changed = true;
+            }
+            Set<String> valid = new HashSet<>(proxyNames);
+            valid.addAll(BUILTIN_PROXY_NAMES);
+            for (Map<String, Object> g : groups) {
+                if (g.get("name") != null) {
+                    valid.add(String.valueOf(g.get("name")));
+                }
+            }
+            for (Map<String, Object> g : groups) {
+                Object p = g.get("proxies");
+                if (!(p instanceof List<?> list)) {
+                    continue;
+                }
+                List<String> kept = new ArrayList<>();
+                for (Object o : list) {
+                    String ref = String.valueOf(o);
+                    if (valid.contains(ref)) {
+                        kept.add(ref);
+                    }
+                }
+                if (kept.size() != list.size()) {
+                    g.put("proxies", kept);
+                    changed = true;
+                }
+            }
+        }
+    }
 
     private static void ensureMainProxyGroup(List<Map<String, Object>> groups, String mainGroupName,
                                              List<String> proxyNames) {
