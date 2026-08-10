@@ -126,6 +126,8 @@ class Acl4ssrTemplateMaterializerTest {
         assertTrue(out.contains("type: url-test"));
         assertTrue(out.contains("(港|HK)"));
         assertFalse(out.contains("- http://www.gstatic.com/generate_204"));
+        assertTrue(out.contains("url: https://www.gstatic.com/generate_204")
+                || out.contains("url: \"https://www.gstatic.com/generate_204\""));
         assertFalse(out.contains("- 300,,50"));
         assertFalse(out.contains("- '300"));
     }

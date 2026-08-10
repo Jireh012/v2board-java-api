@@ -101,7 +101,7 @@ public final class Acl4ssrTemplateMaterializer {
             }
             row.put("proxies", proxies);
             if ("url-test".equals(type) || "fallback".equals(type) || "load-balance".equals(type)) {
-                row.put("url", "http://www.gstatic.com/generate_204");
+                row.put("url", "https://www.gstatic.com/generate_204");
                 row.put("interval", 300);
                 if ("url-test".equals(type)) {
                     row.put("tolerance", 50);
@@ -191,7 +191,7 @@ public final class Acl4ssrTemplateMaterializer {
                 }
                 sb.append(g.name()).append(" = ").append(type).append(", ")
                         .append(String.join(", ", members))
-                        .append(", url=http://www.gstatic.com/generate_204, interval=300\n");
+                        .append(", url=https://www.gstatic.com/generate_204, interval=300\n");
             } else {
                 sb.append(g.name()).append(" = select");
                 if (!members.isEmpty()) {
@@ -248,7 +248,7 @@ public final class Acl4ssrTemplateMaterializer {
         if (!out.toLowerCase(Locale.ROOT).contains("[policy]")) {
             out = """
                     [general]
-                    server_check_url=http://www.gstatic.com/generate_204
+                    server_check_url=https://www.gstatic.com/generate_204
 
                     [dns]
                     server=223.5.5.5
