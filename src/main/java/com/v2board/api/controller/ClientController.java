@@ -4,6 +4,7 @@ import com.v2board.api.model.User;
 import com.v2board.api.protocol.ProtocolHandler;
 import com.v2board.api.protocol.GeneralHandler;
 import com.v2board.api.service.ConfigService;
+import com.v2board.api.service.RuleTemplateService;
 import com.v2board.api.service.ServerService;
 import com.v2board.api.service.UserService;
 import com.v2board.api.service.external.ExternalSubscribeNodeService;
@@ -62,9 +63,18 @@ public class ClientController {
      */
     public String subscribe(
             @RequestParam(required = false) String flag,
+            @RequestParam(required = false) String rule,
             HttpServletRequest request,
             HttpServletResponse response) {
         
+        String ruleParam = rule;
+        if (ruleParam == null || ruleParam.isBlank()) {
+            ruleParam = request.getParameter("rule");
+        }
+        String profile = (ruleParam != null && !ruleParam.isBlank())
+                ? ruleParam
+                : configService.getSubscribeRuleProfile();
+        RuleTemplateService.bindRequestProfile(profile);
         try {
             // 从拦截器设置的属性中获取用户
             User user = (User) request.getAttribute("user");
@@ -105,7 +115,8 @@ public class ClientController {
                 flag = flag.toLowerCase();
             }
             
-            logger.debug("Using flag: {}, User-Agent: {}", flag, userAgent);
+            logger.debug("Using flag: {}, User-Agent: {}, rule_profile: {}",
+                    flag, userAgent, RuleTemplateService.currentRequestProfile());
             
             // 处理sing-box特殊逻辑
             if (flag.contains("sing")) {
@@ -115,6 +126,7 @@ public class ClientController {
                 if (handler != null) {
                     logger.debug("Using sing-box handler: {}", handler.getClass().getSimpleName());
                     handler.applyResponseHeaders(user, response);
+                    response.setHeader("subscription-rule-profile", RuleTemplateService.currentRequestProfile());
                     return handler.handle(user, servers);
                 }
             }
@@ -133,12 +145,15 @@ public class ClientController {
             logger.debug("Using protocol handler: {}", handler.getClass().getSimpleName());
             
             handler.applyResponseHeaders(user, response);
+            response.setHeader("subscription-rule-profile", RuleTemplateService.currentRequestProfile());
             String result = handler.handle(user, servers);
             logger.debug("Generated subscribe content length: {}", result != null ? result.length() : 0);
             return result;
         } catch (Exception e) {
             logger.error("Error processing subscribe request", e);
             return "";
+        } finally {
+            RuleTemplateService.clearRequestProfile();
         }
     }
     

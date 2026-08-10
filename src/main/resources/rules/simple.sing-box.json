@@ -1,0 +1,77 @@
+{
+  "dns": {
+    "servers": [
+      { "type": "local", "tag": "local" },
+      { "type": "udp", "tag": "remote", "server": "1.1.1.1" },
+      { "type": "udp", "tag": "cn", "server": "223.5.5.5" }
+    ],
+    "rules": [
+      {
+        "domain_suffix": [".cn", ".中国"],
+        "action": "route",
+        "server": "cn"
+      }
+    ],
+    "final": "remote"
+  },
+  "inbounds": [
+    {
+      "tag": "mixed-in",
+      "type": "mixed",
+      "listen": "127.0.0.1",
+      "listen_port": 2334,
+      "users": []
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "DIRECT",
+      "type": "direct",
+      "domain_resolver": { "server": "local" }
+    },
+    {
+      "tag": "🚀 节点选择",
+      "type": "selector",
+      "interrupt_exist_connections": true,
+      "outbounds": ["♻️ 自动选择", "DIRECT"]
+    },
+    {
+      "tag": "♻️ 自动选择",
+      "type": "urltest",
+      "outbounds": ["#all"],
+      "url": "http://www.gstatic.com/generate_204",
+      "interval": "5m"
+    },
+    {
+      "tag": "🐟 漏网之鱼",
+      "type": "selector",
+      "outbounds": ["🚀 节点选择", "♻️ 自动选择", "DIRECT"]
+    }
+  ],
+  "route": {
+    "rules": [
+      { "action": "sniff" },
+      { "protocol": "dns", "action": "hijack-dns" },
+      {
+        "domain_keyword": ["adservice", "doubleclick", "googlesyndication"],
+        "action": "reject"
+      },
+      { "ip_is_private": true, "action": "route", "outbound": "DIRECT" },
+      {
+        "domain_suffix": [".cn", ".中国", "baidu.com", "qq.com"],
+        "action": "route",
+        "outbound": "DIRECT"
+      }
+    ],
+    "auto_detect_interface": true,
+    "final": "🐟 漏网之鱼",
+    "default_domain_resolver": { "server": "remote" }
+  },
+  "experimental": {
+    "clash_api": {
+      "default_mode": "rule",
+      "external_controller": "127.0.0.1:9090",
+      "secret": ""
+    }
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "base_url": "https://cdn.jsdelivr.net/gh/ACL4SSR/ACL4SSR@master/Clash",
+  "lists": [
+    { "file": "BanAD.list", "surge_policy": "🛑 广告拦截", "qx_policy": "reject" },
+    { "file": "BanProgramAD.list", "surge_policy": "🛑 广告拦截", "qx_policy": "reject" },
+    { "file": "YouTube.list", "surge_policy": "📹 油管视频", "qx_policy": "📹 油管视频" },
+    { "file": "Netflix.list", "surge_policy": "🎥 奈飞视频", "qx_policy": "🎥 奈飞视频" },
+    { "file": "Telegram.list", "surge_policy": "📲 电报消息", "qx_policy": "📲 电报消息" },
+    { "file": "OpenAi.list", "surge_policy": "💬 Ai平台", "qx_policy": "💬 Ai平台" },
+    { "file": "Apple.list", "surge_policy": "🍎 苹果服务", "qx_policy": "🍎 苹果服务" },
+    { "file": "Microsoft.list", "surge_policy": "Ⓜ️ 微软服务", "qx_policy": "Ⓜ️ 微软服务" },
+    { "file": "ProxyMedia.list", "surge_policy": "🌍 国外媒体", "qx_policy": "🌍 国外媒体" },
+    { "file": "ChinaMedia.list", "surge_policy": "🌏 国内媒体", "qx_policy": "🌏 国内媒体" },
+    { "file": "ChinaDomain.list", "surge_policy": "🎯 全球直连", "qx_policy": "direct" },
+    { "file": "ProxyGFWlist.list", "surge_policy": "🚀 节点选择", "qx_policy": "🚀 节点选择" }
+  ],
+  "targets": [
+    { "path": "src/main/resources/rules/default.surge.conf", "dialect": "surge" },
+    { "path": "src/main/resources/rules/default.surfboard.conf", "dialect": "surge" },
+    { "path": "src/main/resources/rules/default.loon.conf", "dialect": "surge" },
+    { "path": "src/main/resources/rules/default.quantumultx.conf", "dialect": "quantumultx" }
+  ],
+  "footer_surge": [
+    "IP-CIDR,192.168.0.0/16,DIRECT",
+    "IP-CIDR,10.0.0.0/8,DIRECT",
+    "IP-CIDR,172.16.0.0/12,DIRECT",
+    "IP-CIDR,127.0.0.0/8,DIRECT",
+    "IP-CIDR,100.64.0.0/10,DIRECT",
+    "DOMAIN-SUFFIX,cn,DIRECT",
+    "GEOIP,CN,🎯 全球直连"
+  ],
+  "footer_qx": [
+    "ip-cidr, 192.168.0.0/16, direct",
+    "ip-cidr, 10.0.0.0/8, direct",
+    "ip-cidr, 172.16.0.0/12, direct",
+    "ip-cidr, 127.0.0.0/8, direct",
+    "host-suffix, cn, direct",
+    "geoip, cn, 🎯 全球直连"
+  ]
+}

@@ -480,6 +480,15 @@ public class ConfigService {
         return showSubscribeExpire != null ? showSubscribeExpire : 5;
     }
 
+    /**
+     * 默认订阅规则档位：{@code full}（完整 ACL4SSR）/ {@code simple} / {@code nodes}。
+     * 请求 {@code ?rule=} 优先于本配置。
+     */
+    public String getSubscribeRuleProfile() {
+        String v = getStringFromGroup("subscribe", "rule_profile");
+        return RuleTemplateService.normalizeProfile(v);
+    }
+
     public int getAllowNewPeriod() {
         Integer v = intFromGroup("subscribe", "allow_new_period");
         if (v != null) {
@@ -1508,7 +1517,8 @@ public class ConfigService {
         putPhpSection(defaults, "subscribe", flat,
                 "plan_change_enable", "reset_traffic_method", "surplus_enable", "allow_new_period",
                 "new_order_event_id", "renew_order_event_id", "change_order_event_id",
-                "show_info_to_server_enable", "show_subscribe_method", "show_subscribe_expire");
+                "show_info_to_server_enable", "show_subscribe_method", "show_subscribe_expire",
+                "rule_profile");
         putPhpSection(defaults, "frontend", flat,
                 "frontend_theme", "frontend_theme_sidebar", "frontend_theme_header",
                 "frontend_theme_color", "frontend_background_url");
@@ -1596,6 +1606,7 @@ public class ConfigService {
         subscribe.put("show_info_to_server_enable", Boolean.TRUE.equals(showInfoToServerEnable) ? 1 : 0);
         subscribe.put("show_subscribe_method", showSubscribeMethod != null ? showSubscribeMethod : 0);
         subscribe.put("show_subscribe_expire", showSubscribeExpire != null ? showSubscribeExpire : 5);
+        subscribe.put("rule_profile", "full");
         data.put("subscribe", subscribe);
         data.put("frontend", mutableMap(
                 "frontend_theme", "v2board",

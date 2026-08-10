@@ -16,27 +16,40 @@
 **RuleTemplateService** (`com.v2board.api.service.RuleTemplateService`):
 
 ```java
-String resolve(String format);                    // Redis → DB → classpath seed
+String resolve(String format);                    // Redis → DB → classpath seed (full); or profile seed
 Map<String, Object> fetch(String format);         // admin view (content + meta)
 Map<String, Object> save(String format, String content, String sourceUrl, String updateSource);
 Map<String, Object> sync(String format, String url);
 Map<String, Object> restore(String format);       // delete DB row + invalidate cache
+static void bindRequestProfile(String profile);   // full|simple|nodes for current request
+static void clearRequestProfile();
 ```
 
 **Formats** (PK `format`): `clash` | `stash` | `surge` | `surfboard` | `singbox` | `quantumultx` | `loon`.
 
 Aliases normalized at resolve: `meta`/`verge`/`nyanpasu` → `clash`; `sing-box` → `singbox`.
 
+**Rule profiles** (`?rule=` or DB `subscribe.rule_profile`):
+
+| Profile | Resolve |
+|---------|---------|
+| `full` (default) | Redis → DB → `rules/default.*` |
+| `simple` | classpath only `rules/simple.*` |
+| `nodes` | classpath only `rules/nodes.*` |
+
+Admin save/sync edits **full** only. Response header: `subscription-rule-profile`.
+
 ### 3. Contracts
 
 | Piece | Behavior |
 |-------|----------|
 | Redis key | `{prefix}subscribe:rule:{format}` (TTL 24h) |
-| Resolve order | Redis hit → DB row content → classpath `rules/default.*` |
+| Resolve order (`full`) | Redis hit → DB row content → classpath `rules/default.*` |
 | Stash | Prefer `stash` row / `default.stash.yaml`; else fall back to clash resolve |
 | Sing-box old (`flag=sing`) | Always classpath `default.sing-box.old.json` (admin custom covers ≥1.12 only) |
 | Write path | Sanitize → upsert DB → `DEL` cache → re-set cache with new content |
 | Restore | `DELETE` by format → invalidate → next resolve uses seed |
+| Sync product note | Target must be localized full templates; Online rule-providers are stripped / seed-fallback; response may include `stripped_remote`, `used_seed_fallback`, `sync_hint` |
 
 **Classpath seeds**
 
@@ -208,3 +221,11 @@ Manual apply: `src/main/resources/db/v2_subscribe_rule_template.sql`.
 **Context**: Stash clients consume Clash Meta YAML.
 
 **Decision**: Optional independent `stash` row; otherwise resolve falls back to clash content/seed so one edit covers both unless operators override stash.
+
+---
+
+## Maintenance: bake inline rules + Clash GEOSITE allowlist
+
+- Markers `# BEGIN-ACL4SSR-BAKE` / `# END-ACL4SSR-BAKE` in Surge / Surfboard / Loon / Quantumult X **full** seeds.
+- Scripts: `scripts/subscribe-rules/bake_inline_rules.py` (`--check` / `--bake`), `check_clash_geosite.py`, allowlist `rules/geosite-allowlist.txt`.
+- Do **not** put remote rule-providers into subscribe output; refresh by baking into classpath seeds (or admin full template).

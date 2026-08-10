@@ -23,7 +23,14 @@ public final class RuleTemplateSanitizer {
     private RuleTemplateSanitizer() {
     }
 
-    public record Result(String content, String warning) {
+    /**
+     * @param strippedRemote     是否剥离了远程规则依赖
+     * @param usedSeedFallback   是否整段/分段回落到本地种子
+     */
+    public record Result(String content, String warning, boolean strippedRemote, boolean usedSeedFallback) {
+        public Result(String content, String warning) {
+            this(content, warning, false, false);
+        }
     }
 
     public static Result sanitize(String format, String content, String seedContent) {
@@ -107,23 +114,30 @@ public final class RuleTemplateSanitizer {
         if (containsRemoteRuleDependency(out)) {
             // 整份回退种子后再验一次
             if (seedContent != null && !seedContent.isBlank() && !containsRemoteRuleDependency(seedContent)) {
-                return new Result(seedContent, "上游含无法清除的远程规则依赖，已用本地默认模板替换");
+                return new Result(seedContent,
+                        "上游含无法清除的远程规则依赖，已用本地默认模板替换（请同步已本地化的完整模板，勿用 Online rule-providers）",
+                        true, true);
             }
             throw new BusinessException(500, "规则仍含远程规则依赖（rule-providers / GitHub raw URL），拒绝保存");
         }
 
-        String warning = filledFromSeed ? "已剥离远程规则依赖，并用本地种子补齐分流段" : null;
-        if (contentContainsRemoteDeps(content) && warning == null) {
-            warning = "已剥离远程规则依赖（rule-providers / RULE-SET / GitHub raw）";
+        boolean stripped = contentContainsRemoteDeps(content);
+        String warning = null;
+        if (filledFromSeed) {
+            warning = "已剥离远程规则依赖，并用本地种子补齐分流段（Online Full / rule-providers 不适用，请改用本地完整模板）";
+        } else if (stripped) {
+            warning = "已剥离远程规则依赖（rule-providers / RULE-SET / GitHub raw）；请确认分流段仍完整";
         }
-        return new Result(out, warning);
+        return new Result(out, warning, stripped || filledFromSeed, filledFromSeed);
     }
 
     static Result sanitizeGeneric(String content, String seedContent, String format) {
         // Sing-box JSON：远程 rule_set 不宜按行外科手术，整份回退种子
         if ("singbox".equals(format) && hasSingboxRemoteRuleSet(content)) {
             if (seedContent != null && !seedContent.isBlank() && !containsRemoteRuleDependency(seedContent)) {
-                return new Result(seedContent, "上游含远程 rule_set，已用本地默认模板替换");
+                return new Result(seedContent,
+                        "上游含远程 rule_set，已用本地默认模板替换（请同步无 remote rule_set 的本地模板）",
+                        true, true);
             }
             throw new BusinessException(500, "规则含远程 rule_set，拒绝保存");
         }
@@ -139,18 +153,24 @@ public final class RuleTemplateSanitizer {
         String out = sb.toString().trim();
         if (out.isEmpty() || !isUsableGeneric(out, format)) {
             if (seedContent != null && !seedContent.isBlank()) {
-                return new Result(seedContent, "内容剥离远程依赖后不可用，已用本地默认模板替换");
+                return new Result(seedContent,
+                        "内容剥离远程依赖后不可用，已用本地默认模板替换（请同步已本地化的完整模板）",
+                        true, true);
             }
             throw new BusinessException(500, "规则剥离远程依赖后不可用，且无本地种子可回退");
         }
         if (containsRemoteRuleDependency(out)) {
             if (seedContent != null && !seedContent.isBlank()) {
-                return new Result(seedContent, "规则仍含远程依赖，已用本地默认模板替换");
+                return new Result(seedContent,
+                        "规则仍含远程依赖，已用本地默认模板替换（请同步已本地化的完整模板）",
+                        true, true);
             }
             throw new BusinessException(500, "规则仍含远程规则 URL，拒绝保存");
         }
-        String warning = stripped ? "已剥离远程规则 URL" : null;
-        return new Result(out, warning);
+        String warning = stripped
+                ? "已剥离远程规则 URL；请确认分流段仍完整（勿同步带 RULE-SET/https 的 Online 模板）"
+                : null;
+        return new Result(out, warning, stripped, false);
     }
 
     public static boolean containsRemoteRuleDependency(String content) {

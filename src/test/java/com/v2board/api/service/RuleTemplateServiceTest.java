@@ -71,6 +71,40 @@ class RuleTemplateServiceTest {
     }
 
     @Test
+    void resolve_simpleAndNodesProfiles_useClasspathNotDb() {
+        when(cacheService.get(anyString())).thenReturn("should-not-use-cache");
+        SubscribeRuleTemplate row = new SubscribeRuleTemplate();
+        row.setContent("db-full-only");
+        when(mapper.selectById(anyString())).thenReturn(row);
+
+        try {
+            RuleTemplateService.bindRequestProfile("simple");
+            String simple = service.resolve("clash");
+            assertTrue(simple.contains("GEOSITE,category-ads-all"));
+            assertTrue(simple.contains("GEOSITE,gfw"));
+            assertFalse(simple.contains("db-full-only"));
+
+            RuleTemplateService.bindRequestProfile("nodes");
+            String nodes = service.resolve("clash");
+            assertTrue(nodes.contains("name: \"PROXY\"") || nodes.contains("name: PROXY"));
+            assertTrue(nodes.contains("MATCH,PROXY"));
+            assertFalse(nodes.contains("db-full-only"));
+        } finally {
+            RuleTemplateService.clearRequestProfile();
+        }
+        verify(mapper, never()).selectById(anyString());
+    }
+
+    @Test
+    void normalizeProfile_aliasesAndFallback() {
+        assertEquals("full", RuleTemplateService.normalizeProfile(null));
+        assertEquals("full", RuleTemplateService.normalizeProfile(""));
+        assertEquals("nodes", RuleTemplateService.normalizeProfile("node"));
+        assertEquals("simple", RuleTemplateService.normalizeProfile("SIMPLE"));
+        assertEquals("full", RuleTemplateService.normalizeProfile("unknown"));
+    }
+
+    @Test
     void resolve_stashFallsBackToClashWhenNoStashRow() {
         when(cacheService.get("v2board_subscribe:rule:stash")).thenReturn(null);
         when(mapper.selectById("stash")).thenReturn(null);
@@ -139,6 +173,9 @@ class RuleTemplateServiceTest {
 
         var data = service.sync("clash", "https://example.com/clash.yaml");
         assertFalse(String.valueOf(data.get("content")).contains("raw.githubusercontent.com"));
+        assertTrue(Boolean.TRUE.equals(data.get("stripped_remote"))
+                || Boolean.TRUE.equals(data.get("used_seed_fallback")));
+        assertTrue(String.valueOf(data.get("sync_hint")).contains("本地化"));
         verify(mapper).insert(any(SubscribeRuleTemplate.class));
         verify(cacheService).delete("v2board_subscribe:rule:clash");
     }

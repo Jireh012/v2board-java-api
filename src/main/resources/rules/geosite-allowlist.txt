@@ -1,0 +1,32 @@
+# Loyalsoldier / Meta 默认 geosite.dat 中须存在的标签（与 default.clash.yaml 对齐）
+# 维护：改 Clash GEOSITE 规则后同步更新本文件；运行
+#   python3 scripts/subscribe-rules/check_clash_geosite.py
+category-ads-all
+win-spy
+apple
+apple-cn
+icloud
+youtube
+netflix
+telegram
+openai
+category-ai-!cn
+google
+microsoft
+onedrive
+steam
+category-games
+netease
+bahamut
+bilibili
+disney
+hbo
+primevideo
+spotify
+iqiyi
+youku
+tencent
+geolocation-cn
+cn
+gfw
+geolocation-!cn

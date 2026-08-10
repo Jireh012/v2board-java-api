@@ -1,0 +1,33 @@
+# Nodes-only：几乎无分流，供自备配置的用户
+mixed-port: 7890
+allow-lan: true
+bind-address: "*"
+mode: rule
+log-level: info
+external-controller: 127.0.0.1:9090
+
+dns:
+  enable: true
+  ipv6: false
+  enhanced-mode: fake-ip
+  nameserver:
+    - 223.5.5.5
+    - 1.1.1.1
+
+proxies:
+
+proxy-groups:
+  - name: "PROXY"
+    type: select
+    proxies: []
+
+  - name: "♻️ 自动选择"
+    type: url-test
+    url: "http://www.gstatic.com/generate_204"
+    interval: 300
+    tolerance: 50
+    proxies: []
+
+rules:
+  - GEOIP,private,DIRECT,no-resolve
+  - MATCH,PROXY

@@ -29,6 +29,9 @@ public class RuleTemplateService {
     private static final long CACHE_TTL_HOURS = 24;
     private static final Set<String> SUPPORTED = Set.of(
             "clash", "stash", "surge", "surfboard", "singbox", "quantumultx", "loon");
+    public static final String PROFILE_FULL = "full";
+    private static final Set<String> PROFILES = Set.of("full", "simple", "nodes");
+    private static final ThreadLocal<String> REQUEST_PROFILE = new ThreadLocal<>();
 
     private final SubscribeRuleTemplateMapper mapper;
     private final CacheService cacheService;
@@ -46,12 +49,59 @@ public class RuleTemplateService {
         this.redisPrefix = p != null ? p : "";
     }
 
+    /** Bind rule profile for current subscribe request ({@code full|simple|nodes}). */
+    public static void bindRequestProfile(String profile) {
+        REQUEST_PROFILE.set(normalizeProfile(profile));
+    }
+
+    public static void clearRequestProfile() {
+        REQUEST_PROFILE.remove();
+    }
+
+    public static String currentRequestProfile() {
+        String p = REQUEST_PROFILE.get();
+        return p != null ? p : PROFILE_FULL;
+    }
+
+    public static String normalizeProfile(String profile) {
+        if (!StringUtils.hasText(profile)) {
+            return PROFILE_FULL;
+        }
+        String p = profile.trim().toLowerCase(Locale.ROOT);
+        if ("node".equals(p)) {
+            p = "nodes";
+        }
+        if (!PROFILES.contains(p)) {
+            return PROFILE_FULL;
+        }
+        return p;
+    }
+
     public String resolve(String format) {
         String fmt = normalizeFormat(format);
+        String profile = currentRequestProfile();
+        if (!PROFILE_FULL.equals(profile)) {
+            return resolveProfileSeed(fmt, profile);
+        }
         if ("stash".equals(fmt)) {
             return resolveStash();
         }
         return resolveDirect(fmt);
+    }
+
+    /**
+     * simple / nodes：仅 classpath 种子（管理端自定义只覆盖 full）。
+     */
+    private String resolveProfileSeed(String fmt, String profile) {
+        String path = profileClasspathPath(profile, fmt);
+        String content = readClasspath(path);
+        if ((content == null || content.isBlank()) && "stash".equals(fmt)) {
+            content = readClasspath(profileClasspathPath(profile, "clash"));
+        }
+        if (content == null || content.isBlank()) {
+            throw new BusinessException(500, "未找到规则档位 " + profile + " 的默认模板：" + fmt);
+        }
+        return content;
     }
 
     public Map<String, Object> fetch(String format) {
@@ -92,9 +142,7 @@ public class RuleTemplateService {
         RuleTemplateSanitizer.Result sanitized = RuleTemplateSanitizer.sanitize(fmt, content, seed);
         persist(fmt, sanitized.content(), sourceUrl, updateSource != null ? updateSource : "manual");
         Map<String, Object> data = fetch(fmt);
-        if (sanitized.warning() != null) {
-            data.put("warning", sanitized.warning());
-        }
+        applySanitizeMeta(data, sanitized);
         return data;
     }
 
@@ -138,10 +186,18 @@ public class RuleTemplateService {
         }
         persist(fmt, sanitized.content(), url.trim(), "sync");
         Map<String, Object> data = fetch(fmt);
+        applySanitizeMeta(data, sanitized);
+        data.put("sync_hint",
+                "同步目标须为「已本地化」完整模板；带 rule-providers / 远程 RULE-SET 的 Online Full 会被剥离或回落默认种子");
+        return data;
+    }
+
+    private static void applySanitizeMeta(Map<String, Object> data, RuleTemplateSanitizer.Result sanitized) {
         if (sanitized.warning() != null) {
             data.put("warning", sanitized.warning());
         }
-        return data;
+        data.put("stripped_remote", sanitized.strippedRemote());
+        data.put("used_seed_fallback", sanitized.usedSeedFallback());
     }
 
     String cacheKey(String format) {
@@ -248,6 +304,22 @@ public class RuleTemplateService {
             case "singbox" -> "rules/default.sing-box.json";
             case "quantumultx" -> "rules/default.quantumultx.conf";
             case "loon" -> "rules/default.loon.conf";
+            default -> null;
+        };
+    }
+
+    static String profileClasspathPath(String profile, String format) {
+        String p = normalizeProfile(profile);
+        if (PROFILE_FULL.equals(p)) {
+            return classpathPath(format);
+        }
+        return switch (format) {
+            case "clash", "stash" -> "rules/" + p + ".clash.yaml";
+            case "surge" -> "rules/" + p + ".surge.conf";
+            case "surfboard" -> "rules/" + p + ".surfboard.conf";
+            case "singbox" -> "rules/" + p + ".sing-box.json";
+            case "quantumultx" -> "rules/" + p + ".quantumultx.conf";
+            case "loon" -> "rules/" + p + ".loon.conf";
             default -> null;
         };
     }
