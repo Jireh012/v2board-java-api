@@ -2,9 +2,9 @@ package com.v2board.api.protocol;
 
 import com.v2board.api.model.User;
 import com.v2board.api.service.ConfigService;
+import com.v2board.api.service.RuleTemplateService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -19,6 +19,9 @@ public class StashHandler implements ProtocolHandler {
     @Autowired
     private ConfigService configService;
 
+    @Autowired
+    private RuleTemplateService ruleTemplateService;
+
     @Override
     public String getFlag() {
         return "stash";
@@ -29,10 +32,8 @@ public class StashHandler implements ProtocolHandler {
         if (user == null || servers == null || servers.isEmpty()) {
             return "";
         }
-        String template = new ClassPathResource("rules/default.stash.yaml").exists()
-                ? "rules/default.stash.yaml"
-                : "rules/default.clash.yaml";
-        return ClashMetaBuilder.build(servers, user.getUuid(), configService.getAppName(), template);
+        String template = ruleTemplateService.resolve("stash");
+        return ClashMetaBuilder.buildFromContent(servers, user.getUuid(), configService.getAppName(), template);
     }
 
     @Override

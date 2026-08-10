@@ -152,6 +152,10 @@ public final class PanelApiActionCatalog {
         out.add(zp(z, "external-subscribe/sync"));
         out.add(zp(z, "external-subscribe/sync-all"));
         out.add(zp(z, "external-subscribe/nodes"));
+        out.add(zp(z, "subscribe-rule/fetch"));
+        out.add(zp(z, "subscribe-rule/save"));
+        out.add(zp(z, "subscribe-rule/sync"));
+        out.add(zp(z, "subscribe-rule/restore"));
         out.add(zp(z, "server/manage/getNodes"));
         out.add(zp(z, "server/manage/sort"));
         out.add(zp(z, "server/group/fetch"));

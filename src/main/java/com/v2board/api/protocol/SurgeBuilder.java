@@ -23,8 +23,20 @@ public final class SurgeBuilder {
 
     public static String build(List<Map<String, Object>> servers, User user, String appName,
                                String subsLink, String subsDomain) {
+        String config = loadTemplate("rules/custom.surge.conf");
+        if (config.isEmpty()) {
+            config = loadTemplate("rules/default.surge.conf");
+        }
+        return buildFromContent(servers, user, appName, subsLink, subsDomain, config);
+    }
+
+    /**
+     * 使用已解析的文本模板（管理端自定义 / Redis / DB / classpath）。
+     */
+    public static String buildFromContent(List<Map<String, Object>> servers, User user, String appName,
+                                          String subsLink, String subsDomain, String templateContent) {
         StringBuilder proxies = new StringBuilder();
-        StringBuilder proxyGroup = new StringBuilder();
+        List<String> proxyNames = new ArrayList<>();
         String uuid = user.getUuid();
 
         for (Map<String, Object> item : servers) {
@@ -44,14 +56,12 @@ public final class SurgeBuilder {
             };
             if (!line.isEmpty()) {
                 proxies.append(line);
-                proxyGroup.append(server.get("name")).append(", ");
+                proxyNames.add(str(server.get("name")));
             }
         }
 
-        String config = loadTemplate("rules/custom.surge.conf");
-        if (config.isEmpty()) {
-            config = loadTemplate("rules/default.surge.conf");
-        }
+        String config = templateContent != null ? templateContent : "";
+        config = ConfTemplatePlaceholders.applyProxyGroups(config, proxyNames);
 
         long u = user.getU() != null ? user.getU() : 0;
         long d = user.getD() != null ? user.getD() : 0;
@@ -72,7 +82,6 @@ public final class SurgeBuilder {
         config = config.replace("$subs_link", subsLink != null ? subsLink : "");
         config = config.replace("$subs_domain", subsDomain != null ? subsDomain : "");
         config = config.replace("$proxies", proxies.toString());
-        config = config.replace("$proxy_group", proxyGroup.toString().replaceAll(",\\s*$", ""));
         config = config.replace("$subscribe_info", subscribeInfo);
         return config;
     }

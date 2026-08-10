@@ -26,8 +26,20 @@ public final class SurfboardBuilder {
 
     public static String build(List<Map<String, Object>> servers, User user, String appName,
                                String subsLink, String subsDomain) {
+        String config = loadTemplate("rules/custom.surfboard.conf");
+        if (config.isEmpty()) {
+            config = loadTemplate("rules/default.surfboard.conf");
+        }
+        return buildFromContent(servers, user, appName, subsLink, subsDomain, config);
+    }
+
+    /**
+     * 使用已解析的文本模板（管理端自定义 / Redis / DB / classpath）。
+     */
+    public static String buildFromContent(List<Map<String, Object>> servers, User user, String appName,
+                                          String subsLink, String subsDomain, String templateContent) {
         StringBuilder proxies = new StringBuilder();
-        StringBuilder proxyGroup = new StringBuilder();
+        List<String> proxyNames = new ArrayList<>();
 
         for (Map<String, Object> item : servers) {
             Map<String, Object> server = item;
@@ -46,14 +58,12 @@ public final class SurfboardBuilder {
             };
             if (!line.isEmpty()) {
                 proxies.append(line);
-                proxyGroup.append(server.get("name")).append(", ");
+                proxyNames.add(str(server.get("name")));
             }
         }
 
-        String config = loadTemplate("rules/custom.surfboard.conf");
-        if (config.isEmpty()) {
-            config = loadTemplate("rules/default.surfboard.conf");
-        }
+        String config = templateContent != null ? templateContent : "";
+        config = ConfTemplatePlaceholders.applyProxyGroups(config, proxyNames);
 
         long u = user.getU() != null ? user.getU() : 0;
         long d = user.getD() != null ? user.getD() : 0;
@@ -74,7 +84,6 @@ public final class SurfboardBuilder {
         return config.replace("$subs_link", subsLink != null ? subsLink : "")
                 .replace("$subs_domain", subsDomain != null ? subsDomain : "")
                 .replace("$proxies", proxies.toString())
-                .replace("$proxy_group", proxyGroup.toString().replaceAll(",\\s*$", ""))
                 .replace("$subscribe_info", subscribeInfo);
     }
 

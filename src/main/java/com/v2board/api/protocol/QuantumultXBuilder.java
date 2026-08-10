@@ -2,6 +2,8 @@ package com.v2board.api.protocol;
 
 import com.v2board.api.util.Helper;
 
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -9,7 +11,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 对齐 PHP App\Protocols\QuantumultX
+ * 对齐 PHP App\Protocols\QuantumultX，并扩展为完整 ACL4SSR 本地配置。
  */
 public final class QuantumultXBuilder {
 
@@ -18,8 +20,42 @@ public final class QuantumultXBuilder {
     private QuantumultXBuilder() {
     }
 
+    /**
+     * 纯节点列表（旧行为，供兼容）。
+     */
     public static String buildPlain(List<Map<String, Object>> servers, String uuid) {
         StringBuilder uri = new StringBuilder();
+        List<String> ignored = new ArrayList<>();
+        appendServerLines(servers, uuid, uri, ignored);
+        return uri.toString();
+    }
+
+    public static String build(List<Map<String, Object>> servers, String uuid, String subsDomain) {
+        String config = loadTemplate("rules/default.quantumultx.conf");
+        return buildFromContent(servers, uuid, subsDomain, config);
+    }
+
+    /**
+     * 使用已解析的文本模板（管理端自定义 / Redis / DB / classpath）。
+     */
+    public static String buildFromContent(List<Map<String, Object>> servers, String uuid,
+                                          String subsDomain, String templateContent) {
+        StringBuilder proxies = new StringBuilder();
+        List<String> proxyNames = new ArrayList<>();
+        appendServerLines(servers, uuid, proxies, proxyNames);
+
+        String config = templateContent != null ? templateContent : "";
+        config = ConfTemplatePlaceholders.applyProxyGroups(config, proxyNames);
+        config = config.replace("$proxies", proxies.toString());
+        config = config.replace("$subs_domain", subsDomain != null ? subsDomain : "");
+        return config;
+    }
+
+    private static void appendServerLines(List<Map<String, Object>> servers, String uuid,
+                                          StringBuilder uri, List<String> proxyNames) {
+        if (servers == null) {
+            return;
+        }
         for (Map<String, Object> item : servers) {
             Map<String, Object> server = item;
             if ("v2node".equals(str(server.get("type"))) && server.get("protocol") != null) {
@@ -39,9 +75,22 @@ public final class QuantumultXBuilder {
                 case "anytls" -> buildAnyTls(uuid, server);
                 default -> "";
             };
-            uri.append(line);
+            if (!line.isEmpty()) {
+                uri.append(line);
+                proxyNames.add(str(server.get("name")));
+            }
         }
-        return uri.toString();
+    }
+
+    private static String loadTemplate(String path) {
+        try (InputStream in = QuantumultXBuilder.class.getClassLoader().getResourceAsStream(path)) {
+            if (in == null) {
+                return "";
+            }
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            return "";
+        }
     }
 
     @SuppressWarnings("unchecked")

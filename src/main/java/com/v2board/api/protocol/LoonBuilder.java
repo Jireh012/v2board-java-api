@@ -1,25 +1,73 @@
 package com.v2board.api.protocol;
 
+import com.v2board.api.model.User;
 import com.v2board.api.util.Helper;
 
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * 对齐 PHP App\Protocols\Loon
+ * 对齐 PHP App\Protocols\Loon，并扩展为完整 ACL4SSR 本地配置。
  */
 public final class LoonBuilder {
 
     private LoonBuilder() {
     }
 
-    public static String build(List<Map<String, Object>> servers, String uuid) {
+    /**
+     * 纯节点列表（旧行为）。
+     */
+    public static String buildPlain(List<Map<String, Object>> servers, String uuid) {
         StringBuilder uri = new StringBuilder();
+        List<String> ignored = new ArrayList<>();
+        appendServerLines(servers, uuid, uri, ignored);
+        return uri.toString();
+    }
+
+    public static String build(List<Map<String, Object>> servers, User user, String appName,
+                               String subsLink, String subsDomain) {
+        String config = loadTemplate("rules/default.loon.conf");
+        return buildFromContent(servers, user, appName, subsLink, subsDomain, config);
+    }
+
+    /**
+     * 使用已解析的文本模板（管理端自定义 / Redis / DB / classpath）。
+     */
+    public static String buildFromContent(List<Map<String, Object>> servers, User user, String appName,
+                                          String subsLink, String subsDomain, String templateContent) {
+        StringBuilder proxies = new StringBuilder();
+        List<String> proxyNames = new ArrayList<>();
+        String uuid = user != null ? user.getUuid() : "";
+        appendServerLines(servers, uuid, proxies, proxyNames);
+
+        String config = templateContent != null ? templateContent : "";
+        config = ConfTemplatePlaceholders.applyProxyGroups(config, proxyNames);
+
+        config = config.replace("$subs_link", subsLink != null ? subsLink : "");
+        config = config.replace("$subs_domain", subsDomain != null ? subsDomain : "");
+        config = config.replace("$proxies", proxies.toString());
+        if (user != null && config.contains("$subscribe_info")) {
+            config = config.replace("$subscribe_info", buildSubscribeInfo(user, appName));
+        }
+        return config;
+    }
+
+    private static void appendServerLines(List<Map<String, Object>> servers, String uuid,
+                                          StringBuilder uri, List<String> proxyNames) {
+        if (servers == null) {
+            return;
+        }
         for (Map<String, Object> item : servers) {
             Map<String, Object> server = item;
             if ("v2node".equals(str(server.get("type"))) && server.get("protocol") != null) {
-                server = new java.util.LinkedHashMap<>(item);
+                server = new LinkedHashMap<>(item);
                 server.put("type", str(server.get("protocol")));
             }
             String type = str(server.get("type"));
@@ -33,9 +81,40 @@ public final class LoonBuilder {
                 case "anytls" -> buildAnytls(uuid, server);
                 default -> "";
             };
-            uri.append(line);
+            if (!line.isEmpty()) {
+                uri.append(line);
+                proxyNames.add(str(server.get("name")));
+            }
         }
-        return uri.toString();
+    }
+
+    private static String buildSubscribeInfo(User user, String appName) {
+        long u = user.getU() != null ? user.getU() : 0;
+        long d = user.getD() != null ? user.getD() : 0;
+        long total = user.getTransferEnable() != null ? user.getTransferEnable() : 0;
+        double upload = Math.round(u / 1073741824.0 * 100.0) / 100.0;
+        double download = Math.round(d / 1073741824.0 * 100.0) / 100.0;
+        double useTraffic = upload + download;
+        double totalTraffic = Math.round(total / 1073741824.0 * 100.0) / 100.0;
+        String expireDate = user.getExpiredAt() == null || user.getExpiredAt() == 0
+                ? "长期有效"
+                : Instant.ofEpochSecond(user.getExpiredAt())
+                .atZone(ZoneId.systemDefault())
+                .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        String name = appName != null ? appName : "V2Board";
+        return "title=" + name + "订阅信息, content=上传流量：" + upload + "GB\\n下载流量："
+                + download + "GB\\n剩余流量：" + useTraffic + "GB\\n套餐流量：" + totalTraffic + "GB\\n到期时间：" + expireDate;
+    }
+
+    private static String loadTemplate(String path) {
+        try (InputStream in = LoonBuilder.class.getClassLoader().getResourceAsStream(path)) {
+            if (in == null) {
+                return "";
+            }
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            return "";
+        }
     }
 
     public static String buildShadowsocks(String password, Map<String, Object> server) {

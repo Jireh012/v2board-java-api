@@ -2,6 +2,7 @@ package com.v2board.api.protocol;
 
 import com.v2board.api.model.User;
 import com.v2board.api.service.ConfigService;
+import com.v2board.api.service.RuleTemplateService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -18,6 +19,9 @@ public class ClashMetaHandler implements ProtocolHandler {
     @Autowired
     private ConfigService configService;
 
+    @Autowired
+    private RuleTemplateService ruleTemplateService;
+
     @Override
     public String getFlag() {
         return "meta";
@@ -28,7 +32,8 @@ public class ClashMetaHandler implements ProtocolHandler {
         if (user == null || servers == null || servers.isEmpty()) {
             return "";
         }
-        return ClashMetaBuilder.build(servers, user.getUuid(), configService.getAppName(), "rules/default.clash.yaml");
+        String template = ruleTemplateService.resolve("clash");
+        return ClashMetaBuilder.buildFromContent(servers, user.getUuid(), configService.getAppName(), template);
     }
 
     @Override

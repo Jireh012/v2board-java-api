@@ -1,0 +1,35 @@
+{
+  "id": "clash-acl4ssr-rules",
+  "name": "clash-acl4ssr-rules",
+  "title": "Clash 订阅完整 ACL4SSR 分流规则",
+  "description": "将 default.clash.yaml 升级为完整 ACL4SSR 风格策略组与规则，支持 Apple/YouTube/国外媒体等精准分流",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "Jireh",
+  "assignee": "Jireh",
+  "createdAt": "2026-08-10",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "08-10-clash-stash-acl4ssr",
+    "08-10-surge-surfboard-acl4ssr",
+    "08-10-singbox-acl4ssr",
+    "08-10-qx-loon-acl4ssr",
+    "08-10-admin-subscribe-rules"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "title": "多客户端 ACL4SSR + 管理端规则",
+    "description": "多客户端本地 ACL4SSR；表+Redis；同步改写补齐；后台编辑"
+  }
+}

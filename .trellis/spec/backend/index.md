@@ -29,6 +29,7 @@ Code-specs for the Spring Boot / MyBatis-Plus API that shares MySQL + Redis with
 | [Admin Content](./admin-content.md) | Notice / knowledge admin CRUD, sort wire `knowledge_ids` | Active |
 | [External Subscribe](./external-subscribe.md) | Third-party subscribe sync status lifecycle | Active |
 | [Subscribe Delivery](./subscribe-delivery.md) | `subscribe_url` resolution + panel/external name markers | Active |
+| [Subscribe Rules](./subscribe-rules.md) | ACL4SSR templates: Redis/DB resolve, sanitize, builders | Active |
 | [Public Site Config](./public-site-config.md) | Fixed `GET /config` SM4 envelope + public flags / API prefixes | Active |
 | [Panel API SM4](./panel-api-sm4.md) | Prefixes, action aliases, Panel SM4/`X-A`, payment notify `/g/` plaintext | Active |
 | [Telegram Bot](./telegram.md) | Guest webhook, bind/traffic commands, admin notify | Active |
@@ -56,6 +57,7 @@ When changing admin servers, JSON columns, or external subscribe:
 - [ ] Read [admin-content.md](./admin-content.md) if touching admin notice/knowledge APIs or sort payload
 - [ ] Read [external-subscribe.md](./external-subscribe.md) if changing sync status, locks, or admin sync APIs
 - [ ] Read [subscribe-delivery.md](./subscribe-delivery.md) if changing `getSubscribe`, subscribe path/URL, or client node naming
+- [ ] Read [subscribe-rules.md](./subscribe-rules.md) if changing rule templates, sanitize pipeline, or subscribe builders' template resolve
 - [ ] Read [public-site-config.md](./public-site-config.md) if changing fixed `/config`, public flags, or bootstrap envelope fields
 - [ ] Read [panel-api-sm4.md](./panel-api-sm4.md) if changing client API prefixes, action aliases, payment notify prefix, `PanelSm4Filter`, or `X-A`
 - [ ] New panel endpoint → add classicRel to `PanelApiActionCatalog` (wire is `{prefix}/{alias}` only)

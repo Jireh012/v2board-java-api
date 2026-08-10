@@ -1,0 +1,3 @@
+{"file": ".trellis/tasks/08-10-surge-surfboard-acl4ssr/design.md", "reason": "Surge/Surfboard group + builder filter design"}
+{"file": ".trellis/tasks/08-10-clash-acl4ssr-rules/prd.md", "reason": "Parent grouping semantics to align"}
+{"file": ".trellis/spec/backend/subscribe-delivery.md", "reason": "Subscribe delivery conventions"}

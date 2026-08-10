@@ -101,7 +101,10 @@ export APP_KEY=base64:your-secret-key-here
 | `EXTERNAL_PROBE_CONCURRENCY` | 并发探测数 | `4` | `8` |
 | `EXTERNAL_SUBSCRIBE_CRON` | 同步 cron（Spring 6 域） | `0 */30 * * * *` | `0 0 * * * *` |
 
-部署前需手工执行 DDL：`src/main/resources/db/v2_external_subscribe.sql`，并确保 API 主机可执行 `sing-box`。
+部署前需手工执行 DDL：
+
+- `src/main/resources/db/v2_external_subscribe.sql`（外部订阅），并确保 API 主机可执行 `sing-box`
+- `src/main/resources/db/v2_subscribe_rule_template.sql`（管理端订阅规则模板；未建表时订阅回退 classpath 种子）
 
 ### Docker Compose
 

@@ -2,6 +2,7 @@ package com.v2board.api.protocol;
 
 import com.v2board.api.model.User;
 import com.v2board.api.service.ConfigService;
+import com.v2board.api.service.RuleTemplateService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -18,6 +19,9 @@ public class SurfboardHandler implements ProtocolHandler {
     @Autowired
     private ConfigService configService;
 
+    @Autowired
+    private RuleTemplateService ruleTemplateService;
+
     @Override
     public String getFlag() {
         return "surfboard";
@@ -30,7 +34,8 @@ public class SurfboardHandler implements ProtocolHandler {
         }
         String appName = configService.getAppName();
         String subsLink = configService.buildSubscribeUrl(user.getToken(), user.getId());
-        return SurfboardBuilder.build(servers, user, appName, subsLink, resolveHost());
+        String template = ruleTemplateService.resolve("surfboard");
+        return SurfboardBuilder.buildFromContent(servers, user, appName, subsLink, resolveHost(), template);
     }
 
     @Override

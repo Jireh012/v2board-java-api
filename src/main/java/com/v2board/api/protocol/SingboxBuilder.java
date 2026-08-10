@@ -6,6 +6,7 @@ import com.v2board.api.util.Helper;
 
 import java.io.InputStream;
 import java.util.*;
+import java.util.regex.Pattern;
 
 /**
  * 对齐 PHP App\Protocols\Singbox\Singbox / SingboxOld
@@ -13,21 +14,40 @@ import java.util.*;
 public final class SingboxBuilder {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final Set<String> KEEP_EMPTY_TAGS = Set.of(
+            "🚀 节点选择", "节点选择", "🚀 手动切换", "♻️ 自动选择", "自动选择",
+            "DIRECT", "direct", "REJECT", "block", "🐟 漏网之鱼");
 
     private SingboxBuilder() {
     }
 
-    @SuppressWarnings("unchecked")
     public static String build(User user, List<Map<String, Object>> servers, String templateResource, boolean includeAnytls) {
         try {
-            Map<String, Object> config = loadTemplate(templateResource);
-            List<Map<String, Object>> proxies = buildProxies(servers, user.getUuid(), includeAnytls);
-            List<Map<String, Object>> outbounds = addProxies(config, proxies);
-            config.put("outbounds", outbounds);
-            return MAPPER.writeValueAsString(config);
+            return buildFromConfig(user, servers, loadTemplate(templateResource), includeAnytls);
         } catch (Exception e) {
             return "{}";
         }
+    }
+
+    /**
+     * 使用已解析的 JSON 模板正文（管理端自定义 / Redis / DB / classpath）。
+     */
+    public static String buildFromContent(User user, List<Map<String, Object>> servers, String templateJson,
+                                          boolean includeAnytls) {
+        try {
+            return buildFromConfig(user, servers, parseTemplateContent(templateJson), includeAnytls);
+        } catch (Exception e) {
+            return "{}";
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static String buildFromConfig(User user, List<Map<String, Object>> servers, Map<String, Object> config,
+                                          boolean includeAnytls) throws Exception {
+        List<Map<String, Object>> proxies = buildProxies(servers, user.getUuid(), includeAnytls);
+        List<Map<String, Object>> outbounds = addProxies(config, proxies);
+        config.put("outbounds", outbounds);
+        return MAPPER.writeValueAsString(config);
     }
 
     @SuppressWarnings("unchecked")
@@ -70,6 +90,10 @@ public final class SingboxBuilder {
         return proxies;
     }
 
+    /**
+     * 空 outbounds → 填入全部节点；含正则 → 按节点名过滤；仅策略引用 → 保持原样不追加。
+     * tag 以 # 开头的 selector 仍视为「填入全部节点」（兼容旧约定）。
+     */
     @SuppressWarnings("unchecked")
     private static List<Map<String, Object>> addProxies(Map<String, Object> config, List<Map<String, Object>> proxies) {
         List<String> tags = proxies.stream()
@@ -78,18 +102,57 @@ public final class SingboxBuilder {
                 .toList();
         List<Map<String, Object>> outbounds = config.get("outbounds") instanceof List<?> ol
                 ? new ArrayList<>((List<Map<String, Object>>) ol) : new ArrayList<>();
+
         for (Map<String, Object> outbound : outbounds) {
             String type = str(outbound.get("type"));
-            String tag = str(outbound.get("tag"));
-            if (("selector".equals(type) && "节点选择".equals(tag))
-                    || ("urltest".equals(type) && "自动选择".equals(tag))
-                    || ("selector".equals(type) && tag.startsWith("#"))) {
-                List<String> ob = outbound.get("outbounds") instanceof List<?> l
-                        ? new ArrayList<>((List<String>) l) : new ArrayList<>();
-                ob.addAll(tags);
-                outbound.put("outbounds", ob);
+            if (!"selector".equals(type) && !"urltest".equals(type)) {
+                continue;
             }
+            String tag = str(outbound.get("tag"));
+            List<String> groupOutbounds = outbound.get("outbounds") instanceof List<?> l
+                    ? new ArrayList<>((List<String>) l) : new ArrayList<>();
+
+            if (tag.startsWith("#") || groupOutbounds.isEmpty()) {
+                outbound.put("outbounds", new ArrayList<>(tags));
+                continue;
+            }
+
+            boolean isFilter = false;
+            List<String> merged = new ArrayList<>();
+            for (String src : groupOutbounds) {
+                if (!isRegex(src)) {
+                    merged.add(src);
+                    continue;
+                }
+                isFilter = true;
+                for (String dst : tags) {
+                    if (isMatch(src, dst) && !merged.contains(dst)) {
+                        merged.add(dst);
+                    }
+                }
+            }
+            if (!isFilter) {
+                // 仅策略组名 / DIRECT 等引用，不再塞入全部节点
+                outbound.put("outbounds", groupOutbounds);
+                continue;
+            }
+            outbound.put("outbounds", merged);
         }
+
+        // 无匹配节点的地区组可删除（主组 / 手动 / 自动 / 漏网之鱼等保留）
+        outbounds.removeIf(ob -> {
+            String type = str(ob.get("type"));
+            if (!"selector".equals(type) && !"urltest".equals(type)) {
+                return false;
+            }
+            String tag = str(ob.get("tag"));
+            if (KEEP_EMPTY_TAGS.contains(tag) || tag.startsWith("#")) {
+                return false;
+            }
+            Object list = ob.get("outbounds");
+            return !(list instanceof List<?> l) || l.isEmpty();
+        });
+
         List<Map<String, Object>> merged = new ArrayList<>(outbounds);
         merged.addAll(proxies);
         return merged;
@@ -104,13 +167,63 @@ public final class SingboxBuilder {
             }
         } catch (Exception ignored) {
         }
+        return defaultConfig();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> parseTemplateContent(String jsonContent) {
+        if (jsonContent == null || jsonContent.isBlank()) {
+            return defaultConfig();
+        }
+        try {
+            Map<String, Object> loaded = MAPPER.readValue(jsonContent, Map.class);
+            if (loaded != null) {
+                return loaded;
+            }
+        } catch (Exception ignored) {
+        }
+        return defaultConfig();
+    }
+
+    private static Map<String, Object> defaultConfig() {
         Map<String, Object> config = new LinkedHashMap<>();
         config.put("outbounds", List.of(
                 Map.of("tag", "DIRECT", "type", "direct"),
-                Map.of("tag", "节点选择", "type", "selector", "outbounds", List.of("自动选择")),
-                Map.of("tag", "自动选择", "type", "urltest", "outbounds", List.of())
+                Map.of("tag", "🚀 节点选择", "type", "selector", "outbounds", List.of("♻️ 自动选择")),
+                Map.of("tag", "♻️ 自动选择", "type", "urltest", "outbounds", List.of())
         ));
         return config;
+    }
+
+    /**
+     * 对齐 ClashMetaBuilder.isRegex：避免把策略组名误判为正则。
+     */
+    private static boolean isRegex(String exp) {
+        if (exp == null || exp.isEmpty()) {
+            return false;
+        }
+        if (KEEP_EMPTY_TAGS.contains(exp)
+                || "故障转移".equals(exp) || "🔯 故障转移".equals(exp)
+                || "GLOBAL".equals(exp)) {
+            return false;
+        }
+        if (!exp.matches(".*[\\\\.^$|?*+\\[\\]{}()].*")) {
+            return false;
+        }
+        try {
+            Pattern.compile(exp);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static boolean isMatch(String exp, String name) {
+        try {
+            return Pattern.compile(exp).matcher(name).find();
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     public static Map<String, Object> buildShadowsocks(String password, Map<String, Object> server) {

@@ -16,9 +16,21 @@ public final class ClashMetaBuilder {
     private ClashMetaBuilder() {
     }
 
-    @SuppressWarnings("unchecked")
     public static String build(List<Map<String, Object>> servers, String uuid, String appName, String templateResource) {
-        Map<String, Object> config = loadTemplate(templateResource);
+        return buildFromConfig(servers, uuid, appName, loadTemplate(templateResource));
+    }
+
+    /**
+     * 使用已解析的 YAML 模板正文（管理端自定义 / Redis / DB / classpath）。
+     */
+    public static String buildFromContent(List<Map<String, Object>> servers, String uuid, String appName,
+                                          String templateYamlContent) {
+        return buildFromConfig(servers, uuid, appName, parseTemplateContent(templateYamlContent));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static String buildFromConfig(List<Map<String, Object>> servers, String uuid, String appName,
+                                          Map<String, Object> config) {
         List<Map<String, Object>> proxy = new ArrayList<>();
         List<String> proxies = new ArrayList<>();
 
@@ -70,8 +82,8 @@ public final class ClashMetaBuilder {
             mergeProxyGroup(group, proxies);
         }
         groups.removeIf(g -> {
-            Object name = g.get("name");
-            if (mainGroupName.equals(String.valueOf(name)) || "$app_name".equals(String.valueOf(name))) {
+            String name = String.valueOf(g.get("name"));
+            if (mainGroupName.equals(name) || "$app_name".equals(name) || MAIN_SELECT_GROUP.equals(name)) {
                 return false;
             }
             Object p = g.get("proxies");
@@ -85,10 +97,12 @@ public final class ClashMetaBuilder {
         options.setIndent(2);
         options.setPrettyFlow(true);
         String yaml = new Yaml(options).dump(config);
-        return yaml.replace("$app_name", appName != null ? appName : "V2Board");
+        return yaml.replace("$app_name", mainGroupName);
     }
 
-    @SuppressWarnings("unchecked")
+    /**
+     * 空 proxies → 填入全部节点；含正则 → 按节点名过滤；仅策略引用 → 保持原样不追加节点。
+     */
     private static void mergeProxyGroup(Map<String, Object> group, List<String> proxyNames) {
         Object proxiesObj = group.get("proxies");
         if (!(proxiesObj instanceof List<?> srcList)) {
@@ -98,6 +112,10 @@ public final class ClashMetaBuilder {
         List<String> groupProxies = new ArrayList<>();
         for (Object o : srcList) {
             groupProxies.add(String.valueOf(o));
+        }
+        if (groupProxies.isEmpty()) {
+            group.put("proxies", new ArrayList<>(proxyNames));
+            return;
         }
         boolean isFilter = false;
         for (String src : new ArrayList<>(groupProxies)) {
@@ -113,16 +131,20 @@ public final class ClashMetaBuilder {
             }
         }
         if (!isFilter) {
-            groupProxies.addAll(proxyNames);
+            // 仅策略组名 / DIRECT 等引用，不再塞入全部节点
+            group.put("proxies", groupProxies);
+            return;
         }
         group.put("proxies", groupProxies);
     }
+
+    private static final String MAIN_SELECT_GROUP = "🚀 节点选择";
 
     private static void ensureMainProxyGroup(List<Map<String, Object>> groups, String mainGroupName,
                                              List<String> proxyNames) {
         for (Map<String, Object> group : groups) {
             String name = String.valueOf(group.get("name"));
-            if (!mainGroupName.equals(name) && !"$app_name".equals(name)) {
+            if (!MAIN_SELECT_GROUP.equals(name) && !mainGroupName.equals(name) && !"$app_name".equals(name)) {
                 continue;
             }
             if ("$app_name".equals(name)) {
@@ -131,19 +153,18 @@ public final class ClashMetaBuilder {
             List<String> proxies = group.get("proxies") instanceof List<?> list
                     ? new ArrayList<>((List<String>) list) : new ArrayList<>();
             if (proxies.isEmpty()) {
+                proxies.add("🚀 手动切换");
                 proxies.add("自动选择");
                 proxies.add("故障转移");
-                proxies.addAll(proxyNames);
+                proxies.add("DIRECT");
                 group.put("proxies", proxies);
             }
             return;
         }
         Map<String, Object> main = new LinkedHashMap<>();
-        main.put("name", mainGroupName);
+        main.put("name", MAIN_SELECT_GROUP);
         main.put("type", "select");
-        List<String> proxies = new ArrayList<>(List.of("自动选择", "故障转移"));
-        proxies.addAll(proxyNames);
-        main.put("proxies", proxies);
+        main.put("proxies", new ArrayList<>(List.of("🚀 手动切换", "自动选择", "故障转移", "DIRECT")));
         groups.add(0, main);
     }
 
@@ -156,6 +177,21 @@ public final class ClashMetaBuilder {
             }
             Yaml yaml = new Yaml();
             Object loaded = yaml.load(in);
+            if (loaded instanceof Map<?, ?> m) {
+                return new LinkedHashMap<>((Map<String, Object>) m);
+            }
+        } catch (Exception ignored) {
+        }
+        return defaultConfig();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> parseTemplateContent(String yamlContent) {
+        if (yamlContent == null || yamlContent.isBlank()) {
+            return defaultConfig();
+        }
+        try {
+            Object loaded = new Yaml().load(yamlContent);
             if (loaded instanceof Map<?, ?> m) {
                 return new LinkedHashMap<>((Map<String, Object>) m);
             }
@@ -537,6 +573,8 @@ public final class ClashMetaBuilder {
             return false;
         }
         if ("自动选择".equals(exp) || "故障转移".equals(exp)
+                || "♻️ 自动选择".equals(exp) || "🔯 故障转移".equals(exp)
+                || "🚀 节点选择".equals(exp) || "🚀 手动切换".equals(exp)
                 || "DIRECT".equals(exp) || "REJECT".equals(exp) || "GLOBAL".equals(exp)) {
             return false;
         }

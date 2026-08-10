@@ -2,6 +2,7 @@ package com.v2board.api.protocol;
 
 import com.v2board.api.model.User;
 import com.v2board.api.service.ConfigService;
+import com.v2board.api.service.RuleTemplateService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -18,6 +19,9 @@ public class SurgeHandler implements ProtocolHandler {
     @Autowired
     private ConfigService configService;
 
+    @Autowired
+    private RuleTemplateService ruleTemplateService;
+
     @Override
     public String getFlag() {
         return "surge";
@@ -31,7 +35,8 @@ public class SurgeHandler implements ProtocolHandler {
         String appName = configService.getAppName();
         String subsLink = configService.buildSubscribeUrl(user.getToken(), user.getId());
         String subsDomain = resolveHost();
-        return SurgeBuilder.build(servers, user, appName, subsLink, subsDomain);
+        String template = ruleTemplateService.resolve("surge");
+        return SurgeBuilder.buildFromContent(servers, user, appName, subsLink, subsDomain, template);
     }
 
     @Override
