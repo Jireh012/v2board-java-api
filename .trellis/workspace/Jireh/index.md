@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 1
-- **Last Active**: 2026-08-08
+- **Total Sessions**: 2
+- **Last Active**: 2026-08-10
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~30 | Active |
+| `journal-1.md` | ~55 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -30,6 +30,7 @@
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
 | 1 | 2026-08-08 | 面板抗探测与防封锁 | `1d1cbcf`, `125af17`, `d7de583` | `master` |
+| 2 | 2026-08-10 | 同步 ACL4SSR Online 并内联 | `4ea7b69`, `ef63a41`, `5e41faf` | `master`/`main` |
 <!-- @@@/auto:session-history -->
 
 ---
@@ -38,4 +39,3 @@
 
 - Sessions are appended to journal files
 - New journal file created when current exceeds 2000 lines
-- Use `add_session.py` to record sessions
