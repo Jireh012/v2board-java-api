@@ -1,0 +1,5 @@
+{"file": "docs/ops-panel-anti-block.md", "reason": "Anti-detect ops baseline; UI shell complements API prefixes/SM4"}
+{"file": ".trellis/spec/backend/public-site-config.md", "reason": "Fixed GET /config contract; deferred call must not change path/envelope"}
+{"file": "../v2board-ui/.trellis/spec/frontend/site-brand.md", "reason": "loadSiteBrand, auth guards, safe_mode notes — primary UI change surface"}
+{"file": "../v2board-ui/.trellis/spec/frontend/panel-api-sm4.md", "reason": "Bootstrap /config and apiUrl assumptions after deferred brand load"}
+{"file": ".trellis/tasks/08-10-frontend-anti-detect-shell/design.md", "reason": "Decoy routes, adminSeg, build fingerprint approach"}

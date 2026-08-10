@@ -1,0 +1,5 @@
+{"file": "docs/ops-panel-anti-block.md", "reason": "Verify shell work stays within documented anti-detect boundaries"}
+{"file": ".trellis/spec/backend/public-site-config.md", "reason": "Ensure /config still SM4 envelope when eventually called"}
+{"file": "../v2board-ui/.trellis/spec/frontend/site-brand.md", "reason": "Check decoy/deferred-brand against site-brand contracts"}
+{"file": "../v2board-ui/.trellis/spec/frontend/panel-api-sm4.md", "reason": "Check login/admin still use apiUrl after deferred bootstrap"}
+{"file": ".trellis/tasks/08-10-frontend-anti-detect-shell/prd.md", "reason": "AC1–AC7 acceptance gate"}
