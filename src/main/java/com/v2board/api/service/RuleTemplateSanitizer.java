@@ -115,7 +115,7 @@ public final class RuleTemplateSanitizer {
             // 整份回退种子后再验一次
             if (seedContent != null && !seedContent.isBlank() && !containsRemoteRuleDependency(seedContent)) {
                 return new Result(seedContent,
-                        "上游含无法清除的远程规则依赖，已用本地默认模板替换（请同步已本地化的完整模板，勿用 Online rule-providers）",
+                        "上游含无法清除的远程规则依赖，已用本地默认模板替换（请用「同步」内联 Online INI，或粘贴已内联的完整模板）",
                         true, true);
             }
             throw new BusinessException(500, "规则仍含远程规则依赖（rule-providers / GitHub raw URL），拒绝保存");
@@ -124,9 +124,9 @@ public final class RuleTemplateSanitizer {
         boolean stripped = contentContainsRemoteDeps(content);
         String warning = null;
         if (filledFromSeed) {
-            warning = "已剥离远程规则依赖，并用本地种子补齐分流段（Online Full / rule-providers 不适用，请改用本地完整模板）";
+            warning = "已剥离远程规则依赖，并用本地种子补齐分流段（请用「同步」从 Online INI 内联，勿直接粘贴未展开的 rule-providers）";
         } else if (stripped) {
-            warning = "已剥离远程规则依赖（rule-providers / RULE-SET / GitHub raw）；请确认分流段仍完整";
+            warning = "已剥离远程规则依赖（rule-providers / RULE-SET / GitHub raw）；请确认分流段仍完整，或改用「同步」内联";
         }
         return new Result(out, warning, stripped || filledFromSeed, filledFromSeed);
     }
@@ -168,7 +168,7 @@ public final class RuleTemplateSanitizer {
             throw new BusinessException(500, "规则仍含远程规则 URL，拒绝保存");
         }
         String warning = stripped
-                ? "已剥离远程规则 URL；请确认分流段仍完整（勿同步带 RULE-SET/https 的 Online 模板）"
+                ? "已剥离远程规则 URL；请确认分流段仍完整，或改用「同步」从 Online INI 内联本地化"
                 : null;
         return new Result(out, warning, stripped, false);
     }

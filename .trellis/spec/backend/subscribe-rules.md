@@ -49,7 +49,7 @@ Admin save/sync edits **full** only. Response header: `subscription-rule-profile
 | Sing-box old (`flag=sing`) | Always classpath `default.sing-box.old.json` (admin custom covers ≥1.12 only) |
 | Write path | Sanitize → upsert DB → `DEL` cache → re-set cache with new content |
 | Restore | `DELETE` by format → invalidate → next resolve uses seed |
-| Sync product note | Target must be localized full templates; Online rule-providers are stripped / seed-fallback; response may include `stripped_remote`, `used_seed_fallback`, `sync_hint` |
+| Sync product note | Prefer ACL4SSR Online Full NoAuto INI (default URL); server expands `.list` / HTTP `rule-providers` into **inline** templates (seed shell kept). Response may include `stripped_remote`, `used_seed_fallback`, `sync_hint` (`已从 Online/raw 内联本地化…`). Success path should **not** whole-seed-fallback solely because upstream was Online. |
 
 **Classpath seeds (`full`)**
 
@@ -73,7 +73,8 @@ Admin save/sync edits **full** only. Response header: `subscription-rule-profile
 |-----------|--------|
 | Unknown format | `BusinessException(500, "不支持的规则格式：…")` |
 | Empty content on save | `BusinessException(500, "规则内容不能为空")` / controller `content 不能为空` |
-| Sync URL empty and no stored `source_url` | `BusinessException(500, "同步 URL 不能为空")` |
+| Sync URL empty | Use stored `source_url`, else default Online INI `ACL4SSR_Online_Full_NoAuto.ini` |
+| Any ruleset `.list` / provider fetch fails | `BusinessException(500, "拉取规则列表失败：{url}: …")`; no persist |
 | Fetch upstream fails | `BusinessException(500, "拉取上游规则失败：…")` |
 | After sanitize still has remote rule deps and seed also poisoned | `BusinessException(500, …拒绝保存)` |
 | Table missing / select throws | Log warn; resolve falls through to classpath seed |
@@ -209,7 +210,17 @@ static boolean containsRemoteRuleDependency(String content);
 | `warning` | string? | Human-readable sanitize note |
 | `stripped_remote` | boolean | Remote rule deps removed |
 | `used_seed_fallback` | boolean | Fell back to classpath seed |
-| `sync_hint` | string (sync only) | Product note: sync localized templates only |
+| `sync_hint` | string (sync only) | e.g. 已从 Online/raw 内联本地化… |
+
+**Sync expand (before sanitize)** — `RuleTemplateService.prepareSyncContent`:
+
+| Upstream | Behavior |
+|----------|----------|
+| ACL4SSR Online INI (`ruleset=` + `custom_proxy_group=`) | `Acl4ssrIniParser` → fetch all `.list` (fail-fast) → `Acl4ssrTemplateMaterializer` into format dialect (seed shell kept) |
+| Clash/Stash YAML with HTTP `rule-providers` | `ClashRuleProviderExpander` inlines providers → optional merge seed shell |
+| Other | Pass through to sanitize |
+
+Default sync URL: `https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online_Full_NoAuto.ini`.
 
 ### 3. Contracts
 
@@ -221,51 +232,56 @@ static boolean containsRemoteRuleDependency(String content);
 
 **Allowed remote URLs in seeds** (not rule lists): url-test / DoH / connectivity check / Surge `geoip-maxmind-url` (client geo DB). These are not remote *rule* dependencies.
 
-**Product**: Sync target must be an already-localized full client template. ACL4SSR Online Full / Subconverter ini with `rule-providers` will be stripped or replaced by seed — expected, not a silent success.
+**Product**: Online INI / GitHub raw lists are **allowed as sync sources**; the server must expand them into fully inlined templates before persist. Sanitize remains the final gate so subscribe output never requires clients to fetch remote rule lists. Manual paste that still has remote deps after strip may seed-fallback or reject.
 
 ### 4. Validation & Error Matrix
 
 | Condition | Result |
 |-----------|--------|
-| Upstream has GitHub `rule-providers` | Stripped; rules filled from seed if needed; `warning` + `stripped_remote` / maybe `used_seed_fallback` |
+| Sync Online INI + all lists OK | Inlined template persisted; `used_seed_fallback` false; may still set `sync_hint` |
+| Upstream Clash YAML with HTTP `rule-providers` | Expanded inline then sanitize; not treated as “forbidden Online” |
 | Manual paste still has remote rule URL after strip | Seed fallback or reject |
 | Seed itself contains remote rule deps | Reject save |
+| List/provider HTTP fails mid-sync | 500; no persist |
 
 ### 5. Good / Base / Bad Cases
 
-- **Good**: Sync a self-hosted Clash YAML without `rule-providers` → saved as-is (or light cleanup).
-- **Base**: Sync Online Full → seed fallback + `sync_hint` explaining localization.
-- **Bad**: Treat sanitize warning as failure in UI when content is still usable.
+- **Good**: Sync default Online INI for `clash` → DB content has many `DOMAIN-SUFFIX` lines, no `rule-providers` / `raw.githubusercontent.com`.
+- **Base**: Empty URL → default Online INI; seed shell DNS/`[General]` retained.
+- **Bad**: Strip Online without fetching lists and silently seed-fallback (old behavior).
 
 ### 6. Tests Required
 
 - `RuleTemplateSanitizerTest` — strip providers + RULE-SET; fill from seed; reject poisoned seed; generic surge strip.
-- `RuleTemplateServiceTest.sync_*` — asserts `stripped_remote` / `used_seed_fallback` / `sync_hint` present when upstream is remote-heavy.
+- `Acl4ssrIniParserTest` / `Acl4ssrTemplateMaterializerTest` / `ClashRuleProviderExpanderTest`.
+- `RuleTemplateServiceTest.sync_*` — Online INI mock multi-URL; list failure no persist; `sync_hint` mentions 内联本地化.
 
 ### 7. Wrong vs Correct
 
 #### Wrong
 
 ```yaml
+# persist Online YAML without expanding providers
 rule-providers:
   Ads:
     type: http
     url: https://raw.githubusercontent.com/.../BanAD.list
 rules:
   - RULE-SET,Ads,REJECT
-# and GEOSITE,category-ad,REJECT  — tag missing in Loyalsoldier geosite.dat
 ```
 
 #### Correct
 
 ```yaml
-# no rule-providers
+# no rule-providers — lists inlined server-side
 rules:
-  - GEOSITE,category-ads-all,🛑 广告拦截
+  - DOMAIN-SUFFIX,adservice.google.com,🛑 广告拦截
   - MATCH,🐟 漏网之鱼
 ```
 
-> **GEOSITE gotcha**: Use tags present in Meta default Loyalsoldier `geosite.dat`. Forbidden example: `category-ad` (use `category-ads-all`). Allowlist: `rules/geosite-allowlist.txt` + `scripts/subscribe-rules/check_clash_geosite.py`.
+> **GEOSITE gotcha** (classpath seeds / manual GEOSITE edits): Use tags present in Meta default Loyalsoldier `geosite.dat`. Forbidden example: `category-ad` (use `category-ads-all`). Allowlist: `rules/geosite-allowlist.txt` + `scripts/subscribe-rules/check_clash_geosite.py`. Online sync path uses classical DOMAIN/IP rules, not GEOSITE approximation.
+
+> **INI `custom_proxy_group` gotcha**: For `url-test` / `fallback` / `load-balance`, Subconverter appends trailing `http(s)://…` (test URL) then numeric `interval` / `tolerance`. `Acl4ssrIniParser` must strip those tails before treating remaining tokens as group members — otherwise proxies lists get polluted with URLs and numbers. Covered by `Acl4ssrIniParserTest`.
 ---
 
 ## Scenario: Builder merge semantics

@@ -16,7 +16,8 @@ import java.nio.charset.StandardCharsets;
 public class ExternalSubscribeFetcher {
 
     private static final Logger logger = LoggerFactory.getLogger(ExternalSubscribeFetcher.class);
-    private static final int MAX_BYTES = 8 * 1024 * 1024;
+    /** Allow large ACL4SSR IP lists (e.g. ChinaCompanyIp.list) during rule sync. */
+    private static final int MAX_BYTES = 16 * 1024 * 1024;
     private static final int CONNECT_TIMEOUT_MS = 15000;
     private static final int READ_TIMEOUT_MS = 30000;
     private static final int MAX_REDIRECTS = 5;

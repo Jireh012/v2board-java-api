@@ -10,8 +10,11 @@ import org.mockito.ArgumentCaptor;
 
 import java.util.concurrent.TimeUnit;
 
+import com.v2board.api.common.BusinessException;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -154,30 +157,100 @@ class RuleTemplateServiceTest {
     }
 
     @Test
-    void sync_fetchesSanitizesAndSaves() throws Exception {
+    void sync_expandsClashRuleProvidersAndSaves() throws Exception {
         when(fetcher.fetch("https://example.com/clash.yaml")).thenReturn("""
+                mixed-port: 7890
                 rule-providers:
                   Ads:
                     type: http
-                    url: https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/BanAD.list
+                    url: https://example.com/BanAD.list
                 proxy-groups:
-                  - { name: "$app_name", type: select, proxies: ["DIRECT"] }
+                  - name: "🚀 节点选择"
+                    type: select
+                    proxies: ["DIRECT"]
                 rules:
                   - RULE-SET,Ads,REJECT
                   - GEOIP,CN,DIRECT
-                  - MATCH,$app_name
+                  - MATCH,🚀 节点选择
                 """);
+        when(fetcher.fetch("https://example.com/BanAD.list"))
+                .thenReturn("DOMAIN-SUFFIX,ads.example.com\n");
         when(mapper.selectById("clash")).thenReturn(null);
         when(mapper.insert(any(SubscribeRuleTemplate.class))).thenReturn(1);
         when(cacheService.get(anyString())).thenReturn(null);
 
         var data = service.sync("clash", "https://example.com/clash.yaml");
-        assertFalse(String.valueOf(data.get("content")).contains("raw.githubusercontent.com"));
-        assertTrue(Boolean.TRUE.equals(data.get("stripped_remote"))
-                || Boolean.TRUE.equals(data.get("used_seed_fallback")));
-        assertTrue(String.valueOf(data.get("sync_hint")).contains("本地化"));
-        verify(mapper).insert(any(SubscribeRuleTemplate.class));
+        ArgumentCaptor<SubscribeRuleTemplate> captor = ArgumentCaptor.forClass(SubscribeRuleTemplate.class);
+        verify(mapper).insert(captor.capture());
+        String saved = captor.getValue().getContent();
+        assertFalse(saved.contains("rule-providers:"));
+        assertFalse(saved.contains("RULE-SET,"));
+        assertTrue(saved.contains("DOMAIN-SUFFIX,ads.example.com"));
+        assertTrue(saved.contains("dns:") || saved.contains("mixed-port"));
+        assertFalse(Boolean.TRUE.equals(data.get("used_seed_fallback")));
+        assertTrue(String.valueOf(data.get("sync_hint")).contains("内联本地化"));
         verify(cacheService).delete("v2board_subscribe:rule:clash");
+    }
+
+    @Test
+    void sync_onlineIni_inlinesListsWithoutSeedFallback() throws Exception {
+        String ini = """
+                ruleset=🛑 广告拦截,https://example.com/BanAD.list
+                ruleset=🎯 全球直连,[]GEOIP,CN
+                ruleset=🐟 漏网之鱼,[]FINAL
+                custom_proxy_group=🚀 节点选择`select`[]DIRECT
+                custom_proxy_group=🛑 广告拦截`select`[]REJECT`[]DIRECT
+                """;
+        when(fetcher.fetch(RuleTemplateService.DEFAULT_ONLINE_INI_URL)).thenReturn(ini);
+        when(fetcher.fetch("https://example.com/BanAD.list"))
+                .thenReturn("DOMAIN-SUFFIX,ads.example.com\nDOMAIN-KEYWORD,adservice\n");
+        when(mapper.selectById("clash")).thenReturn(null);
+        when(mapper.insert(any(SubscribeRuleTemplate.class))).thenReturn(1);
+        when(cacheService.get(anyString())).thenReturn(null);
+
+        var data = service.sync("clash", null);
+        ArgumentCaptor<SubscribeRuleTemplate> captor = ArgumentCaptor.forClass(SubscribeRuleTemplate.class);
+        verify(mapper).insert(captor.capture());
+        String saved = captor.getValue().getContent();
+        assertFalse(saved.contains("raw.githubusercontent.com"));
+        assertFalse(saved.contains("rule-providers"));
+        assertTrue(saved.contains("DOMAIN-SUFFIX,ads.example.com,🛑 广告拦截"));
+        assertTrue(saved.contains("MATCH,🐟 漏网之鱼"));
+        assertTrue(saved.contains("dns:") || saved.contains("mixed-port"));
+        assertFalse(Boolean.TRUE.equals(data.get("used_seed_fallback")));
+        assertTrue(String.valueOf(data.get("sync_hint")).contains("内联本地化"));
+        assertEquals(RuleTemplateService.DEFAULT_ONLINE_INI_URL, captor.getValue().getSourceUrl());
+    }
+
+    @Test
+    void sync_listFetchFailure_doesNotPersist() throws Exception {
+        String ini = """
+                ruleset=🛑 广告拦截,https://example.com/BanAD.list
+                ruleset=🐟 漏网之鱼,[]FINAL
+                custom_proxy_group=🚀 节点选择`select`[]DIRECT
+                """;
+        when(fetcher.fetch("https://example.com/online.ini")).thenReturn(ini);
+        when(fetcher.fetch("https://example.com/BanAD.list"))
+                .thenThrow(new IllegalStateException("拉取失败: HTTP 404"));
+        when(mapper.selectById("clash")).thenReturn(null);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.sync("clash", "https://example.com/online.ini"));
+        assertTrue(ex.getMessage().contains("拉取规则列表失败"));
+        verify(mapper, never()).insert(any());
+        verify(mapper, never()).updateById(any());
+    }
+
+    @Test
+    void resolveSyncUrl_prefersRequestThenStoredThenDefault() {
+        when(mapper.selectById("clash")).thenReturn(null);
+        assertEquals(RuleTemplateService.DEFAULT_ONLINE_INI_URL, service.resolveSyncUrl("clash", null));
+
+        SubscribeRuleTemplate row = new SubscribeRuleTemplate();
+        row.setSourceUrl("https://stored.example/rules.ini");
+        when(mapper.selectById("surge")).thenReturn(row);
+        assertEquals("https://stored.example/rules.ini", service.resolveSyncUrl("surge", "  "));
+        assertEquals("https://req.example/x.ini", service.resolveSyncUrl("surge", "https://req.example/x.ini"));
     }
 
     @Test

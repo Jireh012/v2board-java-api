@@ -5,6 +5,9 @@ import com.v2board.api.config.V2boardRedisProperties;
 import com.v2board.api.mapper.SubscribeRuleTemplateMapper;
 import com.v2board.api.model.SubscribeRuleTemplate;
 import com.v2board.api.service.external.ExternalSubscribeFetcher;
+import com.v2board.api.service.rules.Acl4ssrIniParser;
+import com.v2board.api.service.rules.Acl4ssrTemplateMaterializer;
+import com.v2board.api.service.rules.ClashRuleProviderExpander;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ClassPathResource;
@@ -14,6 +17,7 @@ import org.springframework.util.StringUtils;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -30,6 +34,12 @@ public class RuleTemplateService {
     private static final Set<String> SUPPORTED = Set.of(
             "clash", "stash", "surge", "surfboard", "singbox", "quantumultx", "loon");
     public static final String PROFILE_FULL = "full";
+    /**
+     * Default sync source: ACL4SSR Online Full NoAuto (Subconverter INI).
+     * Server expands remote .list into inline local templates.
+     */
+    public static final String DEFAULT_ONLINE_INI_URL =
+            "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online_Full_NoAuto.ini";
     private static final Set<String> PROFILES = Set.of("full", "simple", "nodes");
     private static final ThreadLocal<String> REQUEST_PROFILE = new ThreadLocal<>();
 
@@ -127,7 +137,7 @@ public class RuleTemplateService {
             data.put("is_default", false);
             data.put("fallback_format", "clash");
         } else {
-            data.put("source_url", null);
+            data.put("source_url", DEFAULT_ONLINE_INI_URL);
             data.put("update_source", "default");
             data.put("updated_at", null);
             data.put("created_at", null);
@@ -157,39 +167,83 @@ public class RuleTemplateService {
 
     public Map<String, Object> sync(String format, String url) {
         String fmt = normalizeFormat(format);
-        if (!StringUtils.hasText(url)) {
-            // 允许沿用已存 source_url
-            SubscribeRuleTemplate existing = loadRow(fmt);
-            if (existing != null && StringUtils.hasText(existing.getSourceUrl())) {
-                url = existing.getSourceUrl();
-            }
-        }
-        if (!StringUtils.hasText(url)) {
-            throw new BusinessException(500, "同步 URL 不能为空");
-        }
+        String resolvedUrl = resolveSyncUrl(fmt, url);
         String raw;
         try {
-            raw = fetcher.fetch(url.trim());
+            raw = fetcher.fetch(resolvedUrl);
         } catch (Exception e) {
-            logger.warn("Subscribe rule sync fetch failed format={} url={}: {}", fmt, url, e.getMessage());
+            logger.warn("Subscribe rule sync fetch failed format={} url={}: {}", fmt, resolvedUrl, e.getMessage());
             throw new BusinessException(500, "拉取上游规则失败：" + e.getMessage());
         }
         if (!StringUtils.hasText(raw)) {
             throw new BusinessException(500, "上游规则内容为空");
         }
         String seed = loadClasspathSeed(fmt);
-        RuleTemplateSanitizer.Result sanitized;
-        try {
-            sanitized = RuleTemplateSanitizer.sanitize(fmt, raw, seed);
-        } catch (BusinessException e) {
-            throw e;
-        }
-        persist(fmt, sanitized.content(), url.trim(), "sync");
+        String prepared = prepareSyncContent(fmt, raw, seed);
+        RuleTemplateSanitizer.Result sanitized = RuleTemplateSanitizer.sanitize(fmt, prepared, seed);
+        persist(fmt, sanitized.content(), resolvedUrl, "sync");
         Map<String, Object> data = fetch(fmt);
         applySanitizeMeta(data, sanitized);
-        data.put("sync_hint",
-                "同步目标须为「已本地化」完整模板；带 rule-providers / 远程 RULE-SET 的 Online Full 会被剥离或回落默认种子");
+        data.put("sync_hint", "已从 Online/raw 内联本地化（服务端展开规则列表，客户端无远程规则依赖）");
         return data;
+    }
+
+    /**
+     * Resolve sync URL: request → stored source_url → default Online INI.
+     */
+    String resolveSyncUrl(String format, String url) {
+        if (StringUtils.hasText(url)) {
+            return url.trim();
+        }
+        SubscribeRuleTemplate existing = loadRow(format);
+        if (existing != null && StringUtils.hasText(existing.getSourceUrl())) {
+            return existing.getSourceUrl().trim();
+        }
+        return DEFAULT_ONLINE_INI_URL;
+    }
+
+    /**
+     * Expand ACL4SSR Online INI or Clash HTTP rule-providers into inline content before sanitize.
+     */
+    String prepareSyncContent(String fmt, String raw, String seed) {
+        if (Acl4ssrIniParser.looksLikeIni(raw)) {
+            Acl4ssrIniParser.Model model = Acl4ssrIniParser.parse(raw);
+            Map<String, String> lists = fetchRulesetLists(model);
+            return Acl4ssrTemplateMaterializer.materialize(fmt, seed, model, lists);
+        }
+        if (("clash".equals(fmt) || "stash".equals(fmt)) && ClashRuleProviderExpander.hasHttpProviders(raw)) {
+            String expanded = ClashRuleProviderExpander.expand(raw, fetcher);
+            if (StringUtils.hasText(seed)) {
+                return Acl4ssrTemplateMaterializer.mergeClashShell(seed, expanded);
+            }
+            return expanded;
+        }
+        return raw;
+    }
+
+    private Map<String, String> fetchRulesetLists(Acl4ssrIniParser.Model model) {
+        Set<String> urls = new LinkedHashSet<>();
+        for (Acl4ssrIniParser.Ruleset rs : model.rulesets()) {
+            if (rs.isHttpUrl()) {
+                urls.add(rs.source().trim());
+            }
+        }
+        Map<String, String> out = new LinkedHashMap<>();
+        for (String listUrl : urls) {
+            try {
+                String body = fetcher.fetch(listUrl);
+                if (!StringUtils.hasText(body)) {
+                    throw new BusinessException(500, "拉取规则列表失败：" + listUrl + ": 内容为空");
+                }
+                out.put(listUrl, body);
+            } catch (BusinessException e) {
+                throw e;
+            } catch (Exception e) {
+                logger.warn("Subscribe rule list fetch failed url={}: {}", listUrl, e.getMessage());
+                throw new BusinessException(500, "拉取规则列表失败：" + listUrl + ": " + e.getMessage());
+            }
+        }
+        return out;
     }
 
     private static void applySanitizeMeta(Map<String, Object> data, RuleTemplateSanitizer.Result sanitized) {

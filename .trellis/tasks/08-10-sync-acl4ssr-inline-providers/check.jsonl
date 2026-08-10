@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/subscribe-rules.md", "reason": "Verify sync expand contracts and no remote rule deps"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Admin UI ↔ API sync path"}
