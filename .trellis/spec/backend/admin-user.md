@@ -38,6 +38,7 @@ POST /api/v1/admin/user/update   JSON map
 POST /api/v1/admin/user/generate JSON map
 POST /api/v1/admin/user/delUser  form id
 POST /api/v1/admin/user/resetSecret form id
+GET  /api/v1/admin/user/getSubscribeUrl?id=   → data: string subscribe URL (ConfigService.buildSubscribeUrl)
 ```
 
 DB: `v2_user.remarks` TEXT NULL; `v2_user.is_staff` TINYINT.

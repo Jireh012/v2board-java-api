@@ -91,6 +91,7 @@ public final class PanelApiActionCatalog {
         out.add(zp(z, "user/delUser"));
         out.add(zp(z, "user/getLoginLog"));
         out.add(zp(z, "user/resetSecret"));
+        out.add(zp(z, "user/getSubscribeUrl"));
         out.add(zp(z, "user/dumpCSV"));
         out.add(zp(z, "plan/fetch"));
         out.add(zp(z, "plan/save"));

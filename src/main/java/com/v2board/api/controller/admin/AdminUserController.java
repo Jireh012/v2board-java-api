@@ -322,6 +322,21 @@ public class AdminUserController {
         return ApiResponse.success(true);
     }
 
+    /**
+     * 管理端复制用户订阅链接：与用户侧 getSubscribe 同一套 buildSubscribeUrl 规则。
+     */
+    @GetMapping("/getSubscribeUrl")
+    public ApiResponse<String> getSubscribeUrl(@RequestParam("id") Long id) {
+        User user = userMapper.selectById(id);
+        if (user == null) {
+            throw new BusinessException(500, "用户不存在");
+        }
+        if (user.getToken() == null || user.getToken().isBlank()) {
+            throw new BusinessException(500, "用户订阅 token 为空");
+        }
+        return ApiResponse.success(configService.buildSubscribeUrl(user.getToken(), user.getId()));
+    }
+
     // ==================== dumpCSV ====================
     @PostMapping("/dumpCSV")
     public void dumpCSV(HttpServletRequest request, HttpServletResponse response) throws Exception {
