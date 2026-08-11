@@ -25,7 +25,7 @@ v2board:
     sing-box-path: /opt/homebrew/bin/sing-box
     # probe-url: https://www.gstatic.com/generate_204
     # concurrency: 4
-    # 本地开发默认关闭定时同步；需要定时时改为如 "0 */30 * * * *"
+    # 本地开发默认关闭自动同步种子（subscribe.external_sync_enable=0）；生产可在后台「系统配置→订阅」开启
     cron: "-"
 
 logging:

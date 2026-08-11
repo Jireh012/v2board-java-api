@@ -333,6 +333,72 @@ if (preProxy && pick() == null) throw new IllegalStateException("前置代理已
 
 ---
 
+## Scenario: Configurable auto-sync (`subscribe.external_sync_*`)
+
+### 1. Scope / Trigger
+
+- Admin system config「订阅」controls automatic `syncAll` cadence.
+- Manual admin `sync` / `sync-all` always available (ignores enable).
+- Cross-layer: ConfigService → `ExternalSubscribeSyncScheduler` → `ExternalSubscribeSyncService.syncAll`.
+
+### 2. Signatures / keys
+
+Under nested `subscribe` (DB `v2_system_config`):
+
+| Key | Type | Default seed |
+|-----|------|----------------|
+| `external_sync_enable` | 0/1 | `0` if yml/env cron is `-`/blank; else `1` |
+| `external_sync_mode` | `interval` \| `cron` | `interval` (or `cron` when seeding non-default env cron) |
+| `external_sync_interval_value` | int ≥ 1 | `30` |
+| `external_sync_interval_unit` | `minute` \| `hour` \| `day` | `minute` |
+| `external_sync_cron` | Spring 6-field | from `v2board.external-subscribe.cron` or `0 */30 * * * *` |
+
+```java
+ExternalSyncSettings ConfigService.getExternalSyncSettings();
+void ConfigService.validateExternalSyncInSaveBody(body); // on save when keys present
+ExternalSubscribeSyncScheduler.rescheduleFromConfig();   // ApplicationReady + after save(subscribe)
+```
+
+`v2board.external-subscribe.cron` only seeds defaults; runtime ticks read merged DB config.
+
+### 3. Contracts
+
+| Condition | Behavior |
+|-----------|----------|
+| enable=0 | Cancel scheduled task; no auto `syncAll` |
+| mode=interval | `PeriodicTrigger` **fixedDelay** (`setFixedRate(false)`), initial delay = period |
+| mode=cron | `CronTrigger`; `-` is **not** a disable signal |
+| save(subscribe) | Persist then `rescheduleFromConfig()` (no restart) |
+| Old `@Scheduled` on ExternalSubscribeSchedule | **Removed** — must not double-fire |
+
+### 4. Validation (enable=1)
+
+| Mode | Rule |
+|------|------|
+| interval | value ≥ 1; unit ∈ {minute,hour,day}; caps minute≤10080 / hour≤168 / day≤30 |
+| cron | `CronExpression.parse` OK; reject empty / `-` |
+
+enable=0 → soft (draft fields may be invalid).
+
+### 5. Wrong vs Correct
+
+#### Wrong
+
+```java
+@Scheduled(cron = "${v2board.external-subscribe.cron:0 */30 * * * *}")
+public void syncExternalSubscriptions() { syncService.syncAll(); }
+// + also dynamic scheduler → double fire
+```
+
+#### Correct
+
+```java
+// only ExternalSubscribeSyncScheduler, driven by subscribe.external_sync_*
+if (!settings.enabled()) { cancel; return; }
+```
+
+---
+
 ## Related: Client node naming
 
 Reachable external nodes enter subscribe output via `ExternalSubscribeNodeService.listReachableAsServerMaps()` (`type=external`).

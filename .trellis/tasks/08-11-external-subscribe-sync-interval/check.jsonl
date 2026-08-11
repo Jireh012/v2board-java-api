@@ -1,0 +1,5 @@
+{"path":".trellis/spec/backend/external-subscribe.md","note":"No double schedule; enable gate"}
+{"path":".trellis/spec/backend/system-config.md","note":"Keys validated on save"}
+{"path":".trellis/spec/backend/error-handling.md","note":"Invalid cron/interval BusinessException"}
+{"path":"src/main/java/com/v2board/api/schedule/ExternalSubscribeSchedule.java","note":"No @Scheduled left"}
+{"path":"../v2board-ui/src/views/admin/AdminSystemConfigView.vue","note":"Subscribe UI mode switch"}

@@ -204,3 +204,45 @@ Node runtime auth and `base_config` delivery: [server-node.md](./server-node.md)
 ### 5. Tests Required
 
 - `ConfigServiceServerValidationTest` — token / interval / traffic / mode accept & reject.
+
+---
+
+## Scenario: Subscribe external auto-sync fields
+
+### 1. Scope / Trigger
+
+- Trigger: Admin `ConfigService.save` body contains `subscribe` with `external_sync_*`.
+- Symptom if broken: invalid cron saved → scheduler crash loop; or `@Scheduled` + dynamic scheduler double-run.
+
+### 2. Signatures
+
+```java
+void save(Map<String, Object> body); // validateExternalSyncInSaveBody + reschedule
+ExternalSyncSettings getExternalSyncSettings();
+```
+
+Keys live under `subscribe` (same nested map as plan_change / show_subscribe_*). See [external-subscribe.md](./external-subscribe.md) scenario「Configurable auto-sync」.
+
+### 3. Contracts
+
+| Field | Rule when `external_sync_enable=1` |
+|-------|-------------------------------------|
+| `external_sync_mode` | `interval` or `cron` |
+| `external_sync_interval_value` / `_unit` | positive int + minute\|hour\|day with caps |
+| `external_sync_cron` | valid Spring 6-field; not `-` |
+
+Defaults in `buildDefaults()` seed from `ExternalSubscribeProperties.cron` (`-` → enable=0). After persist, `ExternalSubscribeSyncScheduler.rescheduleFromConfig()`.
+
+### 4. Validation & Error Matrix
+
+| Condition | Result |
+|-----------|--------|
+| enable=1 + bad cron | `BusinessException` 「cron 表达式不合法」 |
+| enable=1 + cron=`-` | `BusinessException` （关闭只用开关） |
+| enable=1 + interval 0 / bad unit | `BusinessException` |
+| enable=0 | Soft — other external_sync fields not strictly validated |
+
+### 5. Tests Required
+
+- `ExternalSubscribeSyncConfigTest` — validation + defaults seed from cron `-` / custom cron.
+- `ExternalSubscribeSyncSchedulerTest` — enable=0 does not schedule / cancels previous.

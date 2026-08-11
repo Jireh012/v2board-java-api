@@ -1,0 +1,7 @@
+{"path":".trellis/spec/backend/external-subscribe.md","note":"Sync scheduling contracts"}
+{"path":".trellis/spec/backend/system-config.md","note":"subscribe nested keys + save validation"}
+{"path":"src/main/java/com/v2board/api/schedule/ExternalSubscribeSchedule.java","note":"Remove fixed @Scheduled"}
+{"path":"src/main/java/com/v2board/api/config/ScheduleConfig.java","note":"Reuse TaskScheduler"}
+{"path":"src/main/java/com/v2board/api/config/ExternalSubscribeProperties.java","note":"Seed defaults from env cron"}
+{"path":"src/main/java/com/v2board/api/service/ConfigService.java","note":"Defaults + validation + reschedule hook"}
+{"path":"src/main/java/com/v2board/api/service/external/ExternalSubscribeSyncService.java","note":"syncAll lock semantics unchanged"}

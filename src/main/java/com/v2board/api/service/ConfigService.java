@@ -5,16 +5,20 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.v2board.api.common.BusinessException;
 import com.v2board.api.config.ClientApiPathRegistry;
+import com.v2board.api.config.ExternalSubscribeProperties;
 import com.v2board.api.config.NodeApiRouteRegistrar;
 import com.v2board.api.config.PublicConfigRouteRegistrar;
 import com.v2board.api.config.SubscribeRouteRegistrar;
 import com.v2board.api.mapper.SystemConfigMapper;
 import com.v2board.api.model.SystemConfig;
+import com.v2board.api.schedule.ExternalSubscribeSyncScheduler;
+import com.v2board.api.service.external.ExternalSyncSettings;
 import com.v2board.api.util.V2boardPhpConfigLoader;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -56,6 +60,13 @@ public class ConfigService {
     @Autowired(required = false)
     @Lazy
     private PublicConfigRouteRegistrar publicConfigRouteRegistrar;
+
+    @Autowired(required = false)
+    private ExternalSubscribeProperties externalSubscribeProperties;
+
+    @Autowired(required = false)
+    @Lazy
+    private ExternalSubscribeSyncScheduler externalSubscribeSyncScheduler;
 
     @Value("${v2board.app-name:V2Board}")
     private String appName;
@@ -888,6 +899,20 @@ public class ConfigService {
     }
 
     /**
+     * Resolved {@code subscribe.external_sync_*} for the dynamic auto-sync scheduler.
+     */
+    public ExternalSyncSettings getExternalSyncSettings() {
+        try {
+            Map<String, Object> full = getFullConfig();
+            if (full.get("subscribe") instanceof Map<?, ?> sub) {
+                return parseExternalSyncSettings(sub);
+            }
+        } catch (Exception ignored) {
+        }
+        return defaultExternalSyncSettings();
+    }
+
+    /**
      * 保存配置。请求体为与 fetch 相同的嵌套结构，会与现有配置合并后写入。
      */
     public void save(Map<String, Object> body) throws Exception {
@@ -895,6 +920,7 @@ public class ConfigService {
         validateSubscribePathInSaveBody(body);
         validateServerInSaveBody(body);
         validateClientApiPathsInSaveBody(body);
+        validateExternalSyncInSaveBody(body);
         Map<String, Object> current = getFullConfig();
         deepMerge(current, body);
         // Always ensure node API prefix after merge (empty → auto-gen).
@@ -911,6 +937,9 @@ public class ConfigService {
         }
         if (clientPathsChanged || (body != null && body.containsKey("site"))) {
             refreshClientApiRoutes();
+        }
+        if (externalSubscribeSyncScheduler != null && body != null && body.containsKey("subscribe")) {
+            externalSubscribeSyncScheduler.rescheduleFromConfig();
         }
     }
 
@@ -997,6 +1026,187 @@ public class ConfigService {
             }
         }
         return getSecurePath();
+    }
+
+    /**
+     * Validate {@code subscribe.external_sync_*} when subscribe is present.
+     * enable=0 → soft (draft OK); enable=1 → interval/cron rules.
+     */
+    @SuppressWarnings("unchecked")
+    static void validateExternalSyncInSaveBody(Map<String, Object> body) {
+        if (body == null || !(body.get("subscribe") instanceof Map<?, ?> subRaw)) {
+            return;
+        }
+        Map<String, Object> sub;
+        if (subRaw instanceof HashMap || subRaw instanceof LinkedHashMap) {
+            sub = (Map<String, Object>) subRaw;
+        } else {
+            sub = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> e : subRaw.entrySet()) {
+                sub.put(String.valueOf(e.getKey()), e.getValue());
+            }
+            body.put("subscribe", sub);
+        }
+
+        boolean hasAnyExternalSyncKey = sub.containsKey("external_sync_enable")
+                || sub.containsKey("external_sync_mode")
+                || sub.containsKey("external_sync_interval_value")
+                || sub.containsKey("external_sync_interval_unit")
+                || sub.containsKey("external_sync_cron");
+        if (!hasAnyExternalSyncKey) {
+            return;
+        }
+
+        int enable = parseEnableFlag(sub.get("external_sync_enable"), 0);
+        if (sub.containsKey("external_sync_enable")) {
+            sub.put("external_sync_enable", enable);
+        }
+        if (enable != 1) {
+            // Soft: normalize mode/unit/cron when present, but do not reject drafts.
+            if (sub.containsKey("external_sync_mode")) {
+                String mode = str(sub.get("external_sync_mode")).toLowerCase(Locale.ROOT);
+                if (!ExternalSyncSettings.MODE_INTERVAL.equals(mode)
+                        && !ExternalSyncSettings.MODE_CRON.equals(mode)
+                        && StringUtils.hasText(mode)) {
+                    throw new BusinessException(500, "第三方订阅自动同步模式只能为 interval 或 cron");
+                }
+                if (StringUtils.hasText(mode)) {
+                    sub.put("external_sync_mode", mode);
+                }
+            }
+            return;
+        }
+
+        String mode = str(sub.get("external_sync_mode")).toLowerCase(Locale.ROOT);
+        if (!StringUtils.hasText(mode)) {
+            mode = ExternalSyncSettings.MODE_INTERVAL;
+        }
+        if (!ExternalSyncSettings.MODE_INTERVAL.equals(mode)
+                && !ExternalSyncSettings.MODE_CRON.equals(mode)) {
+            throw new BusinessException(500, "第三方订阅自动同步模式只能为 interval 或 cron");
+        }
+        sub.put("external_sync_mode", mode);
+
+        if (ExternalSyncSettings.MODE_CRON.equals(mode)) {
+            String cron = str(sub.get("external_sync_cron"));
+            if (!StringUtils.hasText(cron) || "-".equals(cron)) {
+                throw new BusinessException(500, "第三方订阅自动同步 cron 不能为空或 -（关闭请使用开关）");
+            }
+            try {
+                CronExpression.parse(cron);
+            } catch (IllegalArgumentException ex) {
+                throw new BusinessException(500, "第三方订阅自动同步 cron 表达式不合法");
+            }
+            sub.put("external_sync_cron", cron);
+            return;
+        }
+
+        int value = parsePositiveInt(sub.get("external_sync_interval_value"), -1);
+        if (value < 1) {
+            throw new BusinessException(500, "第三方订阅自动同步间隔必须为正整数");
+        }
+        String unit = str(sub.get("external_sync_interval_unit")).toLowerCase(Locale.ROOT);
+        if (!StringUtils.hasText(unit)) {
+            unit = ExternalSyncSettings.UNIT_MINUTE;
+        }
+        int max = switch (unit) {
+            case ExternalSyncSettings.UNIT_MINUTE -> 10080;
+            case ExternalSyncSettings.UNIT_HOUR -> 168;
+            case ExternalSyncSettings.UNIT_DAY -> 30;
+            default -> -1;
+        };
+        if (max < 0) {
+            throw new BusinessException(500, "第三方订阅自动同步间隔单位只能为 minute、hour 或 day");
+        }
+        if (value > max) {
+            throw new BusinessException(500, "第三方订阅自动同步间隔超出允许上限（"
+                    + unit + " ≤ " + max + "）");
+        }
+        sub.put("external_sync_interval_value", value);
+        sub.put("external_sync_interval_unit", unit);
+    }
+
+    private static int parseEnableFlag(Object raw, int defaultValue) {
+        if (raw == null) {
+            return defaultValue;
+        }
+        if (raw instanceof Boolean b) {
+            return b ? 1 : 0;
+        }
+        if (raw instanceof Number n) {
+            return n.intValue() == 0 ? 0 : 1;
+        }
+        String s = String.valueOf(raw).trim();
+        if (s.isEmpty()) {
+            return defaultValue;
+        }
+        if ("1".equals(s) || "true".equalsIgnoreCase(s)) {
+            return 1;
+        }
+        if ("0".equals(s) || "false".equalsIgnoreCase(s)) {
+            return 0;
+        }
+        try {
+            return Integer.parseInt(s) == 0 ? 0 : 1;
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
+    }
+
+    private static int parsePositiveInt(Object raw, int defaultValue) {
+        if (raw == null) {
+            return defaultValue;
+        }
+        if (raw instanceof Number n) {
+            return n.intValue();
+        }
+        try {
+            return Integer.parseInt(String.valueOf(raw).trim());
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
+    }
+
+    private ExternalSyncSettings defaultExternalSyncSettings() {
+        String cronSeed = externalSubscribeProperties != null
+                ? externalSubscribeProperties.getCron()
+                : ExternalSyncSettings.DEFAULT_CRON;
+        boolean cronDisabled = !StringUtils.hasText(cronSeed) || "-".equals(cronSeed.trim());
+        String cron = cronDisabled
+                ? ExternalSyncSettings.DEFAULT_CRON
+                : cronSeed.trim();
+        int enable = cronDisabled ? 0 : 1;
+        String mode = ExternalSyncSettings.MODE_INTERVAL;
+        if (!cronDisabled && !ExternalSyncSettings.DEFAULT_CRON.equals(cron)) {
+            mode = ExternalSyncSettings.MODE_CRON;
+        }
+        return new ExternalSyncSettings(enable == 1, mode, 30,
+                ExternalSyncSettings.UNIT_MINUTE, cron);
+    }
+
+    private ExternalSyncSettings parseExternalSyncSettings(Map<?, ?> sub) {
+        ExternalSyncSettings defaults = defaultExternalSyncSettings();
+        int enable = parseEnableFlag(sub.get("external_sync_enable"), defaults.enabled() ? 1 : 0);
+        String mode = str(sub.get("external_sync_mode")).toLowerCase(Locale.ROOT);
+        if (!ExternalSyncSettings.MODE_INTERVAL.equals(mode)
+                && !ExternalSyncSettings.MODE_CRON.equals(mode)) {
+            mode = defaults.mode();
+        }
+        int value = parsePositiveInt(sub.get("external_sync_interval_value"), defaults.intervalValue());
+        if (value < 1) {
+            value = defaults.intervalValue();
+        }
+        String unit = str(sub.get("external_sync_interval_unit")).toLowerCase(Locale.ROOT);
+        if (!ExternalSyncSettings.UNIT_MINUTE.equals(unit)
+                && !ExternalSyncSettings.UNIT_HOUR.equals(unit)
+                && !ExternalSyncSettings.UNIT_DAY.equals(unit)) {
+            unit = defaults.intervalUnit();
+        }
+        String cron = str(sub.get("external_sync_cron"));
+        if (!StringUtils.hasText(cron) || "-".equals(cron)) {
+            cron = defaults.cron();
+        }
+        return new ExternalSyncSettings(enable == 1, mode, value, unit, cron);
     }
 
     /**
@@ -1607,6 +1817,12 @@ public class ConfigService {
         subscribe.put("show_subscribe_method", showSubscribeMethod != null ? showSubscribeMethod : 0);
         subscribe.put("show_subscribe_expire", showSubscribeExpire != null ? showSubscribeExpire : 5);
         subscribe.put("rule_profile", "full");
+        ExternalSyncSettings syncDefaults = defaultExternalSyncSettings();
+        subscribe.put("external_sync_enable", syncDefaults.enabled() ? 1 : 0);
+        subscribe.put("external_sync_mode", syncDefaults.mode());
+        subscribe.put("external_sync_interval_value", syncDefaults.intervalValue());
+        subscribe.put("external_sync_interval_unit", syncDefaults.intervalUnit());
+        subscribe.put("external_sync_cron", syncDefaults.cron());
         data.put("subscribe", subscribe);
         data.put("frontend", mutableMap(
                 "frontend_theme", "v2board",

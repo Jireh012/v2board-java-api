@@ -81,12 +81,13 @@ v2board:
       send_email: { concurrency: 1 }
       send_telegram: { concurrency: 1 }
 
-  # 第三方订阅源：定时拉取并用本机 sing-box 探测连通性
+  # 第三方订阅源：本机 sing-box 探测；cron 仅作系统配置 external_sync_* 的默认种子（运行时由 DB 调度）
   external-subscribe:
     sing-box-path: ${SING_BOX_PATH:sing-box}
     probe-url: ${EXTERNAL_PROBE_URL:https://www.gstatic.com/generate_204}
     probe-timeout-ms: ${EXTERNAL_PROBE_TIMEOUT_MS:8000}
     concurrency: ${EXTERNAL_PROBE_CONCURRENCY:4}
+    # "-" / blank → subscribe.external_sync_enable 默认 0；否则默认开启并可用该值作 cron 种子
     cron: "${EXTERNAL_SUBSCRIBE_CRON:0 */30 * * * *}"
 
 # 应用配置
