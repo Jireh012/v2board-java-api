@@ -1,5 +1,6 @@
 package com.v2board.api.schedule;
 
+import com.v2board.api.mapper.TrafficDelta;
 import com.v2board.api.mapper.UserMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -9,7 +10,9 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -50,7 +53,7 @@ public class TrafficSchedule {
             redisTemplate.delete("v2board_upload_traffic");
             redisTemplate.delete("v2board_download_traffic");
 
-            // 合并为 trafficMap: userId → [u_increment, d_increment]
+            // 合并为 userId → [u_increment, d_increment]
             Map<Long, long[]> trafficMap = new HashMap<>();
 
             for (Map.Entry<Object, Object> entry : uploadMap.entrySet()) {
@@ -75,9 +78,15 @@ public class TrafficSchedule {
                 return;
             }
 
+            List<TrafficDelta> deltas = new ArrayList<>(trafficMap.size());
+            for (Map.Entry<Long, long[]> e : trafficMap.entrySet()) {
+                long[] ud = e.getValue();
+                deltas.add(new TrafficDelta(e.getKey(), ud[0], ud[1]));
+            }
+
             // 批量更新数据库
             long timestamp = System.currentTimeMillis() / 1000;
-            int rows = userMapper.batchUpdateTraffic(trafficMap, timestamp);
+            int rows = userMapper.batchUpdateTraffic(deltas, timestamp);
             logger.info("Traffic update: {} users updated", rows);
 
         } catch (Exception e) {

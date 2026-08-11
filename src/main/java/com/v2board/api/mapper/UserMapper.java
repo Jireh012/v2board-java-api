@@ -7,17 +7,16 @@ import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Update;
 
 import java.util.List;
-import java.util.Map;
 
 @Mapper
 public interface UserMapper extends BaseMapper<User> {
 
     /**
      * 批量更新用户流量 (CASE UPDATE)，对齐 PHP traffic:update
-     * @param trafficMap key=userId, value=long[]{u_increment, d_increment}
-     * @param timestamp  当前时间戳
+     * @param list      每用户上下行增量
+     * @param timestamp 当前时间戳（秒）
      */
-    int batchUpdateTraffic(@Param("trafficMap") Map<Long, long[]> trafficMap, @Param("timestamp") long timestamp);
+    int batchUpdateTraffic(@Param("list") List<TrafficDelta> list, @Param("timestamp") long timestamp);
 
     /**
      * 批量重置用户流量 u=0, d=0

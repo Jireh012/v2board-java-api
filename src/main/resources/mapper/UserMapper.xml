@@ -6,28 +6,28 @@
     <!--
       批量更新用户流量：使用 CASE 语句一次 SQL 更新所有用户的 u/d/t/updated_at
       对齐 PHP traffic:update 命令中的 bulk UPDATE
+      入参用 List&lt;TrafficDelta&gt;（勿用 Map&lt;Long,long[]&gt; + traffic[0]，MyBatis 绑不定数组下标）
     -->
     <update id="batchUpdateTraffic">
         UPDATE v2_user
         SET
             u = u + CASE id
-                <foreach collection="trafficMap" index="userId" item="traffic">
-                    WHEN #{userId} THEN #{traffic[0]}
+                <foreach collection="list" item="item">
+                    WHEN #{item.userId} THEN #{item.upload}
                 </foreach>
                 ELSE 0
             END,
             d = d + CASE id
-                <foreach collection="trafficMap" index="userId" item="traffic">
-                    WHEN #{userId} THEN #{traffic[1]}
+                <foreach collection="list" item="item">
+                    WHEN #{item.userId} THEN #{item.download}
                 </foreach>
                 ELSE 0
             END,
             t = #{timestamp},
             updated_at = #{timestamp}
         WHERE id IN
-        <foreach collection="trafficMap" index="userId" item="traffic"
-                 open="(" separator="," close=")">
-            #{userId}
+        <foreach collection="list" item="item" open="(" separator="," close=")">
+            #{item.userId}
         </foreach>
     </update>
 
