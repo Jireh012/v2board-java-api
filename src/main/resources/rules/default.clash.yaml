@@ -36,12 +36,13 @@ dns:
 proxies:
 
 proxy-groups:
+  # 第一项即客户端默认：须为 url-test「自动选择」，勿把「手动切换」放首位
   - name: "🚀 节点选择"
     type: select
     proxies:
-      - "🚀 手动切换"
       - "♻️ 自动选择"
       - "🔯 故障转移"
+      - "🚀 手动切换"
       - "🇭🇰 香港"
       - "🇨🇳 台湾"
       - "🇸🇬 狮城"
@@ -68,32 +69,50 @@ proxy-groups:
     proxies: []
 
   - name: "🇭🇰 香港"
-    type: select
+    type: url-test
+    url: "https://www.gstatic.com/generate_204"
+    interval: 300
+    tolerance: 50
     proxies:
       - "(?i)港|HK|Hong\\s*Kong"
 
   - name: "🇨🇳 台湾"
-    type: select
+    type: url-test
+    url: "https://www.gstatic.com/generate_204"
+    interval: 300
+    tolerance: 50
     proxies:
       - "(?i)台|TW|Taiwan"
 
   - name: "🇸🇬 狮城"
-    type: select
+    type: url-test
+    url: "https://www.gstatic.com/generate_204"
+    interval: 300
+    tolerance: 50
     proxies:
       - "(?i)新加坡|狮城|SG|Singapore"
 
   - name: "🇯🇵 日本"
-    type: select
+    type: url-test
+    url: "https://www.gstatic.com/generate_204"
+    interval: 300
+    tolerance: 50
     proxies:
       - "(?i)日本|JP|Japan"
 
   - name: "🇺🇲 美国"
-    type: select
+    type: url-test
+    url: "https://www.gstatic.com/generate_204"
+    interval: 300
+    tolerance: 50
     proxies:
       - "(?i)美|US|United\\s*States|America"
 
   - name: "🇰🇷 韩国"
-    type: select
+    type: url-test
+    url: "https://www.gstatic.com/generate_204"
+    interval: 300
+    tolerance: 50
     proxies:
       - "(?i)韩|KR|Korea"
 
@@ -110,7 +129,10 @@ proxy-groups:
     proxies: ["🚀 节点选择", "🇭🇰 香港", "🇸🇬 狮城", "🇯🇵 日本", "🇺🇲 美国"]
 
   - name: "🎥 奈飞节点"
-    type: select
+    type: url-test
+    url: "https://www.gstatic.com/generate_204"
+    interval: 300
+    tolerance: 50
     proxies:
       - "(?i)奈飞|Netflix|NF"
 

@@ -42,6 +42,50 @@ class ClashMetaBuilderTest {
         assertFalse(yaml.contains("raw.githubusercontent.com"), "must not depend on GitHub raw");
         assertTrue(yaml.contains("香港01"), "hk node missing");
         assertTrue(yaml.contains("日本樱花"), "jp node missing");
+        assertTrue(yaml.contains("type: url-test"), "auto/region url-test missing");
+        int mainIdx = yaml.indexOf("🚀 节点选择");
+        assertTrue(mainIdx >= 0);
+        String mainSection = yaml.substring(mainIdx, Math.min(yaml.length(), mainIdx + 350));
+        int autoIdx = mainSection.indexOf("♻️ 自动选择");
+        int manualIdx = mainSection.indexOf("🚀 手动切换");
+        assertTrue(autoIdx >= 0 && manualIdx > autoIdx, "auto select must be before manual in 节点选择");
+    }
+
+    @Test
+    void preferAutoSelect_reordersLegacyManualFirstTemplate() {
+        List<Map<String, Object>> servers = List.of(Map.of(
+                "type", "shadowsocks",
+                "name", "香港01",
+                "host", "1.2.3.4",
+                "port", 443,
+                "cipher", "aes-256-gcm",
+                "created_at", 0L
+        ));
+        String template = """
+                proxies: []
+                proxy-groups:
+                  - name: "🚀 节点选择"
+                    type: select
+                    proxies:
+                      - "🚀 手动切换"
+                      - "♻️ 自动选择"
+                      - DIRECT
+                  - name: "🚀 手动切换"
+                    type: select
+                    proxies: []
+                  - name: "♻️ 自动选择"
+                    type: url-test
+                    url: "https://www.gstatic.com/generate_204"
+                    interval: 300
+                    proxies: []
+                rules:
+                  - MATCH,🚀 节点选择
+                """;
+        String yaml = ClashMetaBuilder.buildFromContent(servers, "uuid", "App", template);
+        int mainIdx = yaml.indexOf("🚀 节点选择");
+        String mainSection = yaml.substring(mainIdx, Math.min(yaml.length(), mainIdx + 280));
+        assertTrue(mainSection.indexOf("♻️ 自动选择") < mainSection.indexOf("🚀 手动切换"),
+                "builder must promote url-test auto group ahead of manual");
     }
 
     @Test

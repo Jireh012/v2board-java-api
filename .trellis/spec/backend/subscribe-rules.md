@@ -49,7 +49,7 @@ Admin save/sync edits **full** only. Response header: `subscription-rule-profile
 | Sing-box old (`flag=sing`) | Always classpath `default.sing-box.old.json` (admin custom covers ≥1.12 only) |
 | Write path | Sanitize → upsert DB → `DEL` cache → re-set cache with new content |
 | Restore | `DELETE` by format → invalidate → next resolve uses seed |
-| Sync product note | Prefer ACL4SSR Online Full NoAuto INI (default URL); server expands `.list` / HTTP `rule-providers` into **inline** templates (seed shell kept). Response may include `stripped_remote`, `used_seed_fallback`, `sync_hint` (`已从 Online/raw 内联本地化…`). Success path should **not** whole-seed-fallback solely because upstream was Online. |
+| Sync product note | Prefer ACL4SSR Online **Full** INI (default URL, includes `♻️ 自动选择` / `url-test`). **Do not** default to `*_NoAuto.ini` — that variant has no auto groups. Server expands `.list` / HTTP `rule-providers` into **inline** templates (seed shell kept). Response may include `stripped_remote`, `used_seed_fallback`, `sync_hint`. Success path should **not** whole-seed-fallback solely because upstream was Online. |
 
 **Classpath seeds (`full`)**
 
@@ -73,7 +73,7 @@ Admin save/sync edits **full** only. Response header: `subscription-rule-profile
 |-----------|--------|
 | Unknown format | `BusinessException(500, "不支持的规则格式：…")` |
 | Empty content on save | `BusinessException(500, "规则内容不能为空")` / controller `content 不能为空` |
-| Sync URL empty | Use stored `source_url`, else default Online INI `ACL4SSR_Online_Full_NoAuto.ini` |
+| Sync URL empty | Use stored `source_url`, else default Online INI `ACL4SSR_Online_Full.ini` |
 | Any ruleset `.list` / provider fetch fails | `BusinessException(500, "拉取规则列表失败：{url}: …")`; no persist |
 | Fetch upstream fails | `BusinessException(500, "拉取上游规则失败：…")` |
 | After sanitize still has remote rule deps and seed also poisoned | `BusinessException(500, …拒绝保存)` |
@@ -220,7 +220,7 @@ static boolean containsRemoteRuleDependency(String content);
 | Clash/Stash YAML with HTTP `rule-providers` | `ClashRuleProviderExpander` inlines providers → optional merge seed shell |
 | Other | Pass through to sanitize |
 
-Default sync URL: `https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online_Full_NoAuto.ini`.
+Default sync URL: `https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online_Full.ini`（含自动测速；`NoAuto` 变体会丢掉 `♻️ 自动选择`）。
 
 ### 3. Contracts
 

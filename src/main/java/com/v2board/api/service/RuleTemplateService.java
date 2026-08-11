@@ -36,11 +36,11 @@ public class RuleTemplateService {
             "clash", "stash", "surge", "surfboard", "singbox", "quantumultx", "loon");
     public static final String PROFILE_FULL = "full";
     /**
-     * Default sync source: ACL4SSR Online Full NoAuto (Subconverter INI).
+     * Default sync source: ACL4SSR Online Full（含 ♻️ 自动选择 / url-test；勿用 NoAuto）。
      * Server expands remote .list into inline local templates.
      */
     public static final String DEFAULT_ONLINE_INI_URL =
-            "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online_Full_NoAuto.ini";
+            "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online_Full.ini";
     private static final Set<String> PROFILES = Set.of("full", "simple", "nodes");
     private static final ThreadLocal<String> REQUEST_PROFILE = new ThreadLocal<>();
 

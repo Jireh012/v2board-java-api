@@ -85,6 +85,8 @@ public final class ClashMetaBuilder {
         // 空地区组删除后，其它组 / rules 里可能仍引用已删除组名 → Mihomo: "'🇨🇳 台湾节点' not found"
         pruneEmptyGroupsAndDanglingRefs(groups, proxies, mainGroupName);
         ensureMainProxyGroup(groups, mainGroupName, proxies);
+        // 客户端 select 默认取第一项；历史模板常把「手动切换」放首位，强制自动/故障转移靠前
+        preferAutoSelectInMainGroup(groups, mainGroupName);
         config.put("proxy-groups", groups);
         RuleTemplateSanitizer.normalizeHealthCheckUrls(config);
 
@@ -201,9 +203,9 @@ public final class ClashMetaBuilder {
             List<String> proxies = group.get("proxies") instanceof List<?> list
                     ? new ArrayList<>((List<String>) list) : new ArrayList<>();
             if (proxies.isEmpty()) {
+                proxies.add("♻️ 自动选择");
+                proxies.add("🔯 故障转移");
                 proxies.add("🚀 手动切换");
-                proxies.add("自动选择");
-                proxies.add("故障转移");
                 proxies.add("DIRECT");
                 group.put("proxies", proxies);
             }
@@ -212,8 +214,42 @@ public final class ClashMetaBuilder {
         Map<String, Object> main = new LinkedHashMap<>();
         main.put("name", MAIN_SELECT_GROUP);
         main.put("type", "select");
-        main.put("proxies", new ArrayList<>(List.of("🚀 手动切换", "自动选择", "故障转移", "DIRECT")));
+        main.put("proxies", new ArrayList<>(List.of("♻️ 自动选择", "🔯 故障转移", "🚀 手动切换", "DIRECT")));
         groups.add(0, main);
+    }
+
+    /**
+     * Clash / Mihomo 对 select 组默认选中 {@code proxies[0]}。
+     * 将「自动选择 / 故障转移」提到主选组最前，避免订阅默认落到「手动切换」。
+     */
+    private static void preferAutoSelectInMainGroup(List<Map<String, Object>> groups, String mainGroupName) {
+        List<String> preferOrder = List.of("♻️ 自动选择", "自动选择", "🔯 故障转移", "故障转移");
+        for (Map<String, Object> group : groups) {
+            String name = String.valueOf(group.get("name"));
+            if (!MAIN_SELECT_GROUP.equals(name) && !mainGroupName.equals(name)) {
+                continue;
+            }
+            Object p = group.get("proxies");
+            if (!(p instanceof List<?> list) || list.isEmpty()) {
+                return;
+            }
+            List<String> proxies = new ArrayList<>();
+            for (Object o : list) {
+                proxies.add(String.valueOf(o));
+            }
+            List<String> head = new ArrayList<>();
+            for (String key : preferOrder) {
+                if (proxies.remove(key)) {
+                    head.add(key);
+                }
+            }
+            if (head.isEmpty()) {
+                return;
+            }
+            head.addAll(proxies);
+            group.put("proxies", head);
+            return;
+        }
     }
 
     @SuppressWarnings("unchecked")
