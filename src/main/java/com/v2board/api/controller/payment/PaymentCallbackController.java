@@ -15,6 +15,7 @@ import com.v2board.api.service.TelegramService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -47,6 +48,27 @@ public class PaymentCallbackController {
     private ObjectMapper objectMapper;
 
     /**
+     * 浏览器点开通知地址时多为 GET；支付宝等网关回调为 POST。
+     * GET 仅探活（确认路由 / 支付方式已启用），不做验签与入账。
+     */
+    @GetMapping("/notify/{method}/{uuid}")
+    public void notifyProbe(HttpServletResponse response,
+                            @PathVariable("method") String method,
+                            @PathVariable("uuid") String uuid) throws IOException {
+        Payment payment = findEnabledPayment(method, uuid);
+        response.setCharacterEncoding("UTF-8");
+        if (payment == null) {
+            response.setStatus(404);
+            response.setContentType("text/plain; charset=UTF-8");
+            response.getWriter().write("payment gate not found or disabled");
+            return;
+        }
+        response.setStatus(200);
+        response.setContentType("text/plain; charset=UTF-8");
+        response.getWriter().write("payment notify ready (POST only)");
+    }
+
+    /**
      * 支付回调接口，对齐 PHP /api/v1/guest/payment/notify/{method}/{uuid}
      * 通过 PaymentDriverFactory 获取对应驱动，验证回调签名，验签通过后标记订单已支付。
      */
@@ -54,12 +76,8 @@ public class PaymentCallbackController {
     public void notify(HttpServletRequest request, HttpServletResponse response,
                        @PathVariable("method") String method,
                        @PathVariable("uuid") String uuid) throws IOException {
-        Payment payment = paymentMapper.selectOne(
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Payment>()
-                        .eq(Payment::getPayment, method)
-                        .eq(Payment::getUuid, uuid)
-        );
-        if (payment == null || payment.getEnable() == null || payment.getEnable() != 1) {
+        Payment payment = findEnabledPayment(method, uuid);
+        if (payment == null) {
             response.setStatus(500);
             response.getWriter().write("gate is not enable");
             return;
@@ -142,6 +160,18 @@ public class PaymentCallbackController {
 
         response.setStatus(200);
         writeSuccessResponse(response, method, notifyResult.get("custom_result"));
+    }
+
+    private Payment findEnabledPayment(String method, String uuid) {
+        Payment payment = paymentMapper.selectOne(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Payment>()
+                        .eq(Payment::getPayment, method)
+                        .eq(Payment::getUuid, uuid)
+        );
+        if (payment == null || payment.getEnable() == null || payment.getEnable() != 1) {
+            return null;
+        }
+        return payment;
     }
 
     private void writeSuccessResponse(HttpServletResponse response, String method, String customResult) throws IOException {
