@@ -36,8 +36,8 @@ Shares PHP `v2_notice` / `v2_knowledge`. JSON is SNAKE_CASE. Controllers talk to
 ```
 GET  /api/v1/admin/notice/fetch
 POST /api/v1/admin/notice/save   JSON Notice
-POST /api/v1/admin/notice/show   form id
-POST /api/v1/admin/notice/drop   form id
+POST /api/v1/admin/notice/show   ?id=   (query；Panel SM4 禁 form-urlencoded)
+POST /api/v1/admin/notice/drop   ?id=
 ```
 
 ### 3. Contracts
@@ -96,9 +96,9 @@ GET  /api/v1/admin/knowledge/fetch
 GET  /api/v1/admin/knowledge/fetch?id=
 GET  /api/v1/admin/knowledge/category
 POST /api/v1/admin/knowledge/save   JSON
-POST /api/v1/admin/knowledge/show   form id
+POST /api/v1/admin/knowledge/show   ?id=
 POST /api/v1/admin/knowledge/sort   JSON { knowledge_ids: Long[] }
-POST /api/v1/admin/knowledge/drop   form id
+POST /api/v1/admin/knowledge/drop   ?id=
 ```
 
 ### 3. Contracts
