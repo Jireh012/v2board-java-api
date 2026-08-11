@@ -1,0 +1,6 @@
+{"path":".trellis/spec/backend/error-handling.md","note":"No BusinessException spam into v2_log"}
+{"path":".trellis/spec/backend/logging-guidelines.md","note":"ERROR+ only; fallback logger; truncation"}
+{"path":".trellis/spec/backend/panel-api-sm4.md","note":"getSystemLog cataloged"}
+{"path":".trellis/spec/backend/quality-guidelines.md","note":"Tests and no recursive log fail"}
+{"path":"src/main/java/com/v2board/api/controller/admin/AdminSystemController.java","note":"API contract list/total"}
+{"path":"../v2board-ui/src/views/admin/AdminQueueView.vue","note":"UI style parity reference"}

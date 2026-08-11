@@ -31,6 +31,7 @@ throw new BusinessException(500, "同步任务正在进行中，请稍后再试"
 - Prefer fail-fast with `BusinessException` at controller/service boundaries.
 - Long-running jobs that persist status (e.g. external subscribe sync) must write terminal `failed`/`success` even when the JVM dies later — see [external-subscribe.md](./external-subscribe.md).
 - Never use empty `catch` around entity→map conversion in list aggregators; log and continue so operators can see data loss.
+- Unexpected errors: `GlobalExceptionHandler` → `log.error` → Logback `DbErrorAppender` → `v2_log` (see [logging-guidelines.md](./logging-guidelines.md)). Do **not** double-insert in the handler. Ordinary `BusinessException` / validation failures are **not** stored.
 
 ---
 

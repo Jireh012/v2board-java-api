@@ -1,0 +1,8 @@
+{"path":".trellis/spec/backend/error-handling.md","note":"BusinessException vs unhandled; GlobalExceptionHandler"}
+{"path":".trellis/spec/backend/logging-guidelines.md","note":"Fill ERROR→v2_log conventions after impl"}
+{"path":".trellis/spec/backend/job-queue.md","note":"Do not merge with v2_job_failed; admin system APIs pattern"}
+{"path":".trellis/spec/backend/directory-structure.md","note":"Where to place service/appender/model"}
+{"path":".trellis/spec/backend/panel-api-sm4.md","note":"Register getSystemLog in action catalog"}
+{"path":"src/main/java/com/v2board/api/config/GlobalExceptionHandler.java","note":"Keep log.error; appender persists"}
+{"path":"src/main/java/com/v2board/api/controller/admin/AdminSystemController.java","note":"Add getSystemLog"}
+{"path":"src/main/java/com/v2board/api/schedule/LogSchedule.java","note":"Purge v2_log 1 month"}

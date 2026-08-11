@@ -145,6 +145,7 @@ public final class PanelApiActionCatalog {
         out.add(zp(z, "system/retryFailedJob"));
         out.add(zp(z, "system/deleteFailedJob"));
         out.add(zp(z, "system/clearFailedJobs"));
+        out.add(zp(z, "system/getSystemLog"));
         out.add(zp(z, "external-subscribe/fetch"));
         out.add(zp(z, "external-subscribe/save"));
         out.add(zp(z, "external-subscribe/drop"));

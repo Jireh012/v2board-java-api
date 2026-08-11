@@ -183,6 +183,7 @@ AdminPaymentController.fetch/save → same base (DB site.app_url, not boot-only 
 | External | `{payment_notify_prefix}/{method}/{uuid}` exactly **two** segments after prefix |
 | Internal | `/api/v1/guest/payment/notify/{method}/{uuid}` |
 | Classic | `/api/v1/guest/payment/**` → **404** |
+| GET probe | Browser GET → `200 payment notify ready (POST only)` if gate enabled; real gateway uses **POST** + signature |
 | Body / auth | Plaintext; no `X-A`; no Panel SM4 |
 | Admin UI | `site.payment_notify_prefix` in system config; copy `notify_url` from payments list |
 | Vite / reverse proxy | Forward `/api/` (covers `/api/g/…`) to API |
@@ -252,6 +253,7 @@ String path = configService.buildPaymentNotifyPath(method, uuid);
 | Classic auth on rewrite zone | `Authorization` / `?auth_data=` → **401** |
 | Empty body | Allowed (no decrypt) |
 | `application/x-www-form-urlencoded` on SM4 zone | 400 「加密区仅接受 JSON 信封请求体」 |
+| UI contract | Panel zone POST/PUT/PATCH must send JSON SM4 envelope. Params for `@RequestParam` APIs go in **query**. Never `URLSearchParams` / form body. Empty writes use encrypted `{}`. |
 | Non-JSON response | Pass-through |
 | Payment notify / telegram / subscribe | **Never** marked panel SM4 |
 

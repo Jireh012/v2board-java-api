@@ -5,12 +5,15 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.v2board.api.common.ApiResponse;
 import com.v2board.api.common.BusinessException;
 import com.v2board.api.mapper.JobFailedMapper;
+import com.v2board.api.mapper.SystemLogMapper;
 import com.v2board.api.model.JobFailed;
+import com.v2board.api.model.SystemLog;
 import com.v2board.api.queue.JobPayload;
 import com.v2board.api.queue.JobWorkerManager;
 import com.v2board.api.queue.RedisJobQueue;
 import com.v2board.api.queue.V2boardQueueProperties;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.lang.management.ManagementFactory;
@@ -37,6 +40,9 @@ public class AdminSystemController {
 
     @Autowired
     private JobFailedMapper jobFailedMapper;
+
+    @Autowired
+    private SystemLogMapper systemLogMapper;
 
     @GetMapping("/getSystemStatus")
     public ApiResponse<Map<String, Object>> getSystemStatus() {
@@ -124,5 +130,29 @@ public class AdminSystemController {
     public ApiResponse<Boolean> clearFailedJobs() {
         jobFailedMapper.delete(new LambdaQueryWrapper<>());
         return ApiResponse.success(true);
+    }
+
+    @GetMapping("/getSystemLog")
+    public ApiResponse<Map<String, Object>> getSystemLog(
+            @RequestParam(value = "current", defaultValue = "1") long current,
+            @RequestParam(value = "pageSize", required = false) Long pageSize,
+            @RequestParam(value = "page_size", required = false) Long pageSizeSnake,
+            @RequestParam(value = "level", required = false) String level) {
+        long page = Math.max(1, current);
+        long sizeParam = pageSize != null ? pageSize : (pageSizeSnake != null ? pageSizeSnake : 20L);
+        long size = Math.min(100, Math.max(1, sizeParam));
+        LambdaQueryWrapper<SystemLog> qw = new LambdaQueryWrapper<SystemLog>()
+                .orderByDesc(SystemLog::getCreatedAt)
+                .orderByDesc(SystemLog::getId);
+        if (StringUtils.hasText(level)) {
+            qw.eq(SystemLog::getLevel, level.trim());
+        }
+        Page<SystemLog> p = systemLogMapper.selectPage(new Page<>(page, size), qw);
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("list", p.getRecords());
+        data.put("total", p.getTotal());
+        data.put("current", page);
+        data.put("pageSize", size);
+        return ApiResponse.success(data);
     }
 }

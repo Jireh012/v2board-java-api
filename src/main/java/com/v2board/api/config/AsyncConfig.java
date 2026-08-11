@@ -10,12 +10,30 @@ import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.util.concurrent.Executor;
+import java.util.concurrent.ThreadPoolExecutor;
 
 @Configuration
 @EnableAsync
 public class AsyncConfig implements AsyncConfigurer {
 
     private static final Logger logger = LoggerFactory.getLogger(AsyncConfig.class);
+
+    /**
+     * Async pool for {@code v2_log} inserts.
+     * DiscardOldestPolicy: under ERROR storm, drop oldest pending persists instead of
+     * blocking request threads (CallerRuns) or throwing (AbortPolicy).
+     */
+    @Bean("systemLogExecutor")
+    public Executor systemLogExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(1);
+        executor.setMaxPoolSize(2);
+        executor.setQueueCapacity(500);
+        executor.setThreadNamePrefix("system-log-");
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.DiscardOldestPolicy());
+        executor.initialize();
+        return executor;
+    }
 
     @Bean("trafficExecutor")
     public Executor trafficExecutor() {
