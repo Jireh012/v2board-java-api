@@ -41,9 +41,26 @@ public class AdminCouponController {
         wrapper.last("LIMIT " + offset + "," + pageSize);
         List<Coupon> coupons = couponMapper.selectList(wrapper);
 
+        long nowSec = System.currentTimeMillis() / 1000;
+        long showingCount = couponMapper.selectCount(
+                new LambdaQueryWrapper<Coupon>().eq(Coupon::getShow, 1));
+        long activeCount = couponMapper.selectCount(new LambdaQueryWrapper<Coupon>()
+                .eq(Coupon::getShow, 1)
+                .and(w -> w.isNull(Coupon::getStartedAt).or().le(Coupon::getStartedAt, nowSec))
+                .and(w -> w.isNull(Coupon::getEndedAt).or().ge(Coupon::getEndedAt, nowSec)));
+        long expiredCount = couponMapper.selectCount(new LambdaQueryWrapper<Coupon>()
+                .isNotNull(Coupon::getEndedAt)
+                .lt(Coupon::getEndedAt, nowSec));
+
+        Map<String, Object> stats = new LinkedHashMap<>();
+        stats.put("showing", showingCount);
+        stats.put("active", activeCount);
+        stats.put("expired", expiredCount);
+
         Map<String, Object> result = new HashMap<>();
         result.put("data", coupons);
         result.put("total", total);
+        result.put("stats", stats);
         return ApiResponse.success(result);
     }
 

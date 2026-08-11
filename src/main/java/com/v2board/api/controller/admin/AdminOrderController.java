@@ -25,6 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -159,9 +160,47 @@ public class AdminOrderController {
             data.add(row);
         }
 
+        // 统计卡片：与当前筛选相同范围，跨全部分页（非仅当前页）
+        QueryWrapper<Order> pendingWrapper = new QueryWrapper<>();
+        applyCommissionFilter(pendingWrapper, isCommission);
+        applyFilters(request, pendingWrapper);
+        pendingWrapper.eq("status", 0);
+        long pendingCount = orderMapper.selectCount(pendingWrapper);
+
+        QueryWrapper<Order> completedWrapper = new QueryWrapper<>();
+        applyCommissionFilter(completedWrapper, isCommission);
+        applyFilters(request, completedWrapper);
+        completedWrapper.eq("status", 3);
+        long completedCount = orderMapper.selectCount(completedWrapper);
+
+        QueryWrapper<Order> amountWrapper = new QueryWrapper<>();
+        applyCommissionFilter(amountWrapper, isCommission);
+        applyFilters(request, amountWrapper);
+        amountWrapper.select("COALESCE(SUM(total_amount),0) AS amount");
+        long amountCents = 0L;
+        List<Map<String, Object>> amountRows = orderMapper.selectMaps(amountWrapper);
+        if (amountRows != null && !amountRows.isEmpty() && amountRows.get(0) != null) {
+            Object amt = amountRows.get(0).get("amount");
+            if (amt instanceof Number n) {
+                amountCents = n.longValue();
+            } else if (amt != null) {
+                try {
+                    amountCents = Long.parseLong(String.valueOf(amt));
+                } catch (NumberFormatException ignored) {
+                    amountCents = 0L;
+                }
+            }
+        }
+
+        Map<String, Object> stats = new LinkedHashMap<>();
+        stats.put("pending", pendingCount);
+        stats.put("completed", completedCount);
+        stats.put("amount_cents", amountCents);
+
         Map<String, Object> resp = new HashMap<>();
         resp.put("data", data);
         resp.put("total", total);
+        resp.put("stats", stats);
         return ApiResponse.success(resp);
     }
 

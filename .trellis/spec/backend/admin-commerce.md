@@ -124,7 +124,13 @@ Entity `v2_coupon` / `Coupon.java`.
 | `limit_plan_ids` / `limit_period` | JSON string \| null | e.g. `"[1,2]"`, `"[\"month_price\"]"` |
 | `started_at` / `ended_at` | unix sec | required; `ended_at > started_at` |
 
-Response list: `{ data: Coupon[], total: number }`.
+Response list: `{ data: Coupon[], total: number, stats }` — `stats` is **full-table** (not current page):
+
+| Field | Meaning |
+|-------|---------|
+| `stats.showing` | `show=1` |
+| `stats.active` | enabled and within `[started_at, ended_at]` at request time |
+| `stats.expired` | `ended_at < now` |
 
 ### 4. Validation & Error Matrix
 
@@ -197,6 +203,14 @@ Redeem (user): `POST /api/v1/user/redeemGiftCard` form `giftcard=<code>`.
 | 5 | Assign plan | days (0 = unlimited) | **required** |
 
 `used_user_ids`: JSON array or Java `Set.toString()`-like `[1, 2]`; admin UI parses both.
+
+`GET …/giftcard/fetch` also returns `stats` over the **full table** (not current page):
+
+| Field | Meaning |
+|-------|---------|
+| `stats.available` | not expired, started, and `limit_use` null or `> 0` |
+| `stats.used_up` | `limit_use` not null and `<= 0` |
+| `stats.expired` | `ended_at < now` |
 
 ### 4. Validation & Error Matrix
 
@@ -330,9 +344,17 @@ GET /api/v1/admin/order/fetch?current&pageSize&is_commission
 | `user_id`, `invite_user_id`, `status`, `commission_status` | yes | `=` |
 | condition whitelist | `>`, `<`, `=`, `>=`, `<=`, `模糊`, `!=` | Admin UI no longer exposes `>`/`<` |
 
-Response: `{ data: OrderRow[], total: number }` (+ `plan_name` on rows).
+Response: `{ data: OrderRow[], total: number, stats }` (+ `plan_name` on rows).
 
-Pagination: this project has **no** MyBatis-Plus `PaginationInnerInterceptor`. `fetch` must `selectCount` + `selectList` with `last("LIMIT offset,pageSize")` (same pattern as admin user/coupon). Do **not** rely on `selectPage` alone — it returns the full set and breaks admin UI paging.
+`stats` uses the **same filter / commission scope as `total`**, not the current page:
+
+| Field | Meaning |
+|-------|---------|
+| `stats.pending` | `status=0` count |
+| `stats.completed` | `status=3` count |
+| `stats.amount_cents` | `SUM(total_amount)` in cents |
+
+Pagination: this project has **no** MyBatis-Plus `PaginationInnerInterceptor`. `fetch` must `selectCount` + `selectList` with `last("LIMIT offset,pageSize")` (same pattern as admin user/coupon). Do **not** rely on `selectPage` alone — it returns the full set and breaks admin UI paging. Do **not** compute admin stat cards from the current page rows only.
 
 ### 4. Validation & Error Matrix
 

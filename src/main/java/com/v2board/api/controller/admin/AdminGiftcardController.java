@@ -40,9 +40,27 @@ public class AdminGiftcardController {
         wrapper.last("LIMIT " + offset + "," + pageSize);
         List<Giftcard> list = giftcardMapper.selectList(wrapper);
 
+        long nowSec = System.currentTimeMillis() / 1000;
+        long availableCount = giftcardMapper.selectCount(new LambdaQueryWrapper<Giftcard>()
+                .and(w -> w.isNull(Giftcard::getEndedAt).or().ge(Giftcard::getEndedAt, nowSec))
+                .and(w -> w.isNull(Giftcard::getStartedAt).or().le(Giftcard::getStartedAt, nowSec))
+                .and(w -> w.isNull(Giftcard::getLimitUse).or().gt(Giftcard::getLimitUse, 0)));
+        long usedUpCount = giftcardMapper.selectCount(new LambdaQueryWrapper<Giftcard>()
+                .isNotNull(Giftcard::getLimitUse)
+                .le(Giftcard::getLimitUse, 0));
+        long expiredCount = giftcardMapper.selectCount(new LambdaQueryWrapper<Giftcard>()
+                .isNotNull(Giftcard::getEndedAt)
+                .lt(Giftcard::getEndedAt, nowSec));
+
+        Map<String, Object> stats = new LinkedHashMap<>();
+        stats.put("available", availableCount);
+        stats.put("used_up", usedUpCount);
+        stats.put("expired", expiredCount);
+
         Map<String, Object> result = new HashMap<>();
         result.put("data", list);
         result.put("total", total);
+        result.put("stats", stats);
         return ApiResponse.success(result);
     }
 
