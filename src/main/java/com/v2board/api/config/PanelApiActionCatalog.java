@@ -63,6 +63,7 @@ public final class PanelApiActionCatalog {
         out.add(zp(z, "order/getPaymentMethod"));
         out.add(zp(z, "order/cancel"));
         out.add(zp(z, "invite/save"));
+        out.add(zp(z, "invite/drop"));
         out.add(zp(z, "invite/details"));
         out.add(zp(z, "invite/fetch"));
         out.add(zp(z, "server/fetch"));

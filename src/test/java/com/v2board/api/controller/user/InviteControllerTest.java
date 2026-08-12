@@ -5,6 +5,7 @@ import com.v2board.api.mapper.CommissionLogMapper;
 import com.v2board.api.mapper.InviteCodeMapper;
 import com.v2board.api.mapper.OrderMapper;
 import com.v2board.api.mapper.UserMapper;
+import com.v2board.api.model.InviteCode;
 import com.v2board.api.model.User;
 import com.v2board.api.service.ConfigService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -14,7 +15,9 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -62,5 +65,31 @@ class InviteControllerTest {
 
         assertEquals(0, controller.save(request).getCode());
         verify(inviteCodeMapper).insert(any());
+    }
+
+    @Test
+    void drop_deletesOwnUnusedCode() {
+        InviteCode row = new InviteCode();
+        row.setId(9L);
+        row.setUserId(7L);
+        row.setStatus(0);
+        when(inviteCodeMapper.selectById(9L)).thenReturn(row);
+        when(inviteCodeMapper.deleteById(9L)).thenReturn(1);
+
+        assertTrue(Boolean.TRUE.equals(controller.drop(request, 9L).getData()));
+        verify(inviteCodeMapper).deleteById(9L);
+    }
+
+    @Test
+    void drop_rejectsUsedCode() {
+        InviteCode row = new InviteCode();
+        row.setId(9L);
+        row.setUserId(7L);
+        row.setStatus(1);
+        when(inviteCodeMapper.selectById(9L)).thenReturn(row);
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> controller.drop(request, 9L));
+        assertEquals("已使用的邀请码不能删除", ex.getMessage());
+        verify(inviteCodeMapper, never()).deleteById(anyLong());
     }
 }

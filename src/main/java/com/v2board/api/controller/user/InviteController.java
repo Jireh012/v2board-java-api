@@ -70,6 +70,27 @@ public class InviteController {
     }
 
     /**
+     * 删除未使用的邀请码（本系统扩展；仅能删自己的 status=0）。
+     */
+    @PostMapping("/drop")
+    public ApiResponse<Boolean> drop(HttpServletRequest request,
+                                     @RequestParam("id") Long id) {
+        User user = requireUser(request);
+        if (id == null || id <= 0) {
+            throw new BusinessException(422, "id 无效");
+        }
+        InviteCode row = inviteCodeMapper.selectById(id);
+        if (row == null || !user.getId().equals(row.getUserId())) {
+            throw new BusinessException(404, "邀请码不存在");
+        }
+        if (row.getStatus() != null && row.getStatus() != 0) {
+            throw new BusinessException(500, "已使用的邀请码不能删除");
+        }
+        int rows = inviteCodeMapper.deleteById(id);
+        return ApiResponse.success(rows > 0);
+    }
+
+    /**
      * 返利明细，对齐 PHP V1\\User\\InviteController::details
      */
     @GetMapping("/details")
