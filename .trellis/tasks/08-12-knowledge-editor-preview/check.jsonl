@@ -1,0 +1,3 @@
+{"path":".trellis/spec/backend/admin-content.md","note":"No API contract break"}
+{"path":"../v2board-ui/src/views/admin/AdminKnowledgeView.vue","note":"Editor+preview wired"}
+{"path":"../v2board-ui/package.json","note":"tinymce self-hosted deps"}

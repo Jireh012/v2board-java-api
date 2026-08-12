@@ -1,0 +1,4 @@
+{"path":".trellis/spec/backend/admin-content.md","note":"Knowledge admin API unchanged; UI editor only"}
+{"path":"../v2board-ui/src/views/admin/AdminKnowledgeView.vue","note":"Replace textarea with TinyMCE+preview"}
+{"path":"../v2board-ui/src/utils/legacyCopy.ts","note":"Preview copy() uses global helper"}
+{"path":"../v2board-ui/src/views/KnowledgeView.vue","note":"User-side render reference for preview styles"}
