@@ -210,12 +210,16 @@ Flatten maps sing-box outbound → panel-shaped fields (`type`/`host`/`port`/`ci
 
 ### 3. Contracts
 
-| Client | External protocols emitted | Notes |
-|--------|---------------------------|--------|
-| Surge | ss / vmess / trojan / hysteria2 / anytls | No native VLESS |
-| Surfboard | ss (whitelist ciphers) / vmess / trojan / anytls | No hy2 / vless |
-| Quantumult X | ss / vmess / vless / trojan / anytls | Skip grpc / httpupgrade / xhttp |
-| Loon | ss / vmess / vless(tcp\|ws) / trojan / hysteria2 / anytls | Reality → `tls=2` + pubkey/short_id |
+| Client | External source of truth | Notes |
+|--------|--------------------------|--------|
+| URI (v2rayN / SagerNet / Passwall / SSR+) | Rebuild `ShareUriConverter.singboxToUri(outbound)` | Do not emit stored `share_uri` when outbound exists |
+| Shadowrocket | Same URI rebuild; VMess → `ShadowrocketBuilder` | Query form, not stale vmess JSON |
+| Clash / Meta / Verge / Stash / Nyanpasu | Rebuild `ClashProxyConverter.singboxToClash(outbound)` | Do not trust stored `clash_proxy` |
+| Sing-box | `singbox_outbound` as-is | Same object the probe used |
+| Surge | Adapter flatten + conf line | ss / vmess / trojan / hy2(+obfs) / anytls; **no VLESS** |
+| Surfboard | Adapter flatten + conf line | ss (cipher whitelist) / vmess / trojan / anytls; no hy2 / vless |
+| Quantumult X | Adapter flatten + conf line | ss / vmess / vless / trojan / anytls; skip grpc / httpupgrade / xhttp |
+| Loon | Adapter flatten + conf line | ss / vmess / vless(tcp\|ws) / trojan / hy2 / anytls |
 
 Panel `type=hysteria2` (and `hysteria`+`version=2`) must also emit hy2 lines on Surge / Loon.
 

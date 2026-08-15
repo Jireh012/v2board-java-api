@@ -215,6 +215,11 @@ public final class SurgeBuilder {
         if (server.get("insecure") != null && !str(server.get("insecure")).isEmpty()) {
             config.add(truthy(server.get("insecure")) ? "skip-cert-verify=true" : "skip-cert-verify=false");
         }
+        if (server.get("obfs") != null && !str(server.get("obfs")).isEmpty()
+                && server.get("obfs_password") != null && !str(server.get("obfs_password")).isEmpty()) {
+            config.add("obfs=" + server.get("obfs"));
+            config.add("obfs-password=" + server.get("obfs_password"));
+        }
         return joinConfig(config);
     }
 

@@ -1,6 +1,7 @@
 package com.v2board.api.protocol;
 
 import com.v2board.api.model.User;
+import com.v2board.api.service.external.ExternalServerAdapter;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -30,7 +31,10 @@ public class ShadowrocketHandler implements ProtocolHandler {
         uri.append(ShadowrocketBuilder.buildStatusLine(user));
         String uuid = user.getUuid();
         for (Map<String, Object> server : servers) {
-            if (ShadowrocketBuilder.isVmessServer(server)) {
+            ExternalServerAdapter.Resolved external = ExternalServerAdapter.resolve(server);
+            if (external != null && "vmess".equals(String.valueOf(external.server().get("type")))) {
+                uri.append(ShadowrocketBuilder.buildVmess(external.credential(), external.server()));
+            } else if (ShadowrocketBuilder.isVmessServer(server)) {
                 uri.append(ShadowrocketBuilder.buildVmess(uuid, server));
             } else {
                 uri.append(generalHandler.buildPlainUriForServer(uuid, server));

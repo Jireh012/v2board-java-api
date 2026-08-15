@@ -416,6 +416,11 @@ public final class ShareUriConverter {
                 if (t.get("server_name") != null) {
                     cfg.put("sni", t.get("server_name"));
                 }
+                if (Boolean.TRUE.equals(t.get("insecure"))) {
+                    cfg.put("skip-cert-verify", true);
+                    cfg.put("verify", false);
+                    cfg.put("allowInsecure", 1);
+                }
             } else {
                 cfg.put("tls", "");
             }
@@ -423,6 +428,9 @@ public final class ShareUriConverter {
             if (transport != null) {
                 if (transport.get("path") != null) {
                     cfg.put("path", transport.get("path") instanceof List<?> l && !l.isEmpty() ? l.get(0) : transport.get("path"));
+                }
+                if (transport.get("service_name") != null && cfg.get("path") == null) {
+                    cfg.put("path", transport.get("service_name"));
                 }
                 Object headers = transport.get("headers");
                 if (headers instanceof Map<?, ?> h && h.get("Host") != null) {
@@ -437,113 +445,164 @@ public final class ShareUriConverter {
     }
 
     private static String vlessToUri(Map<String, Object> o) {
-        StringBuilder sb = new StringBuilder("vless://");
-        sb.append(o.get("uuid")).append("@").append(o.get("server")).append(":").append(o.get("server_port"));
-        sb.append("?encryption=none");
-        Object tls = o.get("tls");
-        if (tls instanceof Map<?, ?> t && Boolean.TRUE.equals(t.get("enabled"))) {
-            Object reality = t.get("reality");
-            if (reality instanceof Map<?, ?> r && Boolean.TRUE.equals(r.get("enabled"))) {
-                sb.append("&security=reality");
-                if (r.get("public_key") != null) {
-                    sb.append("&pbk=").append(r.get("public_key"));
-                }
-                if (r.get("short_id") != null) {
-                    sb.append("&sid=").append(r.get("short_id"));
-                }
-            } else {
-                sb.append("&security=tls");
-            }
-            if (t.get("server_name") != null) {
-                sb.append("&sni=").append(t.get("server_name"));
-            }
-        }
+        Map<String, String> q = new LinkedHashMap<>();
+        q.put("encryption", "none");
+        putTlsQuery(q, o, true);
         String net = transportType(o);
         if (!net.isEmpty()) {
-            sb.append("&type=").append(net);
+            q.put("type", net);
         }
-        Map<String, Object> transport = asMap(o.get("transport"));
-        if (transport != null) {
-            if (transport.get("path") != null) {
-                Object path = transport.get("path");
-                if (path instanceof List<?> l && !l.isEmpty()) {
-                    sb.append("&path=").append(urlEncode(String.valueOf(l.get(0))));
-                } else {
-                    sb.append("&path=").append(urlEncode(String.valueOf(path)));
-                }
-            }
-            if (transport.get("service_name") != null) {
-                sb.append("&serviceName=").append(urlEncode(String.valueOf(transport.get("service_name"))));
-            }
+        putTransportQuery(q, o);
+        if (o.get("flow") != null && !str(o.get("flow")).isEmpty()) {
+            q.put("flow", str(o.get("flow")));
         }
-        if (o.get("flow") != null) {
-            sb.append("&flow=").append(o.get("flow"));
-        }
-        String tag = str(o.get("tag"));
-        if (!tag.isEmpty()) {
-            sb.append("#").append(urlEncode(tag));
-        }
-        return sb.toString();
+        return "vless://" + o.get("uuid") + "@" + o.get("server") + ":" + o.get("server_port")
+                + queryString(q) + fragment(o);
     }
 
     private static String trojanToUri(Map<String, Object> o) {
-        StringBuilder sb = new StringBuilder("trojan://");
-        sb.append(urlEncode(str(o.get("password")))).append("@")
-                .append(o.get("server")).append(":").append(o.get("server_port"));
-        Object tls = o.get("tls");
-        if (tls instanceof Map<?, ?> t && t.get("server_name") != null) {
-            sb.append("?sni=").append(t.get("server_name"));
+        Map<String, String> q = new LinkedHashMap<>();
+        putTlsQuery(q, o, false);
+        String net = transportType(o);
+        if (!net.isEmpty() && !"tcp".equalsIgnoreCase(net)) {
+            q.put("type", net);
         }
-        String tag = str(o.get("tag"));
-        if (!tag.isEmpty()) {
-            sb.append("#").append(urlEncode(tag));
-        }
-        return sb.toString();
+        putTransportQuery(q, o);
+        return "trojan://" + urlEncode(str(o.get("password"))) + "@"
+                + o.get("server") + ":" + o.get("server_port")
+                + queryString(q) + fragment(o);
     }
 
     private static String hysteria2ToUri(Map<String, Object> o) {
-        StringBuilder sb = new StringBuilder("hysteria2://");
-        sb.append(urlEncode(str(o.get("password")))).append("@")
-                .append(o.get("server")).append(":").append(o.get("server_port"));
-        Object tls = o.get("tls");
-        if (tls instanceof Map<?, ?> t && t.get("server_name") != null) {
-            sb.append("?sni=").append(t.get("server_name"));
+        Map<String, String> q = new LinkedHashMap<>();
+        putTlsQuery(q, o, false);
+        Object obfs = o.get("obfs");
+        if (obfs instanceof Map<?, ?> m) {
+            if (m.get("type") != null) {
+                q.put("obfs", str(m.get("type")));
+            }
+            if (m.get("password") != null) {
+                q.put("obfs-password", str(m.get("password")));
+            }
         }
-        String tag = str(o.get("tag"));
-        if (!tag.isEmpty()) {
-            sb.append("#").append(urlEncode(tag));
-        }
-        return sb.toString();
+        return "hysteria2://" + urlEncode(str(o.get("password"))) + "@"
+                + o.get("server") + ":" + o.get("server_port")
+                + queryString(q) + fragment(o);
     }
 
     private static String tuicToUri(Map<String, Object> o) {
-        StringBuilder sb = new StringBuilder("tuic://");
-        sb.append(o.get("uuid")).append(":").append(urlEncode(str(o.get("password"))))
-                .append("@").append(o.get("server")).append(":").append(o.get("server_port"));
-        Object tls = o.get("tls");
-        if (tls instanceof Map<?, ?> t && t.get("server_name") != null) {
-            sb.append("?sni=").append(t.get("server_name"));
+        Map<String, String> q = new LinkedHashMap<>();
+        putTlsQuery(q, o, false);
+        if (o.get("congestion_control") != null) {
+            q.put("congestion_control", str(o.get("congestion_control")));
         }
-        String tag = str(o.get("tag"));
-        if (!tag.isEmpty()) {
-            sb.append("#").append(urlEncode(tag));
+        if (o.get("udp_relay_mode") != null) {
+            q.put("udp_relay_mode", str(o.get("udp_relay_mode")));
         }
-        return sb.toString();
+        return "tuic://" + o.get("uuid") + ":" + urlEncode(str(o.get("password")))
+                + "@" + o.get("server") + ":" + o.get("server_port")
+                + queryString(q) + fragment(o);
     }
 
     private static String anytlsToUri(Map<String, Object> o) {
-        StringBuilder sb = new StringBuilder("anytls://");
-        sb.append(urlEncode(str(o.get("password")))).append("@")
-                .append(o.get("server")).append(":").append(o.get("server_port"));
+        Map<String, String> q = new LinkedHashMap<>();
+        putTlsQuery(q, o, false);
+        return "anytls://" + urlEncode(str(o.get("password"))) + "@"
+                + o.get("server") + ":" + o.get("server_port")
+                + queryString(q) + fragment(o);
+    }
+
+    private static void putTlsQuery(Map<String, String> q, Map<String, Object> o, boolean includeSecurity) {
         Object tls = o.get("tls");
-        if (tls instanceof Map<?, ?> t && t.get("server_name") != null) {
-            sb.append("?sni=").append(t.get("server_name"));
+        if (!(tls instanceof Map<?, ?> t)) {
+            return;
         }
+        boolean enabled = Boolean.TRUE.equals(t.get("enabled"))
+                || t.get("server_name") != null
+                || t.get("reality") != null;
+        if (!enabled) {
+            return;
+        }
+        Object reality = t.get("reality");
+        boolean realityOn = reality instanceof Map<?, ?> r && Boolean.TRUE.equals(r.get("enabled"));
+        if (includeSecurity) {
+            q.put("security", realityOn ? "reality" : "tls");
+        }
+        if (realityOn) {
+            Map<?, ?> r = (Map<?, ?>) reality;
+            if (r.get("public_key") != null) {
+                q.put("pbk", str(r.get("public_key")));
+            }
+            if (r.get("short_id") != null) {
+                q.put("sid", str(r.get("short_id")));
+            }
+        }
+        if (t.get("server_name") != null) {
+            String sni = str(t.get("server_name"));
+            q.put("sni", sni);
+            q.put("peer", sni);
+        }
+        if (Boolean.TRUE.equals(t.get("insecure"))) {
+            q.put("insecure", "1");
+            q.put("allowInsecure", "1");
+        }
+        Object utls = t.get("utls");
+        if (utls instanceof Map<?, ?> u && u.get("fingerprint") != null) {
+            q.put("fp", str(u.get("fingerprint")));
+        }
+    }
+
+    private static void putTransportQuery(Map<String, String> q, Map<String, Object> o) {
+        Map<String, Object> transport = asMap(o.get("transport"));
+        if (transport == null) {
+            return;
+        }
+        if (transport.get("path") != null) {
+            Object path = transport.get("path");
+            if (path instanceof List<?> l && !l.isEmpty()) {
+                q.put("path", String.valueOf(l.get(0)));
+            } else {
+                q.put("path", String.valueOf(path));
+            }
+        }
+        if (transport.get("service_name") != null) {
+            q.put("serviceName", str(transport.get("service_name")));
+        }
+        Object headers = transport.get("headers");
+        if (headers instanceof Map<?, ?> h && h.get("Host") != null) {
+            q.put("host", str(h.get("Host")));
+        } else if (transport.get("host") != null) {
+            Object host = transport.get("host");
+            if (host instanceof List<?> l && !l.isEmpty()) {
+                q.put("host", String.valueOf(l.get(0)));
+            } else {
+                q.put("host", String.valueOf(host));
+            }
+        }
+    }
+
+    private static String queryString(Map<String, String> q) {
+        if (q == null || q.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder("?");
+        boolean first = true;
+        for (Map.Entry<String, String> e : q.entrySet()) {
+            if (e.getValue() == null || e.getValue().isEmpty()) {
+                continue;
+            }
+            if (!first) {
+                sb.append("&");
+            }
+            first = false;
+            sb.append(urlEncode(e.getKey())).append("=").append(urlEncode(e.getValue()));
+        }
+        return sb.length() == 1 ? "" : sb.toString();
+    }
+
+    private static String fragment(Map<String, Object> o) {
         String tag = str(o.get("tag"));
-        if (!tag.isEmpty()) {
-            sb.append("#").append(urlEncode(tag));
-        }
-        return sb.toString();
+        return tag.isEmpty() ? "" : "#" + urlEncode(tag);
     }
 
     private static String transportType(Map<String, Object> o) {

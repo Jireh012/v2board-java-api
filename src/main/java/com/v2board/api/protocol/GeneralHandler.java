@@ -2,6 +2,7 @@ package com.v2board.api.protocol;
 
 import com.v2board.api.model.User;
 import com.v2board.api.service.external.ExternalNodeIdentity;
+import com.v2board.api.service.external.ShareUriConverter;
 import com.v2board.api.util.Helper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -71,17 +72,7 @@ public class GeneralHandler implements ProtocolHandler {
             return "";
         }
         if ("external".equals(type) || Boolean.TRUE.equals(server.get("external"))) {
-            Object uri = server.get("share_uri");
-            if (uri == null || String.valueOf(uri).isBlank()) {
-                return "";
-            }
-            String share = String.valueOf(uri).trim();
-            Object nameObj = server.get("name");
-            if (nameObj != null && !String.valueOf(nameObj).isBlank()) {
-                // Also rewrites vmess base64 `ps` — fragment-only updates leave clients showing old names.
-                share = ExternalNodeIdentity.rewriteShareUriName(share, String.valueOf(nameObj).trim());
-            }
-            return share.endsWith("\r\n") || share.endsWith("\n") ? share : share + "\r\n";
+            return buildExternalShareUri(server);
         }
         return switch (type) {
             case "vmess" -> buildVmess(uuid, server);
@@ -96,6 +87,32 @@ public class GeneralHandler implements ProtocolHandler {
         };
     }
     
+    /**
+     * Rebuild from sing-box outbound (same config the probe used). Stored share_uri
+     * from Clash/JSON sync often dropped insecure / transport / Reality fields,
+     * which makes Shadowrocket fail while admin still marks the node reachable.
+     */
+    @SuppressWarnings("unchecked")
+    private String buildExternalShareUri(Map<String, Object> server) {
+        String share = null;
+        Object outboundObj = server.get("singbox_outbound");
+        if (outboundObj instanceof Map<?, ?> outbound && !outbound.isEmpty()) {
+            share = ShareUriConverter.singboxToUri((Map<String, Object>) outbound);
+        }
+        if (share == null || share.isBlank()) {
+            Object uri = server.get("share_uri");
+            if (uri == null || String.valueOf(uri).isBlank()) {
+                return "";
+            }
+            share = String.valueOf(uri).trim();
+        }
+        Object nameObj = server.get("name");
+        if (nameObj != null && !String.valueOf(nameObj).isBlank()) {
+            share = ExternalNodeIdentity.rewriteShareUriName(share, String.valueOf(nameObj).trim());
+        }
+        return share.endsWith("\r\n") || share.endsWith("\n") ? share : share + "\r\n";
+    }
+
     /**
      * 构建 VMess URI
      */

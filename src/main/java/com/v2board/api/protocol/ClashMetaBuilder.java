@@ -1,6 +1,7 @@
 package com.v2board.api.protocol;
 
 import com.v2board.api.service.RuleTemplateSanitizer;
+import com.v2board.api.service.external.ClashProxyConverter;
 import com.v2board.api.util.Helper;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
@@ -38,7 +39,7 @@ public final class ClashMetaBuilder {
         for (Map<String, Object> item : servers) {
             Map<String, Object> server = new LinkedHashMap<>(item);
             if ("external".equals(String.valueOf(server.get("type"))) || Boolean.TRUE.equals(server.get("external"))) {
-                Map<String, Object> externalProxy = asMap(server.get("clash_proxy"));
+                Map<String, Object> externalProxy = resolveExternalClashProxy(server);
                 if (externalProxy != null && !externalProxy.isEmpty()) {
                     // 始终使用外层已打标的 name（如 ⚠️），避免保留第三方原始别名
                     externalProxy = new LinkedHashMap<>(externalProxy);
@@ -683,6 +684,22 @@ public final class ClashMetaBuilder {
 
     private static String str(Object o) {
         return o == null ? "" : String.valueOf(o);
+    }
+
+    /**
+     * Prefer converting the probe outbound; stored clash_proxy may predate
+     * skip-cert-verify / Reality / transport fields.
+     */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> resolveExternalClashProxy(Map<String, Object> server) {
+        Object outboundObj = server.get("singbox_outbound");
+        if (outboundObj instanceof Map<?, ?> outbound && !outbound.isEmpty()) {
+            Map<String, Object> rebuilt = ClashProxyConverter.singboxToClash((Map<String, Object>) outbound);
+            if (rebuilt != null && !rebuilt.isEmpty()) {
+                return rebuilt;
+            }
+        }
+        return asMap(server.get("clash_proxy"));
     }
 
     @SuppressWarnings("unchecked")

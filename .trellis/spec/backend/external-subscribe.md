@@ -215,7 +215,7 @@ conn.setRequestProperty("User-Agent", "v2board-java-api/external-subscribe");
 - After parse, before probe/upsert: `ExternalNameFilter.applyFiltersToParsed`
 - Updates `name`, outbound `tag`, and `share_uri` via `ExternalNodeIdentity.rewriteShareUriName`
 - `rewriteShareUriName` updates `#fragment` **and** `vmess://` base64 JSON `ps` (many clients read `ps`, not the fragment)
-- Delivery (`GeneralHandler` external path) must call the same helper — fragment-only rewrite leaves old `ps`
+- Delivery (`GeneralHandler` / Shadowrocket) rebuilds share URI from `singbox_outbound` (probe source of truth), then `rewriteShareUriName`. Do not emit the stored `share_uri` when outbound is present — Clash/JSON sync historically dropped `insecure` / transport / Reality, so Shadowrocket fails while admin still marks reachable.
 - Blank result after filters → keep original name
 - Does **not** change logical-key fingerprint
 
@@ -318,6 +318,12 @@ ExternalSubscribeFetcher.fetch(url, Proxy)   -- null Proxy = direct
 - Empty candidate set → sync `failed`, message `前置代理已开启但无可用节点` (no silent direct fallback).
 - Exclude current `source_id` (anti-loop / cold-start via other sources).
 - Probe phase unchanged (still uses its own short-lived proxies).
+- Client delivery must rebuild from the same outbound the probe used:
+  - URI clients: `ShareUriConverter.singboxToUri`
+  - Clash family: `ClashProxyConverter.singboxToClash`
+  - Conf clients: `ExternalServerAdapter` flatten (keep `insecure` / WS / Reality / HY2 `obfs`)
+  - Sing-box: emit outbound as-is
+  Do not prefer stored `share_uri` / `clash_proxy` when outbound is present.
 
 ### 4. Wrong vs Correct
 

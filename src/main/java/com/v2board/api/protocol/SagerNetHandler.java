@@ -23,10 +23,7 @@ public class SagerNetHandler implements ProtocolHandler {
 
     @Override
     public String handle(User user, List<Map<String, Object>> servers) {
-        String plain = generalHandler.buildPlainUriContent(user, servers, server -> {
-            String type = server.get("type") != null ? String.valueOf(server.get("type")) : "";
-            return !"hysteria".equals(type) && !"hysteria2".equals(type);
-        });
+        String plain = generalHandler.buildPlainUriContent(user, servers, SagerNetHandler::includeServer);
         if (plain.isEmpty()) {
             return "";
         }
@@ -36,5 +33,16 @@ public class SagerNetHandler implements ProtocolHandler {
     @Override
     public void applyResponseHeaders(User user, HttpServletResponse response) {
         SubscribeHeaders.applyUserInfo(response, user);
+    }
+
+    static boolean includeServer(Map<String, Object> server) {
+        String type = server.get("type") != null ? String.valueOf(server.get("type")) : "";
+        if ("external".equals(type) || Boolean.TRUE.equals(server.get("external"))) {
+            Object outbound = server.get("singbox_outbound");
+            if (outbound instanceof Map<?, ?> m && m.get("type") != null) {
+                type = String.valueOf(m.get("type"));
+            }
+        }
+        return !"hysteria".equals(type) && !"hysteria2".equals(type);
     }
 }

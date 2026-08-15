@@ -157,6 +157,10 @@ public final class ExternalServerAdapter {
             server.put("allow_insecure", 1);
             server.put("insecure", 1);
         }
+        Object utls = t.get("utls");
+        if (utls instanceof Map<?, ?> u && u.get("fingerprint") != null) {
+            tlsSettings.put("fingerprint", u.get("fingerprint"));
+        }
         Object reality = t.get("reality");
         boolean realityEnabled = reality instanceof Map<?, ?> r && Boolean.TRUE.equals(r.get("enabled"));
         if (realityEnabled) {
