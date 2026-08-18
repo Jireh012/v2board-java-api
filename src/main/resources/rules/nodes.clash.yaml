@@ -17,12 +17,19 @@ dns:
 proxies:
 
 proxy-groups:
+  - name: "🏠 回国"
+    type: select
+    proxies:
+      - "(?i)回国|^CN\\s|中国大陆"
+      - "DIRECT"
+
   # 默认走自动测速；手动切换仍可选全部节点
   - name: "PROXY"
     type: select
     proxies:
       - "♻️ 自动选择"
       - "🚀 手动切换"
+      - "🏠 回国"
 
   - name: "♻️ 自动选择"
     type: url-test
@@ -37,4 +44,5 @@ proxy-groups:
 
 rules:
   - GEOIP,private,DIRECT,no-resolve
+  - GEOIP,CN,🏠 回国
   - MATCH,PROXY

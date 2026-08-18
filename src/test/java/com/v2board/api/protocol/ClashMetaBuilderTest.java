@@ -36,6 +36,8 @@ class ClashMetaBuilderTest {
         assertTrue(yaml.contains("📹 油管视频"), "youtube group missing");
         assertTrue(yaml.contains("🌍 国外媒体"), "foreign media missing");
         assertTrue(yaml.contains("🐟 漏网之鱼"), "final group missing");
+        assertTrue(yaml.contains("🏠 回国"), "return-home group missing");
+        assertTrue(yaml.contains("GEOIP,CN,🏠 回国") || yaml.contains("GEOIP,CN,🏠 回国,"), "cn geoip must use return-home");
         assertTrue(yaml.contains("GEOSITE,category-ads-all"), "ads geosite missing");
         assertFalse(yaml.contains("GEOSITE,category-ad,"), "category-ad is not in Loyalsoldier GeoSite.dat");
         assertFalse(yaml.toLowerCase().contains("rule-providers"), "must not use rule-providers");
@@ -238,5 +240,42 @@ class ClashMetaBuilderTest {
         int manual = yaml.indexOf("🚀 手动切换");
         assertTrue(manual > 0);
         assertTrue(yaml.substring(manual).contains("node-a"));
+    }
+
+    @Test
+    void returnHomeGroup_matchesCnNode_autoSelectExcludesIt() {
+        List<Map<String, Object>> servers = List.of(
+                Map.of(
+                        "type", "shadowsocks",
+                        "name", "CN 回国节点",
+                        "host", "1.2.3.4",
+                        "port", 443,
+                        "cipher", "aes-256-gcm",
+                        "created_at", 0L
+                ),
+                Map.of(
+                        "type", "shadowsocks",
+                        "name", "香港01",
+                        "host", "5.6.7.8",
+                        "port", 443,
+                        "cipher", "aes-256-gcm",
+                        "created_at", 0L
+                )
+        );
+        String yaml = ClashMetaBuilder.build(servers, "uuid", "V2Board", "rules/default.clash.yaml");
+        int home = yaml.indexOf("🏠 回国");
+        assertTrue(home >= 0);
+        String homeSection = yaml.substring(home, Math.min(yaml.length(), home + 220));
+        assertTrue(homeSection.contains("CN 回国节点"));
+        assertTrue(homeSection.contains("DIRECT"));
+        int auto = yaml.indexOf("name: \"♻️ 自动选择\"");
+        if (auto < 0) {
+            auto = yaml.indexOf("name: ♻️ 自动选择");
+        }
+        assertTrue(auto >= 0);
+        String autoSection = yaml.substring(auto, Math.min(yaml.length(), auto + 280));
+        assertTrue(autoSection.contains("香港01"));
+        assertFalse(autoSection.contains("CN 回国节点"), "auto-select must not use return-home nodes");
+        assertTrue(yaml.contains("GEOIP,CN,🏠 回国"));
     }
 }

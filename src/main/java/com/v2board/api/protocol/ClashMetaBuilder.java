@@ -105,7 +105,7 @@ public final class ClashMetaBuilder {
     private static void mergeProxyGroup(Map<String, Object> group, List<String> proxyNames) {
         Object proxiesObj = group.get("proxies");
         if (!(proxiesObj instanceof List<?> srcList)) {
-            group.put("proxies", new ArrayList<>(proxyNames));
+            group.put("proxies", excludeReturnHomeIfIntlSpeed(group, new ArrayList<>(proxyNames)));
             return;
         }
         List<String> groupProxies = new ArrayList<>();
@@ -113,7 +113,7 @@ public final class ClashMetaBuilder {
             groupProxies.add(String.valueOf(o));
         }
         if (groupProxies.isEmpty()) {
-            group.put("proxies", new ArrayList<>(proxyNames));
+            group.put("proxies", excludeReturnHomeIfIntlSpeed(group, new ArrayList<>(proxyNames)));
             return;
         }
         boolean isFilter = false;
@@ -134,7 +134,20 @@ public final class ClashMetaBuilder {
             group.put("proxies", groupProxies);
             return;
         }
-        group.put("proxies", groupProxies);
+        group.put("proxies", excludeReturnHomeIfIntlSpeed(group, groupProxies));
+    }
+
+    private static boolean isIntlSpeedGroup(String name) {
+        return "♻️ 自动选择".equals(name) || "自动选择".equals(name)
+                || "🔯 故障转移".equals(name) || "故障转移".equals(name);
+    }
+
+    /** 自动选择 / 故障转移排除回国节点，避免被当成科学上网出口。 */
+    private static List<String> excludeReturnHomeIfIntlSpeed(Map<String, Object> group, List<String> names) {
+        if (!isIntlSpeedGroup(String.valueOf(group.get("name")))) {
+            return names;
+        }
+        return ConfTemplatePlaceholders.filterNot(names, ConfTemplatePlaceholders.CN_RETURN);
     }
 
     private static final String MAIN_SELECT_GROUP = "🚀 节点选择";

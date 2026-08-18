@@ -112,6 +112,26 @@ class SurgeBuilderTest {
         assertTrue(conf.contains("9.9.9.9"));
     }
 
+    @Test
+    void buildHysteria2_readsInsecureAndSniFromTlsSettings() {
+        User user = sampleUser();
+        Map<String, Object> hy2 = Map.of(
+                "type", "hysteria2",
+                "name", "CN 回国节点",
+                "host", "cn.example",
+                "port", 32711,
+                "obfs", "salamander",
+                "obfs_password", "x",
+                "tls_settings", Map.of("allow_insecure", "1", "server_name", "cn.example")
+        );
+        String conf = SurgeBuilder.buildFromContent(
+                List.of(hy2), user, "App", "https://x/s", "x.com",
+                "[Proxy]\n$proxies\n");
+        assertTrue(conf.contains("skip-cert-verify=true"));
+        assertTrue(conf.contains("sni=cn.example"));
+        assertTrue(conf.contains("obfs=salamander"));
+    }
+
     private static User sampleUser() {
         User user = new User();
         user.setUuid("uuid-1");

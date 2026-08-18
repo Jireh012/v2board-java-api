@@ -8,7 +8,7 @@
 
 ### 1. Scope / Trigger
 
-- Trigger: Protocol handlers (`clash` / `meta` / `verge` / `nyanpasu` / `stash` / `surge` / `surfboard` / `sing-box` / `qx` / `loon`) build subscribe output and must load a rule template.
+- Trigger: Protocol handlers (`clash` / `meta` / `verge` / `nyanpasu` / `stash` / `surge` / `surfboard` / `sing-box` / `qx` / `loon` / `shadowrocket`) build subscribe output and must load a rule template.
 - Cross-layer: Admin UI → `AdminSubscribeRuleController` → `RuleTemplateService` → MySQL `v2_subscribe_rule_template` + Redis → Builders.
 
 ### 2. Signatures
@@ -25,7 +25,7 @@ static void bindRequestProfile(String profile);   // full|simple|nodes for curre
 static void clearRequestProfile();
 ```
 
-**Formats** (PK `format`): `clash` | `stash` | `surge` | `surfboard` | `singbox` | `quantumultx` | `loon`.
+**Formats** (PK `format`): `clash` | `stash` | `surge` | `surfboard` | `singbox` | `quantumultx` | `loon` | `shadowrocket`.
 
 Aliases normalized at resolve: `meta`/`verge`/`nyanpasu` → `clash`; `sing-box` → `singbox`.
 
@@ -62,8 +62,9 @@ Admin save/sync edits **full** only. Response header: `subscription-rule-profile
 | singbox | `rules/default.sing-box.json` |
 | quantumultx | `rules/default.quantumultx.conf` |
 | loon | `rules/default.loon.conf` |
+| shadowrocket | `rules/default.shadowrocket.conf`（ACL4SSR 全量 + 🏠 回国；**不是** PHP URI 列表） |
 
-**Classpath seeds (`simple` / `nodes`)**: `rules/{simple\|nodes}.clash.yaml` (stash shares clash), `*.surge.conf`, `*.surfboard.conf`, `*.quantumultx.conf`, `*.loon.conf`, `*.sing-box.json`.
+**Classpath seeds (`simple` / `nodes`)**: `rules/{simple\|nodes}.clash.yaml` (stash shares clash), `*.surge.conf`, `*.surfboard.conf`, `*.quantumultx.conf`, `*.loon.conf`, `*.sing-box.json`, `*.shadowrocket.conf`.
 
 > **Cache gotcha**: Only **DB custom** templates are written to Redis. Classpath seeds must **not** be cached (TTL 24h would pin stale seeds across jar deploys).
 
@@ -303,7 +304,9 @@ rules:
 | After empty-group removal | Strip dangling member refs from remaining groups (Mihomo fails on `'🇨🇳 台湾节点' not found`) |
 | Policy-only (references other groups / DIRECT / REJECT) | **Do not** append all nodes |
 
-Shared helpers: `ClashMetaBuilder.mergeProxyGroup`, `SingboxBuilder.addProxies`, `ConfTemplatePlaceholders.applyProxyGroups` (Surge/Surfboard/QX/Loon placeholders `$proxy_group` / `$proxy_group_{hk,tw,…}`).
+Shared helpers: `ClashMetaBuilder.mergeProxyGroup`, `SingboxBuilder.addProxies`, `ConfTemplatePlaceholders.applyProxyGroups` (Surge/Surfboard/QX/Loon/Shadowrocket placeholders `$proxy_group` / `$proxy_group_{hk,tw,…,cn}` / `$proxy_group_intl`).
+
+**🏠 回国（全格式）**: 各客户端 seed 增加策略组 `🏠 回国`（回国节点 + **DIRECT**，可选手动直连）。名称匹配 `(?i)回国|^CN\\s|中国大陆`（不含 `CN2`）。`🎯 全球直连` / `🌏 国内媒体` 默认指向该组；`GEOIP,CN` / `GEOSITE,cn` 走 🏠 回国；`$proxy_group_intl` 排除回国节点以免 url-test 把它当出口。无回国节点时组内只剩 `DIRECT`。Shadowrocket `full` seed 与 Surge ACL4SSR 同结构。ACL4SSR **同步** 后 `injectReturnHome` 会补回该组，避免被改成纯直连。
 
 ### 3. Client-local rules (R2)
 

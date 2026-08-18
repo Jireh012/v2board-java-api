@@ -33,7 +33,7 @@ public class RuleTemplateService {
     private static final Logger logger = LoggerFactory.getLogger(RuleTemplateService.class);
     private static final long CACHE_TTL_HOURS = 24;
     private static final Set<String> SUPPORTED = Set.of(
-            "clash", "stash", "surge", "surfboard", "singbox", "quantumultx", "loon");
+            "clash", "stash", "surge", "surfboard", "singbox", "quantumultx", "loon", "shadowrocket");
     public static final String PROFILE_FULL = "full";
     /**
      * Default sync source: ACL4SSR Online Full（含 ♻️ 自动选择 / url-test；勿用 NoAuto）。
@@ -381,6 +381,7 @@ public class RuleTemplateService {
             case "singbox" -> "rules/default.sing-box.json";
             case "quantumultx" -> "rules/default.quantumultx.conf";
             case "loon" -> "rules/default.loon.conf";
+            case "shadowrocket" -> "rules/default.shadowrocket.conf";
             default -> null;
         };
     }
@@ -397,6 +398,7 @@ public class RuleTemplateService {
             case "singbox" -> "rules/" + p + ".sing-box.json";
             case "quantumultx" -> "rules/" + p + ".quantumultx.conf";
             case "loon" -> "rules/" + p + ".loon.conf";
+            case "shadowrocket" -> "rules/" + p + ".shadowrocket.conf";
             default -> null;
         };
     }

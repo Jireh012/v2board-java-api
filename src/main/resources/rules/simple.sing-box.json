@@ -30,10 +30,16 @@
       "domain_resolver": { "server": "local" }
     },
     {
+      "tag": "🏠 回国",
+      "type": "selector",
+      "interrupt_exist_connections": true,
+      "outbounds": ["(?i)回国|^CN\\s|中国大陆", "DIRECT"]
+    },
+    {
       "tag": "🚀 节点选择",
       "type": "selector",
       "interrupt_exist_connections": true,
-      "outbounds": ["♻️ 自动选择", "DIRECT"]
+      "outbounds": ["♻️ 自动选择", "🏠 回国", "DIRECT"]
     },
     {
       "tag": "♻️ 自动选择",
@@ -60,7 +66,7 @@
       {
         "domain_suffix": [".cn", ".中国", "baidu.com", "qq.com"],
         "action": "route",
-        "outbound": "DIRECT"
+        "outbound": "🏠 回国"
       }
     ],
     "auto_detect_interface": true,

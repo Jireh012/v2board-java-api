@@ -11,10 +11,13 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Surge / Surfboard / Loon / Quantumult X 文本模板占位符：
- * 全量节点与地区过滤，并剔除空地区组。
+ * Surge / Surfboard / Loon / Quantumult X / Shadowrocket 文本模板占位符：
+ * 全量节点与地区过滤（含 {@code $proxy_group_cn} / {@code $proxy_group_intl}），并剔除空地区组。
  */
 final class ConfTemplatePlaceholders {
+
+    /** 回国节点：名称含「回国」「中国大陆」，或「CN 」前缀（不含 CN2）。 */
+    static final Pattern CN_RETURN = Pattern.compile("(?i)回国|^CN\\s|中国大陆");
 
     private static final Map<String, Pattern> REGION_PLACEHOLDERS = new LinkedHashMap<>();
 
@@ -26,6 +29,7 @@ final class ConfTemplatePlaceholders {
         REGION_PLACEHOLDERS.put("$proxy_group_us", Pattern.compile("(?i)美|US|United\\s*States|America"));
         REGION_PLACEHOLDERS.put("$proxy_group_kr", Pattern.compile("(?i)韩|KR|Korea"));
         REGION_PLACEHOLDERS.put("$proxy_group_nf", Pattern.compile("(?i)奈飞|Netflix|NF"));
+        REGION_PLACEHOLDERS.put("$proxy_group_cn", CN_RETURN);
     }
 
     private static final Pattern EMPTY_SURGE_GROUP_LINE = Pattern.compile(
@@ -51,7 +55,9 @@ final class ConfTemplatePlaceholders {
         for (Map.Entry<String, Pattern> e : REGION_PLACEHOLDERS.entrySet()) {
             out = out.replace(e.getKey(), String.join(", ", filter(names, e.getValue())));
         }
+        out = out.replace("$proxy_group_intl", String.join(", ", filterNot(names, CN_RETURN)));
         out = out.replace("$proxy_group", String.join(", ", names));
+        out = out.replaceAll(",\\s*,", ",");
         return pruneEmptyProxyGroups(out);
     }
 
@@ -59,6 +65,16 @@ final class ConfTemplatePlaceholders {
         List<String> out = new ArrayList<>();
         for (String n : names) {
             if (n != null && pattern.matcher(n).find()) {
+                out.add(n);
+            }
+        }
+        return out;
+    }
+
+    static List<String> filterNot(List<String> names, Pattern pattern) {
+        List<String> out = new ArrayList<>();
+        for (String n : names) {
+            if (n != null && !pattern.matcher(n).find()) {
                 out.add(n);
             }
         }

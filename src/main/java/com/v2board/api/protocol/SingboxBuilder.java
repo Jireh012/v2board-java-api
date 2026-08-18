@@ -16,7 +16,7 @@ public final class SingboxBuilder {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final Set<String> KEEP_EMPTY_TAGS = Set.of(
             "🚀 节点选择", "节点选择", "🚀 手动切换", "♻️ 自动选择", "自动选择",
-            "DIRECT", "direct", "REJECT", "block", "🐟 漏网之鱼");
+            "DIRECT", "direct", "REJECT", "block", "🐟 漏网之鱼", "🏠 回国");
 
     private SingboxBuilder() {
     }
@@ -129,7 +129,11 @@ public final class SingboxBuilder {
                     ? new ArrayList<>((List<String>) l) : new ArrayList<>();
 
             if (tag.startsWith("#") || groupOutbounds.isEmpty()) {
-                outbound.put("outbounds", new ArrayList<>(tags));
+                List<String> filled = new ArrayList<>(tags);
+                if (isIntlSpeedGroup(tag)) {
+                    filled = ConfTemplatePlaceholders.filterNot(filled, ConfTemplatePlaceholders.CN_RETURN);
+                }
+                outbound.put("outbounds", filled);
                 continue;
             }
 
@@ -209,6 +213,11 @@ public final class SingboxBuilder {
                 Map.of("tag", "♻️ 自动选择", "type", "urltest", "outbounds", List.of())
         ));
         return config;
+    }
+
+    private static boolean isIntlSpeedGroup(String tag) {
+        return "♻️ 自动选择".equals(tag) || "自动选择".equals(tag)
+                || "🔯 故障转移".equals(tag) || "故障转移".equals(tag);
     }
 
     /**

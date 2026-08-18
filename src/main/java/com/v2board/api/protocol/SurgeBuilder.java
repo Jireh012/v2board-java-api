@@ -202,18 +202,27 @@ public final class SurgeBuilder {
         String firstPart = portField.split(",")[0];
         String firstPort = firstPart.contains("-") ? firstPart.split("-")[0] : firstPart;
 
+        Map<String, Object> tlsSettings = tls(server);
+        String sni = str(server.get("server_name"));
+        if (sni.isEmpty() && tlsSettings != null) {
+            sni = str(tlsSettings.getOrDefault("server_name", tlsSettings.get("serverName")));
+        }
+        boolean insecure = truthy(server.get("insecure"))
+                || (tlsSettings != null && (intVal(tlsSettings.get("allow_insecure")) == 1
+                || truthy(tlsSettings.get("allow_insecure"))));
+
         List<String> config = new ArrayList<>();
         config.add(server.get("name") + "=hysteria2");
         config.add(str(server.get("host")));
         config.add(firstPort);
         config.add("password=" + password);
         config.add("download-bandwidth=" + server.getOrDefault("up_mbps", 0));
-        if (server.get("server_name") != null && !str(server.get("server_name")).isEmpty()) {
-            config.add("sni=" + server.get("server_name"));
+        if (!sni.isEmpty()) {
+            config.add("sni=" + sni);
         }
         config.add("udp-relay=true");
-        if (server.get("insecure") != null && !str(server.get("insecure")).isEmpty()) {
-            config.add(truthy(server.get("insecure")) ? "skip-cert-verify=true" : "skip-cert-verify=false");
+        if (insecure || server.get("insecure") != null || (tlsSettings != null && tlsSettings.get("allow_insecure") != null)) {
+            config.add(insecure ? "skip-cert-verify=true" : "skip-cert-verify=false");
         }
         if (server.get("obfs") != null && !str(server.get("obfs")).isEmpty()
                 && server.get("obfs_password") != null && !str(server.get("obfs_password")).isEmpty()) {

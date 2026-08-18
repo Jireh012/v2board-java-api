@@ -22,10 +22,16 @@
       "domain_resolver": { "server": "local" }
     },
     {
+      "tag": "🏠 回国",
+      "type": "selector",
+      "interrupt_exist_connections": true,
+      "outbounds": ["(?i)回国|^CN\\s|中国大陆", "DIRECT"]
+    },
+    {
       "tag": "PROXY",
       "type": "selector",
       "interrupt_exist_connections": true,
-      "outbounds": ["#all"]
+      "outbounds": ["#all", "🏠 回国"]
     },
     {
       "tag": "♻️ 自动选择",

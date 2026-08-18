@@ -62,6 +62,12 @@
       }
     },
     {
+      "tag": "🏠 回国",
+      "type": "selector",
+      "interrupt_exist_connections": true,
+      "outbounds": ["(?i)回国|^CN\\s|中国大陆", "DIRECT"]
+    },
+    {
       "tag": "🚀 节点选择",
       "type": "selector",
       "interrupt_exist_connections": true,
@@ -74,6 +80,7 @@
         "🇯🇵 日本",
         "🇺🇲 美国",
         "🇰🇷 韩国",
+        "🏠 回国",
         "DIRECT"
       ]
     },
@@ -146,7 +153,7 @@
     {
       "tag": "🌏 国内媒体",
       "type": "selector",
-      "outbounds": ["DIRECT", "🚀 节点选择"]
+      "outbounds": ["🏠 回国", "DIRECT", "🚀 节点选择"]
     },
     {
       "tag": "📲 电报消息",
@@ -171,7 +178,7 @@
     {
       "tag": "🎯 全球直连",
       "type": "selector",
-      "outbounds": ["DIRECT", "🚀 节点选择"]
+      "outbounds": ["🏠 回国", "DIRECT", "🚀 节点选择"]
     },
     {
       "tag": "🐟 漏网之鱼",
@@ -250,7 +257,7 @@
       {
         "domain_suffix": [".cn", ".中国", "baidu.com", "qq.com", "weixin.qq.com", "taobao.com", "jd.com", "aliyun.com"],
         "action": "route",
-        "outbound": "🎯 全球直连"
+        "outbound": "🏠 回国"
       }
     ],
     "auto_detect_interface": true,

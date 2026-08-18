@@ -32,13 +32,14 @@ public final class Acl4ssrTemplateMaterializer {
         }
         String fmt = format == null ? "" : format.trim().toLowerCase(Locale.ROOT);
         Map<String, String> lists = listByUrl != null ? listByUrl : Map.of();
-        return switch (fmt) {
+        String raw = switch (fmt) {
             case "clash", "stash" -> materializeClash(seedContent, model, lists);
-            case "surge", "surfboard", "loon" -> materializeSurgeFamily(seedContent, model, lists);
+            case "surge", "surfboard", "loon", "shadowrocket" -> materializeSurgeFamily(seedContent, model, lists);
             case "quantumultx" -> materializeQuantumultX(seedContent, model, lists);
             case "singbox" -> materializeSingbox(seedContent, model, lists);
             default -> throw new BusinessException(500, "不支持的规则格式：" + format);
         };
+        return injectReturnHome(fmt, raw);
     }
 
     /**
@@ -49,7 +50,7 @@ public final class Acl4ssrTemplateMaterializer {
         Map<String, Object> seed = parseYamlMap(seedContent);
         Map<String, Object> expanded = parseYamlMap(expandedClashYaml);
         if (seed.isEmpty()) {
-            return dumpYaml(expanded);
+            return injectReturnHome("clash", dumpYaml(expanded));
         }
         if (expanded.get("proxy-groups") instanceof List<?> g) {
             seed.put("proxy-groups", new ArrayList<>(g));
@@ -62,7 +63,7 @@ public final class Acl4ssrTemplateMaterializer {
         if (!(seed.get("proxies") instanceof List)) {
             seed.put("proxies", new ArrayList<>());
         }
-        return dumpYaml(seed);
+        return injectReturnHome("clash", dumpYaml(seed));
     }
 
     @SuppressWarnings("unchecked")
@@ -561,6 +562,185 @@ public final class Acl4ssrTemplateMaterializer {
             }
         }
         return sb.toString();
+    }
+
+    /** 同步 ACL4SSR 后补上 🏠 回国（可选 DIRECT），并把 CN / 国内媒体指过去。 */
+    static String injectReturnHome(String format, String content) {
+        if (content == null || content.isBlank()) {
+            return content;
+        }
+        return switch (format) {
+            case "clash", "stash" -> injectReturnHomeClash(content);
+            case "quantumultx" -> injectReturnHomeQx(content);
+            case "singbox" -> injectReturnHomeSingbox(content);
+            default -> injectReturnHomeSurge(content);
+        };
+    }
+
+    @SuppressWarnings("unchecked")
+    private static String injectReturnHomeClash(String yaml) {
+        Map<String, Object> config = parseYamlMap(yaml);
+        List<Map<String, Object>> groups = new ArrayList<>();
+        if (config.get("proxy-groups") instanceof List<?> raw) {
+            for (Object o : raw) {
+                if (o instanceof Map<?, ?> m) {
+                    groups.add(new LinkedHashMap<>((Map<String, Object>) m));
+                }
+            }
+        }
+        boolean has = groups.stream().anyMatch(g -> "🏠 回国".equals(g.get("name")));
+        if (!has) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("name", "🏠 回国");
+            row.put("type", "select");
+            row.put("proxies", List.of("(?i)回国|^CN\\s|中国大陆", "DIRECT"));
+            groups.add(0, row);
+        }
+        for (Map<String, Object> g : groups) {
+            String name = String.valueOf(g.get("name"));
+            if ("🎯 全球直连".equals(name) || "🌏 国内媒体".equals(name)
+                    || "📺 哔哩哔哩".equals(name) || "🎶 网易音乐".equals(name)) {
+                prependProxy(g, "🏠 回国");
+            }
+        }
+        config.put("proxy-groups", groups);
+        if (config.get("rules") instanceof List<?> rawRules) {
+            List<Object> rules = new ArrayList<>(rawRules);
+            for (int i = 0; i < rules.size(); i++) {
+                if (rules.get(i) instanceof String r) {
+                    rules.set(i, retargetCnRule(r));
+                }
+            }
+            config.put("rules", rules);
+        }
+        return dumpYaml(config);
+    }
+
+    private static void prependProxy(Map<String, Object> group, String member) {
+        List<String> proxies = new ArrayList<>();
+        if (group.get("proxies") instanceof List<?> raw) {
+            for (Object o : raw) {
+                proxies.add(String.valueOf(o));
+            }
+        }
+        if (!proxies.contains(member)) {
+            proxies.add(0, member);
+        }
+        group.put("proxies", proxies);
+    }
+
+    private static String retargetCnRule(String rule) {
+        if (rule.startsWith("GEOIP,CN,") || rule.startsWith("GEOSITE,cn,")
+                || rule.startsWith("GEOSITE,geolocation-cn,")) {
+            return rule.replace("🎯 全球直连", "🏠 回国").replace(",DIRECT", ",🏠 回国");
+        }
+        return rule;
+    }
+
+    private static String injectReturnHomeSurge(String conf) {
+        boolean inserted = conf.contains("🏠 回国 =");
+        String[] lines = conf.split("\n", -1);
+        List<String> out = new ArrayList<>(lines.length + 2);
+        for (String line : lines) {
+            if (!inserted && line.startsWith("[Proxy Group]")) {
+                out.add(line);
+                out.add("🏠 回国 = select, $proxy_group_cn, DIRECT");
+                inserted = true;
+                continue;
+            }
+            out.add(rewriteSurgePolicyLine(line));
+        }
+        return String.join("\n", out);
+    }
+
+    private static String rewriteSurgePolicyLine(String line) {
+        if (line.contains("🏠 回国")) {
+            return line;
+        }
+        if (line.startsWith("🎯 全球直连 =") || line.startsWith("🌏 国内媒体 =")
+                || line.startsWith("📺 哔哩哔哩 =") || line.startsWith("🎶 网易音乐 =")) {
+            int idx = line.indexOf("= select, ");
+            if (idx >= 0) {
+                return line.substring(0, idx) + "= select, 🏠 回国, " + line.substring(idx + "= select, ".length());
+            }
+        }
+        if (line.startsWith("GEOIP,CN,")) {
+            return line.replace("🎯 全球直连", "🏠 回国").replace(",DIRECT", ",🏠 回国");
+        }
+        return line;
+    }
+
+    private static String injectReturnHomeQx(String conf) {
+        boolean inserted = conf.contains("static=🏠 回国");
+        String[] lines = conf.split("\n", -1);
+        List<String> out = new ArrayList<>(lines.length + 2);
+        for (String line : lines) {
+            if (!inserted && line.startsWith("[policy]")) {
+                out.add(line);
+                out.add("static=🏠 回国, $proxy_group_cn, direct");
+                inserted = true;
+                continue;
+            }
+            out.add(rewriteQxPolicyLine(line));
+        }
+        return String.join("\n", out);
+    }
+
+    private static String rewriteQxPolicyLine(String line) {
+        if (line.contains("🏠 回国")) {
+            return line;
+        }
+        if (line.startsWith("static=🎯 全球直连") || line.startsWith("static=🌏 国内媒体")
+                || line.startsWith("static=📺 哔哩哔哩") || line.startsWith("static=🎶 网易音乐")) {
+            int comma = line.indexOf(',');
+            if (comma > 0) {
+                return line.substring(0, comma) + ", 🏠 回国" + line.substring(comma);
+            }
+        }
+        String lower = line.toLowerCase(Locale.ROOT);
+        if (lower.startsWith("geoip,") && (lower.contains(", cn,") || lower.contains(",cn,"))) {
+            return line.replace("🎯 全球直连", "🏠 回国")
+                    .replace(", direct", ", 🏠 回国")
+                    .replace(",direct", ", 🏠 回国");
+        }
+        return line;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static String injectReturnHomeSingbox(String json) {
+        try {
+            Map<String, Object> root = JSON.readValue(json, Map.class);
+            List<Map<String, Object>> outbounds = root.get("outbounds") instanceof List<?> raw
+                    ? new ArrayList<>((List<Map<String, Object>>) raw) : new ArrayList<>();
+            boolean has = outbounds.stream().anyMatch(o -> "🏠 回国".equals(o.get("tag")));
+            if (!has) {
+                Map<String, Object> home = new LinkedHashMap<>();
+                home.put("tag", "🏠 回国");
+                home.put("type", "selector");
+                home.put("outbounds", List.of("(?i)回国|^CN\\s|中国大陆", "DIRECT"));
+                outbounds.add(1, home);
+            }
+            for (Map<String, Object> ob : outbounds) {
+                String tag = String.valueOf(ob.get("tag"));
+                if ("🎯 全球直连".equals(tag) || "🌏 国内媒体".equals(tag)
+                        || "📺 哔哩哔哩".equals(tag) || "🎶 网易音乐".equals(tag)) {
+                    List<String> members = new ArrayList<>();
+                    if (ob.get("outbounds") instanceof List<?> raw) {
+                        for (Object o : raw) {
+                            members.add(String.valueOf(o));
+                        }
+                    }
+                    if (!members.contains("🏠 回国")) {
+                        members.add(0, "🏠 回国");
+                    }
+                    ob.put("outbounds", members);
+                }
+            }
+            root.put("outbounds", outbounds);
+            return JSON.writeValueAsString(root);
+        } catch (Exception e) {
+            return json;
+        }
     }
 
     @SuppressWarnings("unchecked")

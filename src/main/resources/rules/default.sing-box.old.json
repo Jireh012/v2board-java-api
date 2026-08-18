@@ -91,6 +91,11 @@
   "outbounds": [
     {
       "type": "selector",
+      "tag": "🏠 回国",
+      "outbounds": ["(?i)回国|^CN\\s|中国大陆", "DIRECT"]
+    },
+    {
+      "type": "selector",
       "tag": "🚀 节点选择",
       "outbounds": [
         "🚀 手动切换",
@@ -101,6 +106,7 @@
         "🇯🇵 日本",
         "🇺🇲 美国",
         "🇰🇷 韩国",
+        "🏠 回国",
         "DIRECT"
       ]
     },
@@ -170,7 +176,7 @@
     {
       "type": "selector",
       "tag": "🌏 国内媒体",
-      "outbounds": ["DIRECT", "🚀 节点选择"]
+      "outbounds": ["🏠 回国", "DIRECT", "🚀 节点选择"]
     },
     {
       "type": "selector",
@@ -195,7 +201,7 @@
     {
       "type": "selector",
       "tag": "🎯 全球直连",
-      "outbounds": ["DIRECT", "🚀 节点选择"]
+      "outbounds": ["🏠 回国", "DIRECT", "🚀 节点选择"]
     },
     {
       "type": "selector",
@@ -273,7 +279,7 @@
       },
       {
         "geosite": ["cn"],
-        "outbound": "🎯 全球直连"
+        "outbound": "🏠 回国"
       },
       {
         "geoip": ["cn", "private"],

@@ -213,7 +213,7 @@ Flatten maps sing-box outbound → panel-shaped fields (`type`/`host`/`port`/`ci
 | Client | External source of truth | Notes |
 |--------|--------------------------|--------|
 | URI (v2rayN / SagerNet / Passwall / SSR+) | Rebuild `ShareUriConverter.singboxToUri(outbound)` | Do not emit stored `share_uri` when outbound exists |
-| Shadowrocket | Same URI rebuild; VMess → `ShadowrocketBuilder` | Query form, not stale vmess JSON |
+| Shadowrocket | Surge-compatible **conf** (`RuleTemplateService.resolve("shadowrocket")` + `SurgeBuilder`) | 🏠 回国分流；不再下发 Base64 URI 列表。VMess URI 仅 `ShadowrocketBuilder` 内部/测试仍可用 |
 | Clash / Meta / Verge / Stash / Nyanpasu | Rebuild `ClashProxyConverter.singboxToClash(outbound)` | Do not trust stored `clash_proxy` |
 | Sing-box | `singbox_outbound` as-is | Same object the probe used |
 | Surge | Adapter flatten + conf line | ss / vmess / trojan / hy2(+obfs) / anytls; **no VLESS** |

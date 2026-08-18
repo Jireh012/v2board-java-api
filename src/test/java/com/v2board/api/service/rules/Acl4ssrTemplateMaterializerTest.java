@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class Acl4ssrTemplateMaterializerTest {
 
     @ParameterizedTest
-    @ValueSource(strings = {"clash", "stash", "surge", "surfboard", "singbox", "quantumultx", "loon"})
+    @ValueSource(strings = {"clash", "stash", "surge", "surfboard", "singbox", "quantumultx", "loon", "shadowrocket"})
     void materialize_allFormatsInlineWithoutRemoteDeps(String format) throws Exception {
         String seedPath = switch (format) {
             case "clash", "stash" -> "rules/default.clash.yaml";
@@ -23,6 +23,7 @@ class Acl4ssrTemplateMaterializerTest {
             case "singbox" -> "rules/default.sing-box.json";
             case "quantumultx" -> "rules/default.quantumultx.conf";
             case "loon" -> "rules/default.loon.conf";
+            case "shadowrocket" -> "rules/default.shadowrocket.conf";
             default -> throw new IllegalArgumentException(format);
         };
         Acl4ssrIniParser.Model model = Acl4ssrIniParser.parse("""
@@ -39,6 +40,7 @@ class Acl4ssrTemplateMaterializerTest {
         assertFalse(out.contains("rule-providers"), format);
         assertFalse(out.contains("RULE-SET,https"), format);
         assertTrue(out.contains("ads.example.com"), format);
+        assertTrue(out.contains("🏠 回国"), format);
         if ("clash".equals(format) || "stash".equals(format)) {
             assertTrue(out.contains("mixed-port") || out.contains("dns:"), format);
         } else if ("singbox".equals(format)) {
@@ -68,8 +70,9 @@ class Acl4ssrTemplateMaterializerTest {
         String out = Acl4ssrTemplateMaterializer.materialize("clash", seed, model, lists);
         assertTrue(out.contains("mixed-port") || out.contains("dns:"));
         assertTrue(out.contains("DOMAIN-SUFFIX,ads.example.com,🛑 广告拦截"));
-        assertTrue(out.contains("GEOIP,CN,"));
+        assertTrue(out.contains("GEOIP,CN,🏠 回国"));
         assertTrue(out.contains("MATCH,🐟 漏网之鱼"));
+        assertTrue(out.contains("🏠 回国"));
         assertFalse(out.contains("rule-providers"));
         assertFalse(out.contains("raw.githubusercontent.com"));
         assertFalse(out.contains("RULE-SET,"));
@@ -92,6 +95,7 @@ class Acl4ssrTemplateMaterializerTest {
         assertTrue(out.contains("[Proxy Group]"));
         assertTrue(out.contains("DOMAIN-SUFFIX,ads.example.com,🛑 广告拦截"));
         assertTrue(out.contains("FINAL,🐟 漏网之鱼"));
+        assertTrue(out.contains("🏠 回国 = select, $proxy_group_cn, DIRECT"));
         assertFalse(out.contains("raw.githubusercontent.com"));
     }
 
@@ -147,6 +151,24 @@ class Acl4ssrTemplateMaterializerTest {
         String loon = Acl4ssrTemplateMaterializer.materialize("loon", read("rules/default.loon.conf"), model, lists);
         assertTrue(loon.contains("[General]"));
         assertTrue(loon.contains("DOMAIN-SUFFIX,example.com,"));
+        assertTrue(qx.contains("static=🏠 回国"));
+        assertTrue(loon.contains("🏠 回国 = select, $proxy_group_cn, DIRECT"));
+    }
+
+    @Test
+    void injectReturnHome_surgeRewritesDirectOnlyGlobalGroup() {
+        String conf = """
+                [Proxy Group]
+                🎯 全球直连 = select, DIRECT
+                🌏 国内媒体 = select, DIRECT, 🚀 节点选择
+                [Rule]
+                GEOIP,CN,DIRECT
+                """;
+        String out = Acl4ssrTemplateMaterializer.injectReturnHome("shadowrocket", conf);
+        assertTrue(out.contains("🏠 回国 = select, $proxy_group_cn, DIRECT"));
+        assertTrue(out.contains("🎯 全球直连 = select, 🏠 回国, DIRECT"));
+        assertTrue(out.contains("🌏 国内媒体 = select, 🏠 回国, DIRECT, 🚀 节点选择"));
+        assertTrue(out.contains("GEOIP,CN,🏠 回国"));
     }
 
     private static String read(String path) throws Exception {
