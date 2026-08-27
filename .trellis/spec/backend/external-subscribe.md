@@ -260,7 +260,7 @@ void applyDisplayName(Map<String, Object> server, String name);
 
 `ExternalSubscribeNodeService.listReachableAsServerMaps()`:
 
-1. Load reachable nodes for enabled sources (`sort ASC`, `id ASC`)
+1. Load reachable nodes for enabled sources that are **not traffic-exhausted** (`sort ASC`, `id ASC`)
 2. Dedupe by `logicalKey` — **first wins**
 3. If display names collide after dedupe, rename to `name1`, `name2`, … and sync clash/tag/share_uri
 4. Return list (Controller then applies `⚠️ ` markers)
@@ -305,7 +305,8 @@ v2_external_subscribe_source.pre_proxy_enable  -- tinyint 0|1, default 0
 Admin save/fetch JSON field: pre_proxy_enable
 ExternalSubscribeSyncService.fetchSubscribeContent(source)
 SingBoxProbeService.openHttpProxy(outbound) -> LocalHttpProxySession (AutoCloseable)
-ExternalSubscribeFetcher.fetch(url, Proxy)   -- null Proxy = direct
+ExternalSubscribeFetcher.fetchResult(url, Proxy)   -- null Proxy = direct; subscribe sync reads body + subscription-userinfo
+ExternalSubscribeFetcher.fetch(url, Proxy)         -- body only (rule-template / fallback)
 ```
 
 ### 3. Contracts
@@ -313,7 +314,7 @@ ExternalSubscribeFetcher.fetch(url, Proxy)   -- null Proxy = direct
 | `pre_proxy_enable` | Behavior |
 |--------------------|----------|
 | `0` / null | Direct `fetcher.fetch(url)` |
-| `1` | Pick first reachable node from **other enabled sources** (`sort ASC`, `id ASC`); open local HTTP proxy; `fetch(url, proxy)` |
+| `1` | Pick first reachable node from **other enabled, non-exhausted sources** (`sort ASC`, `id ASC`); open local HTTP proxy; `fetch(url, proxy)` |
 
 - Empty candidate set → sync `failed`, message `前置代理已开启但无可用节点` (no silent direct fallback).
 - Exclude current `source_id` (anti-loop / cold-start via other sources).
@@ -336,6 +337,67 @@ if (preProxy && pick() == null) return fetcher.fetch(url); // silent direct
 ```java
 if (preProxy && pick() == null) throw new IllegalStateException("前置代理已开启但无可用节点");
 ```
+
+---
+
+## Scenario: Exclude traffic-exhausted third-party sources
+
+### 1. Scope / Trigger
+
+- Upstream panels expose quota via HTTP `subscription-userinfo` (`upload=; download=; total=; expire=`) and/or info pseudo-nodes named like `剩余流量：0 GB`.
+- When that source's traffic is used up, its nodes must not appear in user subscribe output, and must not be used as pre-proxy.
+
+### 2. Signatures
+
+```
+v2_external_subscribe_source.traffic_upload / traffic_download / traffic_total / traffic_expire  -- bigint nullable
+v2_external_subscribe_source.traffic_exhausted  -- tinyint 0|1, default 0
+ExternalSubscribeFetcher.fetchResult(url[, proxy]) -> FetchResult(body, subscriptionUserinfo)
+ExternalSubscribeTraffic.resolve(userinfo, parsedBeforeInfoDrop) -> Snapshot
+Admin fetch JSON: traffic_upload, traffic_download, traffic_total, traffic_expire, traffic_exhausted
+```
+
+### 3. Contracts
+
+| Condition | Behavior |
+|-----------|----------|
+| `total > 0` and `upload + download >= total` | `traffic_exhausted=1` |
+| `total` missing or `0` | Not exhausted from header (unlimited / unknown) |
+| Info-node remaining parses to `<= 0` (含负数 / 「已用完」) | `traffic_exhausted=1` even if header missing / unlimited |
+| Info-node remaining `> 0` and header has no `total>0` | Persist as `traffic_total=remaining`, used=0 so admin list can show 剩余流量 |
+| No header and no remaining-traffic name | Do **not** exclude (keep previous behavior) |
+| Sync **failed** | Do **not** clear last traffic fields |
+| Sync **success** (including empty parse) | Persist snapshot; nulls written via `LambdaUpdateWrapper` |
+| `expire` only | Not treated as exhausted |
+| Delivery | `listReachableAsServerMaps` skips `traffic_exhausted=1` |
+| Pre-proxy | `listPreProxyCandidates` skips exhausted sources |
+| Admin node list | Still shows stored nodes for diagnosis |
+
+Info pseudo-nodes remain dropped from storage (`ExternalInfoNode.removeFrom`) **after** remaining-traffic is read.
+
+### 4. Wrong vs Correct
+
+#### Wrong
+
+```java
+ExternalInfoNode.removeFrom(parsed); // then try to read 「剩余流量」 from remaining nodes
+// or keep delivering reachable nodes when upload+download >= total
+```
+
+#### Correct
+
+```java
+Snapshot snap = ExternalSubscribeTraffic.resolve(userinfo, parsed); // before removeFrom
+persistTraffic(source, snap);
+ExternalInfoNode.removeFrom(parsed);
+```
+
+### 5. Tests Required
+
+- Unit: `upload+download >= total` → exhausted; `total=0` → not exhausted; no header/name → not exhausted
+- Unit: info-node `剩余流量：0 GB` / 「已用完」 / `剩余流量：-1.5 GB` → exhausted
+- Unit: `listReachableAsServerMaps` omits exhausted source nodes
+- Unit: `listPreProxyCandidates` omits exhausted sources
 
 ---
 

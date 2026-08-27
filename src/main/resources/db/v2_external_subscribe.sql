@@ -10,6 +10,11 @@ CREATE TABLE IF NOT EXISTS `v2_external_subscribe_source` (
   `last_sync_at` bigint DEFAULT NULL COMMENT '上次同步时间(秒)',
   `last_sync_status` varchar(32) DEFAULT NULL COMMENT 'success/failed/running',
   `last_sync_message` varchar(1024) DEFAULT NULL COMMENT '同步摘要或错误信息',
+  `traffic_upload` bigint DEFAULT NULL COMMENT '上游已上报传(字节)',
+  `traffic_download` bigint DEFAULT NULL COMMENT '上游已报下载(字节)',
+  `traffic_total` bigint DEFAULT NULL COMMENT '上游套餐总量(字节),0或不填视为不限或未知',
+  `traffic_expire` bigint DEFAULT NULL COMMENT '上游套餐到期(unix秒)',
+  `traffic_exhausted` tinyint NOT NULL DEFAULT 0 COMMENT '1=流量已用尽,下发时排除该源节点',
   `created_at` bigint DEFAULT NULL,
   `updated_at` bigint DEFAULT NULL,
   PRIMARY KEY (`id`)
@@ -38,3 +43,9 @@ CREATE TABLE IF NOT EXISTS `v2_external_subscribe_node` (
 --   ADD COLUMN `name_filters` json DEFAULT NULL COMMENT '名称过滤规则 [{pattern,replacement,regex}]' AFTER `remark`;
 -- ALTER TABLE `v2_external_subscribe_source`
 --   ADD COLUMN `pre_proxy_enable` tinyint NOT NULL DEFAULT 0 COMMENT '0直连 1自动前置代理' AFTER `enable`;
+-- ALTER TABLE `v2_external_subscribe_source`
+--   ADD COLUMN `traffic_upload` bigint DEFAULT NULL COMMENT '上游已上报传(字节)' AFTER `last_sync_message`,
+--   ADD COLUMN `traffic_download` bigint DEFAULT NULL COMMENT '上游已报下载(字节)' AFTER `traffic_upload`,
+--   ADD COLUMN `traffic_total` bigint DEFAULT NULL COMMENT '上游套餐总量(字节)' AFTER `traffic_download`,
+--   ADD COLUMN `traffic_expire` bigint DEFAULT NULL COMMENT '上游套餐到期(unix秒)' AFTER `traffic_total`,
+--   ADD COLUMN `traffic_exhausted` tinyint NOT NULL DEFAULT 0 COMMENT '1=流量已用尽,下发时排除该源节点' AFTER `traffic_expire`;

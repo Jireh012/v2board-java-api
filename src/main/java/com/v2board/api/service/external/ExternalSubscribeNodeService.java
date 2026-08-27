@@ -43,7 +43,13 @@ public class ExternalSubscribeNodeService {
         if (enabled.isEmpty()) {
             return List.of();
         }
-        Set<Long> sourceIds = enabled.stream().map(ExternalSubscribeSource::getId).collect(Collectors.toSet());
+        Set<Long> sourceIds = enabled.stream()
+                .filter(ExternalSubscribeTraffic::isDeliverable)
+                .map(ExternalSubscribeSource::getId)
+                .collect(Collectors.toSet());
+        if (sourceIds.isEmpty()) {
+            return List.of();
+        }
         List<ExternalSubscribeNode> nodes = nodeMapper.selectList(
                 new LambdaQueryWrapper<ExternalSubscribeNode>()
                         .in(ExternalSubscribeNode::getSourceId, sourceIds)
@@ -52,6 +58,9 @@ public class ExternalSubscribeNodeService {
                         .orderByAsc(ExternalSubscribeNode::getId));
         List<Map<String, Object>> mapped = new ArrayList<>();
         for (ExternalSubscribeNode node : nodes) {
+            if (node.getSourceId() == null || !sourceIds.contains(node.getSourceId())) {
+                continue;
+            }
             if (ExternalInfoNode.isInfoName(node.getName())) {
                 continue;
             }

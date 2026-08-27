@@ -131,7 +131,7 @@ Prefixes also rewrite:
 | Source | Prefix | `type` / flag |
 |--------|--------|----------------|
 | Panel (`ServerService.getAvailableServers`) | `🔒 ` | normal protocol types |
-| External (`ExternalSubscribeNodeService.listReachableAsServerMaps`) | `⚠️ ` | `type=external`, `external=true`; list is already logical-key deduped + same-name numbered (`name1`/`name2`) before markers — see [external-subscribe.md](./external-subscribe.md) |
+| External (`ExternalSubscribeNodeService.listReachableAsServerMaps`) | `⚠️ ` | `type=external`, `external=true`; **skips `traffic_exhausted=1` sources**; list is already logical-key deduped + same-name numbered (`name1`/`name2`) before markers — see [external-subscribe.md](./external-subscribe.md) |
 
 Info nodes injected by `setSubscribeInfoToServers` are added **after** marking and stay unmarked.
 

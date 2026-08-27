@@ -45,16 +45,29 @@ class ExternalSubscribePreProxyTest {
     }
 
     @Test
+    void listPreProxyCandidates_excludesExhaustedSources() {
+        ExternalSubscribeSource self = enabledSource(1L);
+        ExternalSubscribeSource exhausted = enabledSource(2L);
+        exhausted.setTrafficExhausted(1);
+        when(sourceMapper.selectList(any())).thenReturn(List.of(self, exhausted));
+
+        List<ExternalSubscribeNode> list = syncService.listPreProxyCandidates(1L);
+        assertTrue(list.isEmpty());
+        verify(nodeMapper, never()).selectList(any());
+    }
+
+    @Test
     void fetchSubscribeContent_directWhenDisabled() throws Exception {
         ExternalSubscribeSource source = new ExternalSubscribeSource();
         source.setId(1L);
         source.setUrl("https://example.com/sub");
         source.setPreProxyEnable(0);
-        when(fetcher.fetch("https://example.com/sub")).thenReturn("body");
+        when(fetcher.fetchResult("https://example.com/sub"))
+                .thenReturn(ExternalSubscribeFetcher.FetchResult.of("body"));
 
         assertEquals("body", syncService.fetchSubscribeContent(source));
-        verify(fetcher).fetch("https://example.com/sub");
-        verify(fetcher, never()).fetch(anyString(), any());
+        verify(fetcher).fetchResult("https://example.com/sub");
+        verify(fetcher, never()).fetchResult(anyString(), any());
         verifyNoInteractions(probeService);
     }
 
@@ -85,14 +98,15 @@ class ExternalSubscribePreProxyTest {
         Proxy proxy = httpProxy(19000);
         SingBoxProbeService.LocalHttpProxySession session = mockSession(proxy);
         when(probeService.openHttpProxy(anyMap())).thenReturn(session);
-        when(fetcher.fetch(eq("https://blocked.example/sub"), eq(proxy))).thenReturn("proxied-body");
+        when(fetcher.fetchResult(eq("https://blocked.example/sub"), eq(proxy)))
+                .thenReturn(ExternalSubscribeFetcher.FetchResult.of("proxied-body"));
 
         assertEquals("proxied-body", syncService.fetchSubscribeContent(source));
 
         verify(probeService).openHttpProxy(argThat(outbound ->
                 "direct".equals(outbound.get("type")) && "x".equals(outbound.get("tag"))));
-        verify(fetcher).fetch("https://blocked.example/sub", proxy);
-        verify(fetcher, never()).fetch(anyString());
+        verify(fetcher).fetchResult("https://blocked.example/sub", proxy);
+        verify(fetcher, never()).fetchResult(anyString());
         verify(session).close();
     }
 
@@ -114,9 +128,10 @@ class ExternalSubscribePreProxyTest {
         when(probeService.openHttpProxy(anyMap()))
                 .thenReturn(sessionBad)
                 .thenReturn(sessionGood);
-        when(fetcher.fetch(eq("https://example.com/sub"), eq(proxyBad)))
+        when(fetcher.fetchResult(eq("https://example.com/sub"), eq(proxyBad)))
                 .thenThrow(new IllegalStateException("proxy dead"));
-        when(fetcher.fetch(eq("https://example.com/sub"), eq(proxyGood))).thenReturn("ok");
+        when(fetcher.fetchResult(eq("https://example.com/sub"), eq(proxyGood)))
+                .thenReturn(ExternalSubscribeFetcher.FetchResult.of("ok"));
 
         assertEquals("ok", syncService.fetchSubscribeContent(source));
         verify(probeService, times(2)).openHttpProxy(anyMap());
@@ -146,13 +161,14 @@ class ExternalSubscribePreProxyTest {
         Proxy proxy = httpProxy(19100);
         SingBoxProbeService.LocalHttpProxySession session = mockSession(proxy);
         when(probeService.openHttpProxy(anyMap())).thenReturn(session);
-        when(fetcher.fetch(eq("https://github.example/raw.ini"), eq(proxy))).thenReturn("via-proxy");
+        when(fetcher.fetchResult(eq("https://github.example/raw.ini"), eq(proxy)))
+                .thenReturn(ExternalSubscribeFetcher.FetchResult.of("via-proxy"));
 
         assertEquals("via-proxy",
                 syncService.fetchWithDirectThenPreProxy("https://github.example/raw.ini"));
 
         verify(fetcher).fetch("https://github.example/raw.ini");
-        verify(fetcher).fetch("https://github.example/raw.ini", proxy);
+        verify(fetcher).fetchResult("https://github.example/raw.ini", proxy);
         verify(probeService).openHttpProxy(anyMap());
         verify(session).close();
     }

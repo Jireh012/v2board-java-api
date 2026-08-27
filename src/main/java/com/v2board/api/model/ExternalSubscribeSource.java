@@ -41,6 +41,26 @@ public class ExternalSubscribeSource {
     @TableField("last_sync_message")
     private String lastSyncMessage;
 
+    /** Upstream used upload bytes from subscription-userinfo (nullable). */
+    @TableField("traffic_upload")
+    private Long trafficUpload;
+
+    /** Upstream used download bytes from subscription-userinfo (nullable). */
+    @TableField("traffic_download")
+    private Long trafficDownload;
+
+    /** Upstream plan total bytes; 0/null = unlimited or unknown. */
+    @TableField("traffic_total")
+    private Long trafficTotal;
+
+    /** Upstream plan expire unix seconds (nullable). */
+    @TableField("traffic_expire")
+    private Long trafficExpire;
+
+    /** 1 = quota used up; exclude this source from user subscribe / pre-proxy. */
+    @TableField("traffic_exhausted")
+    private Integer trafficExhausted;
+
     @TableField("created_at")
     private Long createdAt;
 

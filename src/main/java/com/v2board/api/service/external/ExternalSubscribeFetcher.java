@@ -31,14 +31,31 @@ public class ExternalSubscribeFetcher {
             "v2rayN/6.45"
     };
 
+    public record FetchResult(String body, String subscriptionUserinfo) {
+        public static FetchResult of(String body) {
+            return new FetchResult(body == null ? "" : body, null);
+        }
+    }
+
     public String fetch(String url) throws Exception {
-        return fetch(url, null);
+        return fetchResult(url, null).body();
     }
 
     /**
      * @param proxy optional HTTP proxy (e.g. local sing-box mixed); null = direct
      */
     public String fetch(String url, Proxy proxy) throws Exception {
+        return fetchResult(url, proxy).body();
+    }
+
+    public FetchResult fetchResult(String url) throws Exception {
+        return fetchResult(url, null);
+    }
+
+    /**
+     * @param proxy optional HTTP proxy (e.g. local sing-box mixed); null = direct
+     */
+    public FetchResult fetchResult(String url, Proxy proxy) throws Exception {
         if (url == null || url.isBlank()) {
             throw new IllegalArgumentException("订阅地址为空");
         }
@@ -59,7 +76,7 @@ public class ExternalSubscribeFetcher {
         throw last != null ? last : new IllegalStateException("拉取失败");
     }
 
-    private String fetchWithUserAgent(String url, String userAgent, Proxy proxy) throws Exception {
+    private FetchResult fetchWithUserAgent(String url, String userAgent, Proxy proxy) throws Exception {
         String current = url;
         for (int i = 0; i <= MAX_REDIRECTS; i++) {
             URL target = URI.create(current).toURL();
@@ -91,15 +108,30 @@ public class ExternalSubscribeFetcher {
             }
             try (InputStream in = conn.getInputStream()) {
                 byte[] body = readLimited(in, MAX_BYTES);
+                String userinfo = headerUserinfo(conn);
                 String contentType = conn.getContentType();
-                logger.debug("Fetched subscribe content, ua={}, proxy={}, type={}, bytes={}",
-                        userAgent, proxy != null, contentType, body.length);
-                return new String(body, StandardCharsets.UTF_8);
+                logger.debug("Fetched subscribe content, ua={}, proxy={}, type={}, bytes={}, userinfo={}",
+                        userAgent, proxy != null, contentType, body.length, userinfo != null);
+                return new FetchResult(new String(body, StandardCharsets.UTF_8), userinfo);
             } finally {
                 conn.disconnect();
             }
         }
         throw new IllegalStateException("重定向次数过多");
+    }
+
+    private static String headerUserinfo(HttpURLConnection conn) {
+        if (conn == null) {
+            return null;
+        }
+        String value = conn.getHeaderField("subscription-userinfo");
+        if (value == null || value.isBlank()) {
+            value = conn.getHeaderField("Subscription-Userinfo");
+        }
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 
     private static String readErrorBody(HttpURLConnection conn) {

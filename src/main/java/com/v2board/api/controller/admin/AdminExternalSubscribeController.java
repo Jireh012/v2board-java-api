@@ -58,6 +58,11 @@ public class AdminExternalSubscribeController {
             row.put("last_sync_at", s.getLastSyncAt());
             row.put("last_sync_status", s.getLastSyncStatus());
             row.put("last_sync_message", s.getLastSyncMessage());
+            row.put("traffic_upload", s.getTrafficUpload());
+            row.put("traffic_download", s.getTrafficDownload());
+            row.put("traffic_total", s.getTrafficTotal());
+            row.put("traffic_expire", s.getTrafficExpire());
+            row.put("traffic_exhausted", s.getTrafficExhausted() != null ? s.getTrafficExhausted() : 0);
             row.put("created_at", s.getCreatedAt());
             row.put("updated_at", s.getUpdatedAt());
             long[] c = counts.getOrDefault(s.getId(), new long[]{0, 0});

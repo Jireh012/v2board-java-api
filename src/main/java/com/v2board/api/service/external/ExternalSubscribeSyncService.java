@@ -1,6 +1,7 @@
 package com.v2board.api.service.external;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.v2board.api.common.BusinessException;
 import com.v2board.api.mapper.ExternalSubscribeNodeMapper;
@@ -130,9 +131,12 @@ public class ExternalSubscribeSyncService {
                 throw new IllegalStateException("本机 sing-box 不可用，请配置 v2board.external-subscribe.sing-box-path");
             }
 
-            String content = fetchSubscribeContent(source);
-            List<CanonicalExternalNode> parsed = new ArrayList<>(parser.parse(content));
+            ExternalSubscribeFetcher.FetchResult fetched = fetchSubscribeResult(source);
+            List<CanonicalExternalNode> parsed = new ArrayList<>(parser.parse(fetched.body()));
             ExternalNameFilter.applyFiltersToParsed(parsed, ExternalNameFilter.fromJson(source.getNameFilters()));
+            ExternalSubscribeTraffic.Snapshot traffic = ExternalSubscribeTraffic.resolve(
+                    fetched.subscriptionUserinfo(), parsed);
+            persistTraffic(source, traffic);
             int droppedInfo = ExternalInfoNode.removeFrom(parsed);
             if (droppedInfo > 0) {
                 logger.info("Dropped {} info pseudo-node(s) from source {}", droppedInfo, source.getId());
@@ -141,7 +145,7 @@ public class ExternalSubscribeSyncService {
                 // 清空旧节点
                 nodeMapper.delete(new LambdaQueryWrapper<ExternalSubscribeNode>()
                         .eq(ExternalSubscribeNode::getSourceId, source.getId()));
-                finish(source, "success", "未解析到节点", now);
+                finish(source, "success", syncSummary("未解析到节点", traffic), now);
                 return;
             }
 
@@ -169,7 +173,7 @@ public class ExternalSubscribeSyncService {
             }
 
             finish(source, "success",
-                    "解析 " + parsed.size() + " 个，连通 " + reachableCount + " 个", now);
+                    syncSummary("解析 " + parsed.size() + " 个，连通 " + reachableCount + " 个", traffic), now);
             logger.info("Synced external source {}: {}", source.getId(), source.getLastSyncMessage());
         } catch (Exception e) {
             logger.error("Sync external source {} failed", source.getId(), e);
@@ -183,9 +187,13 @@ public class ExternalSubscribeSyncService {
      * Direct fetch, or auto-pick a reachable node from another enabled source as HTTP pre-proxy.
      */
     String fetchSubscribeContent(ExternalSubscribeSource source) throws Exception {
+        return fetchSubscribeResult(source).body();
+    }
+
+    ExternalSubscribeFetcher.FetchResult fetchSubscribeResult(ExternalSubscribeSource source) throws Exception {
         boolean preProxy = source.getPreProxyEnable() != null && source.getPreProxyEnable() == 1;
         if (!preProxy) {
-            return fetcher.fetch(source.getUrl());
+            return fetcher.fetchResult(source.getUrl());
         }
         Exception last = null;
         for (ExternalSubscribeNode proxyNode : listPreProxyCandidates(source.getId())) {
@@ -226,7 +234,7 @@ public class ExternalSubscribeSyncService {
             Exception last = directErr;
             for (ExternalSubscribeNode node : candidates) {
                 try {
-                    String body = fetchViaPreProxyNode(url.trim(), node);
+                    String body = fetchViaPreProxyNode(url.trim(), node).body();
                     logger.info("Fetched via pre-proxy node id={} name={} url={}",
                             node.getId(), node.getName(), url);
                     return body;
@@ -240,14 +248,15 @@ public class ExternalSubscribeSyncService {
         }
     }
 
-    private String fetchViaPreProxyNode(String url, ExternalSubscribeNode proxyNode) throws Exception {
+    private ExternalSubscribeFetcher.FetchResult fetchViaPreProxyNode(String url, ExternalSubscribeNode proxyNode)
+            throws Exception {
         if (proxyNode == null || !StringUtils.hasText(proxyNode.getSingboxOutbound())) {
             throw new IllegalStateException("前置代理节点缺少 sing-box outbound");
         }
         @SuppressWarnings("unchecked")
         Map<String, Object> outbound = MAPPER.readValue(proxyNode.getSingboxOutbound(), Map.class);
         try (SingBoxProbeService.LocalHttpProxySession session = probeService.openHttpProxy(outbound)) {
-            return fetcher.fetch(url, session.proxy());
+            return fetcher.fetchResult(url, session.proxy());
         }
     }
 
@@ -259,7 +268,10 @@ public class ExternalSubscribeSyncService {
                 new LambdaQueryWrapper<ExternalSubscribeSource>().eq(ExternalSubscribeSource::getEnable, 1));
         List<Long> sourceIds = new ArrayList<>();
         for (ExternalSubscribeSource s : enabled) {
-            if (s.getId() != null && (excludeSourceId == null || !s.getId().equals(excludeSourceId))) {
+            if (!ExternalSubscribeTraffic.isDeliverable(s)) {
+                continue;
+            }
+            if (excludeSourceId == null || !s.getId().equals(excludeSourceId)) {
                 sourceIds.add(s.getId());
             }
         }
@@ -317,6 +329,40 @@ public class ExternalSubscribeSyncService {
             existing.setUpdatedAt(now);
             nodeMapper.updateById(existing);
         }
+    }
+
+    /**
+     * Null traffic fields must be written via wrapper (MyBatis-Plus skips nulls on updateById).
+     * Failed sync must not call this — keep last known quota.
+     */
+    private void persistTraffic(ExternalSubscribeSource source, ExternalSubscribeTraffic.Snapshot snap) {
+        if (source.getId() == null) {
+            return;
+        }
+        int exhausted = snap.exhausted() ? 1 : 0;
+        long now = System.currentTimeMillis() / 1000;
+        LambdaUpdateWrapper<ExternalSubscribeSource> w = new LambdaUpdateWrapper<>();
+        w.eq(ExternalSubscribeSource::getId, source.getId())
+                .set(ExternalSubscribeSource::getTrafficUpload, snap.upload())
+                .set(ExternalSubscribeSource::getTrafficDownload, snap.download())
+                .set(ExternalSubscribeSource::getTrafficTotal, snap.total())
+                .set(ExternalSubscribeSource::getTrafficExpire, snap.expire())
+                .set(ExternalSubscribeSource::getTrafficExhausted, exhausted)
+                .set(ExternalSubscribeSource::getUpdatedAt, now);
+        sourceMapper.update(null, w);
+        source.setTrafficUpload(snap.upload());
+        source.setTrafficDownload(snap.download());
+        source.setTrafficTotal(snap.total());
+        source.setTrafficExpire(snap.expire());
+        source.setTrafficExhausted(exhausted);
+        source.setUpdatedAt(now);
+    }
+
+    private static String syncSummary(String base, ExternalSubscribeTraffic.Snapshot traffic) {
+        if (traffic != null && traffic.exhausted()) {
+            return base + "；流量已用尽，已排除";
+        }
+        return base;
     }
 
     private void finish(ExternalSubscribeSource source, String status, String message, long now) {
