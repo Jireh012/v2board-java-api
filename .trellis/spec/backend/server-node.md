@@ -294,3 +294,39 @@ UI may replace `--api-host ''` when displaying; local Vite ports `5173`/`5174`/`
 --api-host 'http://127.0.0.1:8080'          # local Spring
 --api-host 'https://api.example.com'       # production API / app_url
 ```
+
+---
+
+## Scenario: Remote panel-issued TLS (`cert_mode=remote`)
+
+### 1. Scope / Trigger
+
+- Admin saves v2node with TLS on and `tls_settings.cert_mode=remote`.
+- Node config must receive PEM; user subscribe must not.
+
+### 2. Contracts
+
+| Layer | Behavior |
+|-------|----------|
+| Save | If `pinned_peer_cert_sha256` is unset, generate P-256 self-signed (CN=SNI or `example.com`, 3650d, SHA-256). PIN = SHA-256(DER) hex. Existing PIN → do not re-sign (SNI change included). |
+| Node `c` config | Full `tls_settings` including `tls_cert` / `tls_key`. |
+| User subscribe map | `stripSubscribeTlsSecrets`: drop `tls_cert`, `tls_key`, Reality `private_key`, `ech_key`. Keep PIN for URI `pcs=`. |
+| URI | VMess/VLESS/Trojan/HY2/TUIC/AnyTLS include `pcs`. Clash YAML does not. |
+| Failure | `BusinessException(500, "创建失败")` |
+
+### 3. Wrong vs Correct
+
+#### Wrong
+Leave PEM on subscribe maps; regenerate whenever SNI changes if PIN already stored.
+
+#### Correct
+```java
+Helper.ensureRemoteTlsCertificate(tlsSettings); // isset PIN → skip
+stripSubscribeTlsSecrets(parsed);               // subscribe only
+```
+
+### 4. Tests Required
+
+- `RemoteTlsCertTest` — PIN matches DER SHA-256; idempotent when PIN set.
+- `HelperPcsTest` — URI contains `pcs=`.
+- `ServerServiceStripTlsSecretsTest` — PEM stripped, PIN kept.

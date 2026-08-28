@@ -307,6 +307,8 @@ public class AdminNodeController {
             }
         }
 
+        Helper.ensureRemoteTlsCertificate(tlsSettings);
+
         stringifyJsonField(body, "tls_settings", tlsSettings);
     }
 

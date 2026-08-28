@@ -123,7 +123,7 @@ public class PaymentService {
      */
     public List<String> getPaymentMethods() {
         return List.of(
-                "AlipayF2F", "WechatPayNative", "EPay", "MGate",
+                "Paytaro", "AlipayF2F", "WechatPayNative", "EPay", "MGate",
                 "StripeAlipay", "StripeWepay", "StripeCredit", "StripeCheckout", "StripeALL",
                 "BTCPay", "Coinbase", "CoinPayments", "BEasyPaymentUSDT", "Epusdt"
         );
@@ -157,6 +157,10 @@ public class PaymentService {
     private Map<String, Object> getFormDefinition(String method) {
         if (method == null) return new HashMap<>();
         return switch (method) {
+            case "Paytaro" -> buildForm(
+                    field("pid", "App ID", "Paytaro 应用的 App ID；"),
+                    field("key", "App Secret", "Paytaro 应用的 App Secret；")
+            );
             case "AlipayF2F" -> buildForm(
                     field("app_id", "支付宝APPID", ""),
                     field("private_key", "支付宝私钥", ""),

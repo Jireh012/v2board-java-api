@@ -17,6 +17,7 @@ public class PaymentDriverFactory {
 
     public PaymentDriverFactory() {
         drivers.put("AlipayF2F", new AlipayF2FDriver());
+        drivers.put("Paytaro", new PaytaroDriver());
         drivers.put("MGate", new MGateDriver());
         drivers.put("EPay", new EPayDriver());
         drivers.put("WechatPayNative", new WechatPayNativeDriver());

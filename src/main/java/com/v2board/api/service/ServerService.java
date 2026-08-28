@@ -627,13 +627,23 @@ public class ServerService {
         try {
             Map<String, Object> parsed = objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
             if (stripPrivate && parsed != null) {
-                parsed.remove("private_key");
-                parsed.remove("ech_key");
+                stripSubscribeTlsSecrets(parsed);
             }
             map.put(key, parsed);
         } catch (Exception e) {
             logger.warn("Failed to parse {} JSON", key, e);
         }
+    }
+
+    /** 用户订阅 map：去掉节点私钥 / 远程证书 PEM，保留 PIN 供 pcs=。 */
+    static void stripSubscribeTlsSecrets(Map<String, Object> parsed) {
+        if (parsed == null) {
+            return;
+        }
+        parsed.remove("private_key");
+        parsed.remove("ech_key");
+        parsed.remove("tls_cert");
+        parsed.remove("tls_key");
     }
 
     /**

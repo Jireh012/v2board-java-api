@@ -183,6 +183,7 @@ AdminPaymentController.fetch/save → same base (DB site.app_url, not boot-only 
 | External | `{payment_notify_prefix}/{method}/{uuid}` exactly **two** segments after prefix |
 | Internal | `/api/v1/guest/payment/notify/{method}/{uuid}` |
 | Classic | `/api/v1/guest/payment/**` → **404** |
+| Drivers | Paytaro / Alipay / EPay / … all use this plaintext path (`custom_result` as body when set) |
 | GET probe | Browser GET → `200 payment notify ready (POST only)` if gate enabled; real gateway uses **POST** + signature |
 | Body / auth | Plaintext; no `X-A`; no Panel SM4 |
 | Admin UI | `site.payment_notify_prefix` in system config; copy `notify_url` from payments list |

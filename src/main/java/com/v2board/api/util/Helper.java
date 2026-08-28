@@ -3,18 +3,38 @@ package com.v2board.api.util;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.v2board.api.common.BusinessException;
+import org.bouncycastle.asn1.x500.X500Name;
+import org.bouncycastle.asn1.x500.X500NameBuilder;
+import org.bouncycastle.asn1.x500.style.BCStyle;
+import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
+import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
 import org.bouncycastle.crypto.generators.X25519KeyPairGenerator;
 import org.bouncycastle.crypto.params.X25519KeyGenerationParameters;
 import org.bouncycastle.crypto.params.X25519PrivateKeyParameters;
 import org.bouncycastle.crypto.params.X25519PublicKeyParameters;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.bouncycastle.openssl.jcajce.JcaPEMWriter;
+import org.bouncycastle.operator.ContentSigner;
+import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 
+import java.io.StringWriter;
+import java.math.BigInteger;
 import java.net.URLEncoder;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
+import java.security.Security;
+import java.security.cert.X509Certificate;
+import java.security.spec.ECGenParameterSpec;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Base64;
+import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Random;
@@ -319,6 +339,7 @@ public class Helper {
         } else {
             config.put("fp", "chrome");
         }
+        config.put("pcs", pinnedPeerCertSha256(server));
         if (server.get("server_name") != null) {
             config.put("sni", String.valueOf(server.get("server_name")));
         } else if (tlsSettings.get("server_name") != null) {
@@ -372,6 +393,7 @@ public class Helper {
         if (server.get("udp_relay_mode") != null) {
             config.put("udp_relay_mode", String.valueOf(server.get("udp_relay_mode")));
         }
+        config.put("pcs", pinnedPeerCertSha256(server));
         String remote = formatHost(String.valueOf(server.get("host")));
         String port = String.valueOf(server.get("port"));
         String name = encodeURIComponent(String.valueOf(server.get("name")));
@@ -394,7 +416,8 @@ public class Helper {
         String sni = tlsSettings.get("server_name") != null ? String.valueOf(tlsSettings.get("server_name")) : "";
         StringBuilder uri = new StringBuilder();
         uri.append("hysteria2://").append(password).append("@").append(remote).append(":").append(firstPort)
-                .append("/?insecure=").append(insecure).append("&sni=").append(sni);
+                .append("/?insecure=").append(insecure).append("&sni=").append(sni)
+                .append("&pcs=").append(pinnedPeerCertSha256(server));
         if (server.get("obfs") != null && server.get("obfs_password") != null) {
             uri.append("&obfs=").append(server.get("obfs"))
                     .append("&obfs-password=").append(encodeURIComponent(String.valueOf(server.get("obfs_password"))));
@@ -448,7 +471,8 @@ public class Helper {
         String serverName = server.get("server_name") != null ? String.valueOf(server.get("server_name")) : "";
         Object allowInsecure = server.getOrDefault("allow_insecure", false);
         String name = encodeURIComponent(String.valueOf(server.get("name")));
-        String query = "allowInsecure=" + allowInsecure + "&peer=" + serverName + "&sni=" + serverName;
+        String query = "allowInsecure=" + allowInsecure + "&peer=" + serverName + "&sni=" + serverName
+                + "&pcs=" + encodeURIComponent(pinnedPeerCertSha256(server));
         return "trojan://" + password + "@" + host + ":" + port + "?" + query + "#" + name + "\r\n";
     }
 
@@ -588,6 +612,102 @@ public class Helper {
         result.put("ech_key", Base64.getEncoder().encodeToString(echKeysBytes));
         result.put("ech_config", Base64.getEncoder().encodeToString(echConfigBytes));
         return result;
+    }
+
+    /**
+     * 对齐 PHP V2nodeController：tls_settings.cert_mode=remote 且尚未写入 PIN 时生成 P-256 自签。
+     * PIN 已存在（isset）则不重签。
+     */
+    public static void ensureRemoteTlsCertificate(Map<String, Object> tlsSettings) {
+        if (tlsSettings == null) {
+            return;
+        }
+        if (!"remote".equals(String.valueOf(tlsSettings.get("cert_mode")))) {
+            return;
+        }
+        if (tlsSettings.get("pinned_peer_cert_sha256") != null) {
+            return;
+        }
+        Object sni = tlsSettings.get("server_name");
+        String cn = (sni == null || String.valueOf(sni).isBlank()) ? "example.com" : String.valueOf(sni);
+        Map<String, String> cert = generateRemoteTlsCertificate(cn);
+        tlsSettings.put("tls_cert", cert.get("tls_cert"));
+        tlsSettings.put("tls_key", cert.get("tls_key"));
+        tlsSettings.put("pinned_peer_cert_sha256", cert.get("pinned_peer_cert_sha256"));
+    }
+
+    /**
+     * 对齐 PHP OpenSSL EC P-256 自签：CN=SNI，3650 天，SHA-256，PIN = SHA-256(DER) hex。
+     */
+    public static Map<String, String> generateRemoteTlsCertificate(String serverName) {
+        String cn = (serverName == null || serverName.isBlank()) ? "example.com" : serverName.trim();
+        try {
+            if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
+                Security.addProvider(new BouncyCastleProvider());
+            }
+            KeyPairGenerator kpg = KeyPairGenerator.getInstance("EC", BouncyCastleProvider.PROVIDER_NAME);
+            kpg.initialize(new ECGenParameterSpec("secp256r1"), new SecureRandom());
+            KeyPair kp = kpg.generateKeyPair();
+
+            X500Name subject = new X500NameBuilder(BCStyle.INSTANCE).addRDN(BCStyle.CN, cn).build();
+            Date notBefore = new Date();
+            Date notAfter = Date.from(Instant.now().plus(3650, ChronoUnit.DAYS));
+            BigInteger serial = new BigInteger(64, new SecureRandom()).abs();
+            if (serial.equals(BigInteger.ZERO)) {
+                serial = BigInteger.ONE;
+            }
+
+            JcaX509v3CertificateBuilder builder = new JcaX509v3CertificateBuilder(
+                    subject, serial, notBefore, notAfter, subject, kp.getPublic());
+            ContentSigner signer = new JcaContentSignerBuilder("SHA256withECDSA")
+                    .setProvider(BouncyCastleProvider.PROVIDER_NAME)
+                    .build(kp.getPrivate());
+            X509Certificate cert = new JcaX509CertificateConverter()
+                    .setProvider(BouncyCastleProvider.PROVIDER_NAME)
+                    .getCertificate(builder.build(signer));
+
+            String tlsCert = pemEncode("CERTIFICATE", cert.getEncoded());
+            String tlsKey;
+            try (StringWriter sw = new StringWriter(); JcaPEMWriter pw = new JcaPEMWriter(sw)) {
+                pw.writeObject(kp.getPrivate());
+                pw.flush();
+                tlsKey = sw.toString();
+            }
+            String pin = bytesToHex(MessageDigest.getInstance("SHA-256").digest(cert.getEncoded()));
+
+            Map<String, String> result = new LinkedHashMap<>();
+            result.put("tls_cert", tlsCert);
+            result.put("tls_key", tlsKey);
+            result.put("pinned_peer_cert_sha256", pin);
+            return result;
+        } catch (Exception e) {
+            throw new BusinessException(500, "创建失败");
+        }
+    }
+
+    private static String pemEncode(String type, byte[] der) {
+        String b64 = Base64.getMimeEncoder(64, new byte[] {'\n'}).encodeToString(der);
+        return "-----BEGIN " + type + "-----\n" + b64 + "\n-----END " + type + "-----\n";
+    }
+
+    @SuppressWarnings("unchecked")
+    public static Map<String, Object> tlsSettingsOf(Map<String, Object> server) {
+        if (server == null) {
+            return Map.of();
+        }
+        Object tls = server.get("tls_settings");
+        if (!(tls instanceof Map<?, ?>)) {
+            tls = server.get("tlsSettings");
+        }
+        if (tls instanceof Map<?, ?> m) {
+            return (Map<String, Object>) m;
+        }
+        return Map.of();
+    }
+
+    public static String pinnedPeerCertSha256(Map<String, Object> server) {
+        Object pin = tlsSettingsOf(server).get("pinned_peer_cert_sha256");
+        return pin == null ? "" : String.valueOf(pin);
     }
 }
 

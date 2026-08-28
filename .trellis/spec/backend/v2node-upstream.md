@@ -36,3 +36,12 @@ Relative GitHub: when working only in this API repo, open [wyx2685/v2node](https
 **Context**: Node and panel are separate git repos; both need the upstream URL.
 
 **Decision**: Full node coding specs + install/release contracts live in **v2node** `.trellis/spec/node/`. This file is a short pointer for panel-side checklists and guides.
+
+---
+
+## Merged upstream (keep divergences)
+
+Cherry-picked onto Jireh012 `main` (retain ApiPrefix/SM4 + Jireh012 `install.sh` + SNI rematch):
+
+- `160320c` remote cert (`tls_cert`/`tls_key` write when `cert_mode=remote`)
+- `ad749f5` xray-core v26.7.28

@@ -507,3 +507,46 @@ Object bonusObj = deposit != null ? deposit.get("deposit_bounus") : null;
 **Decision**: Admin save/generate for coupon, giftcard, and plan updates use `LambdaUpdateWrapper` explicit `.set` for nullable columns.
 
 **Why**: MyBatis-Plus `updateById` skips nulls by default → stale JSON limits and prices.
+
+---
+
+## Scenario: Cancel pending order (CAS)
+
+### 1. Scope / Trigger
+
+- User/admin cancel of `status=0` must not refund if the row already left pending (pay race).
+
+### 2. Contracts
+
+- Guard: `order == null` / `id == null` / `status != 0` → `false`, no write.
+- `UPDATE v2_order SET status=2, updated_at=? WHERE id=? AND status=0`.
+- Affected rows ≠ 1 → `false`, **do not** add `balance_amount` back.
+- Success → refund `balance_amount` to user, then return true.
+
+### 3. Tests Required
+
+- `OrderServiceCancelTest` — CAS success refunds; CAS 0 rows does not touch user.
+
+---
+
+## Scenario: Paytaro payment method
+
+### 1. Scope / Trigger
+
+- PHP `App\Payments\Paytaro` listed first; MGate remains.
+
+### 2. Contracts
+
+| Item | Value |
+|------|--------|
+| Gateway | `https://v3.paytaro.com/submit.php` |
+| Config | `pid`, `key` |
+| `type` | always `alipay` |
+| Amount | cents/100, two decimals |
+| Sign | drop empty / `sign` / `sign_type`, `ksort`, `k=v&k=v` + secret, MD5 |
+| Notify | `trade_status=TRADE_SUCCESS`; `trade_no=out_trade_no`, `callback_no=trade_no`, `custom_result=success` |
+| Notify path | plaintext `{payment_notify_prefix}/{method}/{uuid}` — not Panel SM4 |
+
+### 3. Tests Required
+
+- `PaytaroDriverTest` — sign order-independent; pay URL; notify success/fail.

@@ -1,6 +1,7 @@
 package com.v2board.api.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.v2board.api.common.BusinessException;
 import com.v2board.api.mapper.OrderMapper;
 import com.v2board.api.mapper.PlanMapper;
@@ -470,24 +471,29 @@ public class OrderService {
 
     /**
      * 取消订单 — 对齐 PHP OrderService::cancel()
-     * 设置状态为2，如有使用余额则退回
+     * 以 status=0 为条件 CAS 更新为 2，成功后再退余额（避免并发入账后退款）。
      */
     @Transactional
     public boolean cancel(Order order) {
-        if (order == null || order.getStatus() == null || order.getStatus() != 0) {
+        if (order == null || order.getId() == null || order.getStatus() == null || order.getStatus() != 0) {
+            return false;
+        }
+        long now = System.currentTimeMillis() / 1000;
+        LambdaUpdateWrapper<Order> uw = new LambdaUpdateWrapper<Order>()
+                .eq(Order::getId, order.getId())
+                .eq(Order::getStatus, 0)
+                .set(Order::getStatus, 2)
+                .set(Order::getUpdatedAt, now);
+        if (orderMapper.update(null, uw) != 1) {
             return false;
         }
         order.setStatus(2);
-        order.setUpdatedAt(System.currentTimeMillis() / 1000);
-        if (orderMapper.updateById(order) <= 0) {
-            return false;
-        }
-        // 退回余额
+        order.setUpdatedAt(now);
         if (order.getBalanceAmount() != null && order.getBalanceAmount() > 0) {
             User user = userMapper.selectById(order.getUserId());
             if (user != null) {
                 user.setBalance((user.getBalance() != null ? user.getBalance() : 0L) + order.getBalanceAmount());
-                user.setUpdatedAt(System.currentTimeMillis() / 1000);
+                user.setUpdatedAt(now);
                 userMapper.updateById(user);
             }
         }

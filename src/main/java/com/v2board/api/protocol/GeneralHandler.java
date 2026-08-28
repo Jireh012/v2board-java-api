@@ -131,15 +131,29 @@ public class GeneralHandler implements ProtocolHandler {
             config.put("host", "");
             config.put("path", "");
             
-            Boolean tls = (Boolean) server.get("tls");
-            config.put("tls", tls != null && tls ? "tls" : "");
-            
-            // 处理 TLS 设置
-            if (tls != null && tls) {
-                Map<String, Object> tlsSettings = (Map<String, Object>) server.get("tlsSettings");
-                if (tlsSettings != null && tlsSettings.get("serverName") != null) {
-                    config.put("sni", tlsSettings.get("serverName"));
+            Object tlsRaw = server.get("tls");
+            boolean tlsOn = tlsRaw instanceof Boolean b
+                    ? b
+                    : tlsRaw instanceof Number n && n.intValue() > 0;
+            config.put("tls", tlsOn ? "tls" : "");
+
+            Object tlsSettingsObj = server.get("tlsSettings");
+            if (!(tlsSettingsObj instanceof Map)) {
+                tlsSettingsObj = server.get("tls_settings");
+            }
+            Map<String, Object> tlsSettings = tlsSettingsObj instanceof Map<?, ?> m
+                    ? (Map<String, Object>) m : null;
+
+            if (tlsOn && tlsSettings != null) {
+                Object sni = tlsSettings.get("serverName");
+                if (sni == null) {
+                    sni = tlsSettings.get("server_name");
                 }
+                if (sni != null) {
+                    config.put("sni", sni);
+                }
+                Object pin = tlsSettings.get("pinned_peer_cert_sha256");
+                config.put("pcs", pin != null ? String.valueOf(pin) : "");
             }
             
             // 处理网络设置
@@ -303,6 +317,8 @@ public class GeneralHandler implements ProtocolHandler {
                 }
             }
             params.put("insecure", String.valueOf(insecure));
+            Object pin = tlsSettings != null ? tlsSettings.get("pinned_peer_cert_sha256") : null;
+            params.put("pcs", pin != null ? String.valueOf(pin) : "");
             
             // 处理TLS相关设置
             if (tls != null && tls != 0) {
@@ -601,8 +617,8 @@ public class GeneralHandler implements ProtocolHandler {
             
             name = URLEncoder.encode(name, StandardCharsets.UTF_8);
             
-            String query = String.format("allowInsecure=%s&peer=%s&sni=%s",
-                allowInsecure, serverName, serverName);
+            String query = String.format("allowInsecure=%s&peer=%s&sni=%s&pcs=%s",
+                allowInsecure, serverName, serverName, Helper.pinnedPeerCertSha256(server));
             
             return String.format("trojan://%s@%s:%d?%s#%s\r\n", 
                 password, host, port, query, name);

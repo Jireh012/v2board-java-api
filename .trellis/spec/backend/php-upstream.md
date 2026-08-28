@@ -41,3 +41,14 @@ When a task says “align with PHP” / “对照原版”:
 **Context**: Multiple V2Board forks diverge on node API, invite, Telegram, and config layout.
 
 **Decision**: Canonical reference = `https://github.com/wyx2685/v2board` @ `master`. Change only if the user explicitly designates a different upstream in Trellis.
+
+---
+
+## Aligned (2026-08)
+
+| Feature | PHP | Java |
+|---------|-----|------|
+| Remote TLS cert | `V2nodeController::save` `cert_mode=remote` | `Helper.ensureRemoteTlsCertificate` |
+| Subscribe `pcs=` | `Helper::build*Uri` | `Helper` + `GeneralHandler` (Clash YAML 不加) |
+| Paytaro | `App\Payments\Paytaro` first in methods; keep MGate | `PaytaroDriver` + methods 置顶 |
+| Cancel CAS | `UPDATE status=2 WHERE id=? AND status=0` | `OrderService.cancel` `LambdaUpdateWrapper` |

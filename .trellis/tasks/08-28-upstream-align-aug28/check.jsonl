@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/backend/php-upstream.md", "reason": "PHP contracts for Paytaro, pcs, remote cert, cancel"}
+{"file": ".trellis/spec/backend/v2node-upstream.md", "reason": "Must keep SM4 and Jireh012 install after merge"}
+{"file": ".trellis/spec/backend/server-node.md", "reason": "tls_cert/tls_key node-only; strip from subscribe"}
+{"file": ".trellis/spec/backend/admin-commerce.md", "reason": "Cancel CAS and payment methods"}
+{"file": ".trellis/spec/backend/panel-api-sm4.md", "reason": "Payment notify not SM4"}

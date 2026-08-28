@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/backend/php-upstream.md", "reason": "Canonical PHP wyx2685/v2board for Paytaro, remote cert, cancel CAS, pcs"}
+{"file": ".trellis/spec/backend/v2node-upstream.md", "reason": "Compare/merge wyx2685/v2node; install stays Jireh012"}
+{"file": ".trellis/spec/backend/server-node.md", "reason": "Node config tls_settings and install_command must not point at wyx2685 Releases"}
+{"file": ".trellis/spec/backend/admin-commerce.md", "reason": "Order cancel and payment method list"}
+{"file": ".trellis/spec/backend/panel-api-sm4.md", "reason": "Paytaro notify stays plaintext payment prefix"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "BusinessException on remote cert generation failure"}
+{"file": ".trellis/spec/guides/commit-message.md", "reason": "feat scope Chinese conventional commits"}
