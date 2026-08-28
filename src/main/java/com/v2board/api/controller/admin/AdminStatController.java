@@ -3,6 +3,7 @@ package com.v2board.api.controller.admin;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.v2board.api.common.ApiResponse;
+import com.v2board.api.common.BusinessException;
 import com.v2board.api.mapper.*;
 import com.v2board.api.model.*;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -210,6 +211,41 @@ public class AdminStatController {
         return ApiResponse.success(result);
     }
 
+    /**
+     * GET /api/v1/admin/stat/getStatServer — 按节点查询日流量（UTC 日，字节）。
+     * Java 面板专用；PHP 无对等接口。vmess 同时匹配历史 v2ray 行。
+     */
+    @GetMapping("/getStatServer")
+    public ApiResponse<Map<String, Object>> getStatServer(
+            @RequestParam(value = "server_id", required = false) Long serverId,
+            @RequestParam(value = "server_type", required = false) String serverType,
+            @RequestParam(value = "start_date", required = false) String startDate,
+            @RequestParam(value = "end_date", required = false) String endDate) {
+        if (serverId == null || serverId <= 0) {
+            throw new BusinessException("请选择节点");
+        }
+        if (serverType == null || serverType.isBlank()) {
+            throw new BusinessException("请选择节点类型");
+        }
+        String type = serverType.trim();
+        LocalDate start = StatServerQuery.parseUtcDate(startDate, "开始日期");
+        LocalDate end = StatServerQuery.parseUtcDate(endDate, "结束日期");
+        StatServerQuery.validateRange(start, end);
+
+        List<StatServer> rows = statServerMapper.selectList(
+                new LambdaQueryWrapper<StatServer>()
+                        .eq(StatServer::getServerId, serverId)
+                        .in(StatServer::getServerType, StatServerQuery.typesForQuery(type))
+                        .eq(StatServer::getRecordType, "d")
+                        .ge(StatServer::getRecordAt, StatServerQuery.utcStartEpoch(start))
+                        .le(StatServer::getRecordAt, StatServerQuery.utcStartEpoch(end))
+                        .orderByDesc(StatServer::getRecordAt));
+
+        Map<Long, String> nameMap = loadAllServers(false).getOrDefault(type, Collections.emptyMap());
+        String name = nameMap.getOrDefault(serverId, "");
+        return ApiResponse.success(StatServerQuery.assemble(serverId, type, name, start, end, rows));
+    }
+
     // ==================== 私有方法 ====================
 
     private Long sumOrderAmount(long from, long to) {
@@ -241,19 +277,39 @@ public class AdminStatController {
     }
 
     private Map<String, Map<Long, String>> loadAllServers() {
+        return loadAllServers(true);
+    }
+
+    /** @param parentsOnly true = exclude parent_id children (dashboard rank); false = all rows for name lookup */
+    private Map<String, Map<Long, String>> loadAllServers(boolean parentsOnly) {
         Map<String, Map<Long, String>> servers = new HashMap<>();
         Map<Long, String> vmessNames = toNameMap(serverVmessMapper.selectList(
-                new LambdaQueryWrapper<ServerVmess>().isNull(ServerVmess::getParentId)));
-        servers.put("shadowsocks", toNameMap(serverShadowsocksMapper.selectList(new LambdaQueryWrapper<ServerShadowsocks>().isNull(ServerShadowsocks::getParentId))));
+                parentsOnly ? new LambdaQueryWrapper<ServerVmess>().isNull(ServerVmess::getParentId)
+                            : new LambdaQueryWrapper<>()));
+        servers.put("shadowsocks", toNameMap(serverShadowsocksMapper.selectList(
+                parentsOnly ? new LambdaQueryWrapper<ServerShadowsocks>().isNull(ServerShadowsocks::getParentId)
+                            : new LambdaQueryWrapper<>())));
         // PHP StatController maps both "vmess" and legacy "v2ray" to Vmess rows
         servers.put("vmess", vmessNames);
         servers.put("v2ray", vmessNames);
-        servers.put("vless", toNameMap(serverVlessMapper.selectList(new LambdaQueryWrapper<ServerVless>().isNull(ServerVless::getParentId))));
-        servers.put("trojan", toNameMap(serverTrojanMapper.selectList(new LambdaQueryWrapper<ServerTrojan>().isNull(ServerTrojan::getParentId))));
-        servers.put("hysteria", toNameMap(serverHysteriaMapper.selectList(new LambdaQueryWrapper<ServerHysteria>().isNull(ServerHysteria::getParentId))));
-        servers.put("tuic", toNameMap(serverTuicMapper.selectList(new LambdaQueryWrapper<ServerTuic>().isNull(ServerTuic::getParentId))));
-        servers.put("anytls", toNameMap(serverAnytlsMapper.selectList(new LambdaQueryWrapper<ServerAnytls>().isNull(ServerAnytls::getParentId))));
-        servers.put("v2node", toNameMap(serverV2nodeMapper.selectList(new LambdaQueryWrapper<ServerV2node>().isNull(ServerV2node::getParentId))));
+        servers.put("vless", toNameMap(serverVlessMapper.selectList(
+                parentsOnly ? new LambdaQueryWrapper<ServerVless>().isNull(ServerVless::getParentId)
+                            : new LambdaQueryWrapper<>())));
+        servers.put("trojan", toNameMap(serverTrojanMapper.selectList(
+                parentsOnly ? new LambdaQueryWrapper<ServerTrojan>().isNull(ServerTrojan::getParentId)
+                            : new LambdaQueryWrapper<>())));
+        servers.put("hysteria", toNameMap(serverHysteriaMapper.selectList(
+                parentsOnly ? new LambdaQueryWrapper<ServerHysteria>().isNull(ServerHysteria::getParentId)
+                            : new LambdaQueryWrapper<>())));
+        servers.put("tuic", toNameMap(serverTuicMapper.selectList(
+                parentsOnly ? new LambdaQueryWrapper<ServerTuic>().isNull(ServerTuic::getParentId)
+                            : new LambdaQueryWrapper<>())));
+        servers.put("anytls", toNameMap(serverAnytlsMapper.selectList(
+                parentsOnly ? new LambdaQueryWrapper<ServerAnytls>().isNull(ServerAnytls::getParentId)
+                            : new LambdaQueryWrapper<>())));
+        servers.put("v2node", toNameMap(serverV2nodeMapper.selectList(
+                parentsOnly ? new LambdaQueryWrapper<ServerV2node>().isNull(ServerV2node::getParentId)
+                            : new LambdaQueryWrapper<>())));
         return servers;
     }
 

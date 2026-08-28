@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/admin-stat.md", "reason": "Admin stat endpoints, GB vs bytes, server name map including v2ray alias"}
+{"file": ".trellis/spec/backend/panel-api-sm4.md", "reason": "New admin classicRel must be in PanelApiActionCatalog"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "BusinessException for validation, not 500"}
+{"file": ".trellis/spec/guides/commit-message.md", "reason": "feat(stat) conventional Chinese commits"}

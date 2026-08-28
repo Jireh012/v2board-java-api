@@ -115,6 +115,7 @@ public final class PanelApiActionCatalog {
         out.add(zp(z, "stat/getUserTodayRank"));
         out.add(zp(z, "stat/getUserLastRank"));
         out.add(zp(z, "stat/getStatUser"));
+        out.add(zp(z, "stat/getStatServer"));
         out.add(zp(z, "notice/fetch"));
         out.add(zp(z, "notice/save"));
         out.add(zp(z, "notice/show"));

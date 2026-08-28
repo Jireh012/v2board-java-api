@@ -29,7 +29,9 @@ class PanelApiActionAliasesTest {
         assertEquals("auth/login", aliases.resolveClassicRel("passport", aliases.aliasFor("passport", "auth/login")));
         assertEquals("config/fetch", aliases.resolveClassicRel("admin", aliases.aliasFor("admin", "config/fetch")));
         assertEquals(
-                "server/vmess/save",
+                "stat/getStatServer",
+                aliases.resolveClassicRel("admin", aliases.aliasFor("admin", "stat/getStatServer")));
+        assertEquals("server/vmess/save",
                 aliases.resolveClassicRel("admin", aliases.aliasFor("admin", "server/vmess/save")));
     }
 
