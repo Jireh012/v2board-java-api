@@ -1,0 +1,27 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Task|Subagent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 '/Users/jireh/Repos/v2board-java-api/.codex/hooks/inject-subagent-context.py'",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 '/Users/jireh/Repos/v2board-java-api/.codex/hooks/session-start.py'",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
