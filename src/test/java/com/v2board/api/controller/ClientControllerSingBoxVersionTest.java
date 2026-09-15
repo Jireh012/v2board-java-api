@@ -16,5 +16,7 @@ class ClientControllerSingBoxVersionTest {
         assertFalse(ClientController.isSingBoxVersionAtLeast("1.10.0", 1, 12));
         assertFalse(ClientController.isSingBoxVersionAtLeast("1.11.7", 1, 12));
         assertFalse(ClientController.isSingBoxVersionAtLeast(null, 1, 12));
+        assertTrue(ClientController.isSingBoxVersionAtLeast("1.14.0", 1, 14));
+        assertFalse(ClientController.isSingBoxVersionAtLeast("1.13.2", 1, 14));
     }
 }

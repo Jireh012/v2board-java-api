@@ -30,7 +30,8 @@ public class SingboxHandler implements ProtocolHandler {
             return "{}";
         }
         String template = ruleTemplateService.resolve("singbox");
-        return SingboxBuilder.buildFromContent(user, servers, template, true);
+        boolean migrateDns = SingboxVersion.needsDnsResponseMatch(SingboxVersion.current());
+        return SingboxBuilder.buildFromContent(user, servers, template, true, migrateDns);
     }
 
     @Override

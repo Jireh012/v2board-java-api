@@ -22,8 +22,13 @@ public final class SingboxBuilder {
     }
 
     public static String build(User user, List<Map<String, Object>> servers, String templateResource, boolean includeAnytls) {
+        return build(user, servers, templateResource, includeAnytls, false);
+    }
+
+    public static String build(User user, List<Map<String, Object>> servers, String templateResource,
+                               boolean includeAnytls, boolean migrateDnsResponseMatch) {
         try {
-            return buildFromConfig(user, servers, loadTemplate(templateResource), includeAnytls);
+            return buildFromConfig(user, servers, loadTemplate(templateResource), includeAnytls, migrateDnsResponseMatch);
         } catch (Exception e) {
             return "{}";
         }
@@ -34,8 +39,15 @@ public final class SingboxBuilder {
      */
     public static String buildFromContent(User user, List<Map<String, Object>> servers, String templateJson,
                                           boolean includeAnytls) {
+        return buildFromContent(user, servers, templateJson, includeAnytls,
+                SingboxVersion.needsDnsResponseMatch(SingboxVersion.current()));
+    }
+
+    public static String buildFromContent(User user, List<Map<String, Object>> servers, String templateJson,
+                                          boolean includeAnytls, boolean migrateDnsResponseMatch) {
         try {
-            return buildFromConfig(user, servers, parseTemplateContent(templateJson), includeAnytls);
+            return buildFromConfig(user, servers, parseTemplateContent(templateJson), includeAnytls,
+                    migrateDnsResponseMatch);
         } catch (Exception e) {
             return "{}";
         }
@@ -43,10 +55,13 @@ public final class SingboxBuilder {
 
     @SuppressWarnings("unchecked")
     private static String buildFromConfig(User user, List<Map<String, Object>> servers, Map<String, Object> config,
-                                          boolean includeAnytls) throws Exception {
+                                          boolean includeAnytls, boolean migrateDnsResponseMatch) throws Exception {
         List<Map<String, Object>> proxies = buildProxies(servers, user.getUuid(), includeAnytls);
         List<Map<String, Object>> outbounds = addProxies(config, proxies);
         config.put("outbounds", outbounds);
+        if (migrateDnsResponseMatch) {
+            SingboxDnsResponseMatch.apply(config);
+        }
         return MAPPER.writeValueAsString(config);
     }
 

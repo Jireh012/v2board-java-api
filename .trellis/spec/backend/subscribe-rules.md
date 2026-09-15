@@ -46,7 +46,11 @@ Admin save/sync edits **full** only. Response header: `subscription-rule-profile
 | Redis key | `{prefix}subscribe:rule:{format}` (TTL 24h) |
 | Resolve order (`full`) | Redis hit → DB row content → classpath `rules/default.*` |
 | Stash | Prefer `stash` row / `default.stash.yaml`; else fall back to clash resolve |
-| Sing-box old (`flag=sing`) | Always classpath `default.sing-box.old.json` (admin custom covers ≥1.12 only) |
+| Sing-box old | Only when UA/flag version is explicitly **&lt; 1.12**; classpath `default.sing-box.old.json` (admin custom covers ≥1.12 only) |
+| Sing-box ≥1.12 | `SingboxHandler` + Redis/DB/seed `default.sing-box.json` |
+| Sing-box ≥1.14 | Same 1.12 template, then `SingboxDnsResponseMatch`: DNS rules with `ip_cidr` / `ip_is_private` / `ip_accept_any` / GeoIP `rule_set` get a leading `evaluate` + `match_response` |
+| No version (`?flag=sing-box`, Hiddify `&flag=sing`) | **1.12+ template**, not old (PHP still uses old when version missing) |
+| Official apps | UA `SFA/` `SFI/` `SFM/` `SFT/` also select sing-box JSON even without the substring `sing` |
 | Write path | Sanitize → upsert DB → `DEL` cache → re-set cache with new content |
 | Restore | `DELETE` by format → invalidate → next resolve uses seed |
 | Sync product note | Prefer ACL4SSR Online **Full** INI (default URL, includes `♻️ 自动选择` / `url-test`). **Do not** default to `*_NoAuto.ini` — that variant has no auto groups. Server expands `.list` / HTTP `rule-providers` into **inline** templates (seed shell kept). Response may include `stripped_remote`, `used_seed_fallback`, `sync_hint`. Success path should **not** whole-seed-fallback solely because upstream was Online. |
@@ -91,6 +95,7 @@ Admin save/sync edits **full** only. Response header: `subscription-rule-profile
 
 - Unit: `RuleTemplateServiceTest` — Redis prefer / DB cache / classpath fallback / stash→clash / save sanitize+invalidate / restore / sync / simple+nodes ignore DB / `normalizeProfile`.
 - Unit: Builders accept `buildFromContent` with resolved template.
+- Unit: `SingboxVersionTest` / `SingboxDnsResponseMatchTest` — client 1.12 vs 1.14 gates; DNS `evaluate`+`match_response`.
 
 ### 7. Wrong vs Correct
 

@@ -52,3 +52,4 @@ When a task says “align with PHP” / “对照原版”:
 | Subscribe `pcs=` | `Helper::build*Uri` | `Helper` + `GeneralHandler` (Clash YAML 不加) |
 | Paytaro | `App\Payments\Paytaro` first in methods; keep MGate | `PaytaroDriver` + methods 置顶 |
 | Cancel CAS | `UPDATE status=2 WHERE id=? AND status=0` | `OrderService.cancel` `LambdaUpdateWrapper` |
+| sing-box client | No version → `SingboxOld`; regex `sing-box\s+([0-9.]+)` only | No version → **≥1.12** JSON; also `SFA/SFI/SFM/SFT`; merge UA for version; ≥1.14 DNS `evaluate`+`match_response` |

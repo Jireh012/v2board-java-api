@@ -347,6 +347,32 @@ public String subscribe(
 // Route: ConfigService.getSubscribePath() + registerMapping / unregisterMapping
 // Interceptor: match request URI to getSubscribePath() at runtime
 ```
+
+---
+
+## Scenario: sing-box JSON vs URI list
+
+### 1. Scope / Trigger
+
+- Trigger: Subscribe GET with `?flag=sing-box` / Hiddify `&flag=sing`, or UA `sing-box …` / `SFA|SFI|SFM|SFT/…`.
+- Cross-layer: `ClientController.subscribe` → `SingboxVersion` → `SingboxHandler` / `SingboxOldHandler` → `SingboxBuilder` → optional `SingboxDnsResponseMatch`.
+- Do **not** change `subscribe(String flag, HttpServletRequest, HttpServletResponse)` arity.
+
+### 2. Contracts
+
+| Input | Output |
+|-------|--------|
+| Version explicitly &lt; 1.12 | `default.sing-box.old.json` (legacy DNS `address`, geosite) |
+| Version ≥ 1.12, or **missing** | 1.12+ template (`RuleTemplateService.resolve("singbox")`) |
+| Version ≥ 1.14 | After merge, rewrite DNS address-filter rules: leading `{action:evaluate,server}` + `match_response:true` |
+| Query flag overwrites UA for handler pick; version parsed from **flag + UA** | `?flag=sing-box` + UA `SFA/1.14.0` → 1.14 JSON |
+| Default v2rayN UA `v2rayN/7.24.9` (no flag) | URI list unchanged — v2rayN still generates its own DNS when switching cores |
+
+### 3. Tests Required
+
+- `SingboxVersionTest` — SFA/slash versions; no-version is not legacy; 1.14 DNS gate.
+- `SingboxDnsResponseMatchTest` — seed domain_suffix untouched; `ip_is_private` / geoip `rule_set` get evaluate + match_response; idempotent.
+
 ---
 
 ## Design Decision: Request-origin fallback

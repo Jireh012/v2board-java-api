@@ -1,8 +1,9 @@
 package com.v2board.api.controller;
 
 import com.v2board.api.model.User;
-import com.v2board.api.protocol.ProtocolHandler;
 import com.v2board.api.protocol.GeneralHandler;
+import com.v2board.api.protocol.ProtocolHandler;
+import com.v2board.api.protocol.SingboxVersion;
 import com.v2board.api.service.ConfigService;
 import com.v2board.api.service.RuleTemplateService;
 import com.v2board.api.service.ServerService;
@@ -22,8 +23,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 @RestController
 public class ClientController {
@@ -105,22 +104,25 @@ public class ClientController {
             
             // 根据 flag 或 User-Agent 选择协议处理器
             String userAgent = request.getHeader("User-Agent");
+            String ua = userAgent != null ? userAgent.toLowerCase() : "";
             if (flag == null || flag.isEmpty()) {
-                flag = userAgent != null ? userAgent.toLowerCase() : "";
+                flag = ua;
             } else {
                 flag = flag.toLowerCase();
             }
+            // query flag 可能只有 sing-box，版本号仍在 UA（SFA/1.14.0、sing-box 1.14.0）
+            String versionSource = (flag + " " + ua).trim();
             
             logger.debug("Using flag: {}, User-Agent: {}, rule_profile: {}",
                     flag, userAgent, RuleTemplateService.currentRequestProfile());
             
-            // 处理sing-box特殊逻辑
-            if (flag.contains("sing")) {
-                // 检查sing-box版本
-                String version = extractSingBoxVersion(flag);
+            // 处理sing-box特殊逻辑（含 SFA/SFI/SFM/SFT，其 UA 不含 "sing"）
+            if (SingboxVersion.wantsJson(flag) || SingboxVersion.wantsJson(ua)) {
+                String version = SingboxVersion.extract(versionSource);
+                SingboxVersion.bind(version);
                 ProtocolHandler handler = selectSingBoxHandler(version);
                 if (handler != null) {
-                    logger.debug("Using sing-box handler: {}", handler.getClass().getSimpleName());
+                    logger.debug("Using sing-box handler: {} version={}", handler.getClass().getSimpleName(), version);
                     handler.applyResponseHeaders(user, response);
                     response.setHeader("subscription-rule-profile", RuleTemplateService.currentRequestProfile());
                     return handler.handle(user, servers);
@@ -128,7 +130,7 @@ public class ClientController {
             }
             
             // 对于非sing-box的客户端，设置订阅信息到服务器
-            if (!flag.contains("sing")) {
+            if (!SingboxVersion.wantsJson(flag) && !SingboxVersion.wantsJson(ua)) {
                 setSubscribeInfoToServers(servers, user);
             }
             
@@ -149,6 +151,7 @@ public class ClientController {
             logger.error("Error processing subscribe request", e);
             return "";
         } finally {
+            SingboxVersion.clear();
             RuleTemplateService.clearRequestProfile();
         }
     }
@@ -192,70 +195,25 @@ public class ClientController {
     }
     
     /**
-     * 提取sing-box版本号
-     * PHP: preg_match('/sing-box\s+([0-9.]+)/i', $flag, $matches)
-     */
-    private String extractSingBoxVersion(String flag) {
-        Pattern pattern = Pattern.compile("sing-box\\s+([0-9.]+)", Pattern.CASE_INSENSITIVE);
-        Matcher matcher = pattern.matcher(flag);
-        if (matcher.find()) {
-            return matcher.group(1);
-        }
-        return null;
-    }
-    
-    /**
-     * 选择sing-box处理器
-     * PHP: 根据版本选择Singbox或SingboxOld
+     * 选择sing-box处理器。无版本或 ≥1.12 用新模板；仅显式 &lt;1.12 用旧模板。
      */
     private ProtocolHandler selectSingBoxHandler(String version) {
-        if (version == null) {
-            // 如果没有版本信息，尝试查找SingboxOld处理器
-            for (ProtocolHandler handler : protocolHandlers) {
-                if (handler.getFlag().contains("sing") && 
-                    handler.getClass().getSimpleName().contains("Old")) {
-                    return handler;
-                }
+        boolean legacy = SingboxVersion.useLegacyTemplate(version);
+        for (ProtocolHandler handler : protocolHandlers) {
+            if (!handler.getFlag().contains("sing")) {
+                continue;
             }
-            return null;
-        }
-        
-        // 比较版本，>= 1.12.0 使用新版本，否则使用旧版本（支持 1.12.0 三段式，不能用 Double.parseDouble）
-        if (isSingBoxVersionAtLeast(version, 1, 12)) {
-            for (ProtocolHandler handler : protocolHandlers) {
-                if (handler.getFlag().contains("sing")
-                        && !handler.getClass().getSimpleName().contains("Old")) {
-                    return handler;
-                }
-            }
-        } else {
-            for (ProtocolHandler handler : protocolHandlers) {
-                if (handler.getFlag().contains("sing")
-                        && handler.getClass().getSimpleName().contains("Old")) {
-                    return handler;
-                }
+            boolean isOld = handler.getClass().getSimpleName().contains("Old");
+            if (legacy == isOld) {
+                return handler;
             }
         }
-
         return null;
     }
 
     /** 解析 sing-box 版本号 major.minor[.patch]，与门槛比较。 */
     static boolean isSingBoxVersionAtLeast(String version, int major, int minor) {
-        if (version == null || version.isBlank()) {
-            return false;
-        }
-        String[] parts = version.trim().split("\\.");
-        try {
-            int vMajor = parts.length > 0 ? Integer.parseInt(parts[0]) : 0;
-            int vMinor = parts.length > 1 ? Integer.parseInt(parts[1]) : 0;
-            if (vMajor != major) {
-                return vMajor > major;
-            }
-            return vMinor >= minor;
-        } catch (NumberFormatException e) {
-            return false;
-        }
+        return SingboxVersion.atLeast(version, major, minor);
     }
     
     /**
