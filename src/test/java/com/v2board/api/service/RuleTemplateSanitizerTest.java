@@ -145,4 +145,51 @@ class RuleTemplateSanitizerTest {
         assertTrue(result.content().contains("\"type\":\"direct\"") || result.content().contains("DIRECT"));
         assertTrue(result.warning() != null && result.warning().contains("rule_set"));
     }
+
+    @Test
+    void isUnsafeDstPortCatchAll_detectsLeakFishPortRules() {
+        assertTrue(RuleTemplateSanitizer.isUnsafeDstPortCatchAll("DST-PORT,80,🐟 漏网之鱼"));
+        assertTrue(RuleTemplateSanitizer.isUnsafeDstPortCatchAll("DST-PORT,443,🐟 漏网之鱼"));
+        assertTrue(RuleTemplateSanitizer.isUnsafeDstPortCatchAll("- DST-PORT,443,🚀 节点选择"));
+        assertFalse(RuleTemplateSanitizer.isUnsafeDstPortCatchAll("DST-PORT,80,DIRECT"));
+        assertFalse(RuleTemplateSanitizer.isUnsafeDstPortCatchAll("DST-PORT,443,🎯 全球直连"));
+        assertFalse(RuleTemplateSanitizer.isUnsafeDstPortCatchAll("GEOIP,CN,DIRECT"));
+        assertFalse(RuleTemplateSanitizer.isUnsafeDstPortCatchAll("DST-PORT,22,🐟 漏网之鱼"));
+    }
+
+    @Test
+    void sanitizeClash_stripsDstPortCatchAllToLeakFish() {
+        String upstream = """
+                proxy-groups:
+                  - { name: "$app_name", type: select, proxies: ["DIRECT"] }
+                rules:
+                  - GEOIP,CN,DIRECT
+                  - DST-PORT,80,🐟 漏网之鱼
+                  - DST-PORT,443,🐟 漏网之鱼
+                  - MATCH,DIRECT
+                """;
+        RuleTemplateSanitizer.Result result = RuleTemplateSanitizer.sanitize("clash", upstream, SEED);
+        String out = result.content().toUpperCase();
+        assertFalse(out.contains("DST-PORT,80,"));
+        assertFalse(out.contains("DST-PORT,443,"));
+        assertTrue(result.content().contains("GEOIP,CN,DIRECT") || result.content().contains("MATCH"));
+    }
+
+    @Test
+    void stripUnsafeDstPortRules_mutatesConfigMap() {
+        java.util.Map<String, Object> config = new java.util.LinkedHashMap<>();
+        java.util.List<Object> rules = new java.util.ArrayList<>();
+        rules.add("GEOIP,CN,DIRECT");
+        rules.add("DST-PORT,80,🐟 漏网之鱼");
+        rules.add("DST-PORT,443,🐟 漏网之鱼");
+        rules.add("MATCH,DIRECT");
+        config.put("rules", rules);
+        RuleTemplateSanitizer.stripUnsafeDstPortRules(config);
+        @SuppressWarnings("unchecked")
+        java.util.List<Object> after = (java.util.List<Object>) config.get("rules");
+        assertTrue(after.stream().noneMatch(r -> String.valueOf(r).toUpperCase().startsWith("DST-PORT,80,")));
+        assertTrue(after.stream().noneMatch(r -> String.valueOf(r).toUpperCase().startsWith("DST-PORT,443,")));
+        assertTrue(after.stream().anyMatch(r -> String.valueOf(r).startsWith("MATCH,")));
+    }
+
 }

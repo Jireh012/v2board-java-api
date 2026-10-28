@@ -89,6 +89,7 @@ public final class ClashMetaBuilder {
         // 客户端 select 默认取第一项；历史模板常把「手动切换」放首位，强制自动/故障转移靠前
         preferAutoSelectInMainGroup(groups, mainGroupName);
         config.put("proxy-groups", groups);
+        RuleTemplateSanitizer.stripUnsafeDstPortRules(config);
         RuleTemplateSanitizer.normalizeHealthCheckUrls(config);
 
         DumperOptions options = new DumperOptions();

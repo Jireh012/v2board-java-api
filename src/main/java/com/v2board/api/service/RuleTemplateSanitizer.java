@@ -109,6 +109,7 @@ public final class RuleTemplateSanitizer {
         options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
         options.setIndent(2);
         options.setPrettyFlow(true);
+        stripUnsafeDstPortRules(config);
         normalizeHealthCheckUrls(config);
         String out = rewriteHealthCheckToHttps(new Yaml(options).dump(config));
 
@@ -200,6 +201,10 @@ public final class RuleTemplateSanitizer {
         boolean stripped = false;
         for (String line : content.split("\\R", -1)) {
             if (containsRemoteRuleUrl(line) || looksLikeRemoteRuleSet(line)) {
+                stripped = true;
+                continue;
+            }
+            if (isUnsafeDstPortCatchAll(line)) {
                 stripped = true;
                 continue;
             }
@@ -337,4 +342,59 @@ public final class RuleTemplateSanitizer {
         }
         return Map.of();
     }
+
+    /**
+     * ACL4SSR Online 等模板常在 GEOIP,CN 之后追加 {@code DST-PORT,80/443 → 漏网之鱼}。
+     * 域名未按国内 IP 命中时，会把本该直连的 HTTP(S) 强制送进代理。
+     * 与本仓库 default.clash（无 DST-PORT 端口兜底）对齐：出订阅 / 保存模板时剥离这类规则。
+     */
+    @SuppressWarnings("unchecked")
+    public static void stripUnsafeDstPortRules(Map<String, Object> config) {
+        if (config == null) {
+            return;
+        }
+        Object rulesObj = config.get("rules");
+        if (!(rulesObj instanceof List<?>)) {
+            return;
+        }
+        List<Object> rules = new ArrayList<>((List<Object>) rulesObj);
+        rules.removeIf(r -> isUnsafeDstPortCatchAll(String.valueOf(r)));
+        config.put("rules", rules);
+    }
+
+    /**
+     * @return true 表示应删除：80/443 端口规则且策略不是直连 / 拒绝 / 全球直连
+     */
+    static boolean isUnsafeDstPortCatchAll(String rule) {
+        if (rule == null || rule.isBlank()) {
+            return false;
+        }
+        String s = rule.trim();
+        if (s.startsWith("- ")) {
+            s = s.substring(2).trim();
+        }
+        String upper = s.toUpperCase(Locale.ROOT);
+        boolean port80 = upper.startsWith("DST-PORT,80,") || upper.startsWith("DEST-PORT,80,");
+        boolean port443 = upper.startsWith("DST-PORT,443,") || upper.startsWith("DEST-PORT,443,");
+        if (!port80 && !port443) {
+            return false;
+        }
+        int first = s.indexOf(',');
+        int second = s.indexOf(',', first + 1);
+        if (first < 0 || second < 0) {
+            return false;
+        }
+        String policy = s.substring(second + 1).trim();
+        int hash = policy.indexOf('#');
+        if (hash >= 0) {
+            policy = policy.substring(0, hash).trim();
+        }
+        String p = policy.toUpperCase(Locale.ROOT);
+        if ("DIRECT".equals(p) || "REJECT".equals(p) || "REJECT-DROP".equals(p)
+                || policy.contains("全球直连")) {
+            return false;
+        }
+        return true;
+    }
+
 }
